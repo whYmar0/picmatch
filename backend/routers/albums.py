@@ -1,16 +1,14 @@
 """
 routers/albums.py — Album management routes
 
-BUGFIXES:
-  - invite_url now uses FRONTEND_URL env var (was fragile port-replace hack)
-  - .dict() replaced with .model_dump() (Pydantic v2)
-  - get_my_albums now returns AlbumOut with photos array for card previews
-  - All UUID comparisons cast to str() for SQLite compatibility
+NEW in this revision:
+  - Analytics now joins Vote → User to get voter usernames (reactions per photo)
+  - global_like_rate = total_likes / total_votes * 100 computed at album level
+  - voter_summaries: list of {voter_id, username, vote_count} for icon-row bottom sheet
+  - Unified auth: get_creator_user → get_current_user (all users can create albums)
 """
 
-import os
-import uuid
-import secrets
+import os, uuid, secrets
 from typing import List
 from pathlib import Path
 
@@ -21,133 +19,107 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db
 from models import User, Album, Photo, Vote
-from schemas import AlbumOut, AlbumWithPhotos, AlbumAnalytics, PhotoStats, PhotoOut, MessageResponse
-from auth import get_current_user, get_creator_user
+from schemas import (
+    AlbumOut, AlbumWithPhotos, AlbumAnalytics,
+    PhotoStats, PhotoOut, MessageResponse,
+    VoterReaction, VoterSummary,
+)
+from auth import get_current_user   # unified — no more get_creator_user gate here
 
 router = APIRouter(prefix="/albums", tags=["Albums"])
 
-UPLOAD_DIR  = Path(os.getenv("UPLOAD_DIR", "./uploads"))
+UPLOAD_DIR   = Path(os.getenv("UPLOAD_DIR", "./uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 BASE_URL     = os.getenv("BASE_URL",     "http://localhost:8000")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")   # ← FIX: dedicated var
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 MAX_FILE_SIZE = 10 * 1024 * 1024
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
-def _str(val) -> str:
-    return str(val)
-
+def _s(v) -> str:
+    return str(v)
 
 def photo_url(stored: str) -> str:
     return f"{BASE_URL}/uploads/{stored}"
 
-
 def photo_to_out(p: Photo) -> PhotoOut:
-    return PhotoOut(
-        id=p.id,
-        filename=p.filename,
-        url=photo_url(p.stored_filename),
-        order=p.order,
-        created_at=p.created_at,
-    )
-
+    return PhotoOut(id=p.id, filename=p.filename,
+                    url=photo_url(p.stored_filename),
+                    order=p.order, created_at=p.created_at)
 
 def album_to_out(album: Album) -> AlbumOut:
-    """
-    FIX: invite_url now uses FRONTEND_URL instead of fragile port-replace hack.
-    FIX: photos array always included so AlbumCard can render thumbnails.
-    FIX: .model_dump() instead of deprecated .dict()
-    """
     return AlbumOut(
-        id=album.id,
-        title=album.title,
-        description=album.description,
+        id=album.id, title=album.title, description=album.description,
         invite_code=album.invite_code,
-        invite_url=f"{FRONTEND_URL}/vote/{album.invite_code}",  # ← FIX
+        invite_url=f"{FRONTEND_URL}/vote/{album.invite_code}",
         is_active=album.is_active,
         photo_count=len(album.photos),
         created_at=album.created_at,
         creator=album.creator,
-        photos=[photo_to_out(p) for p in album.photos],         # ← FIX: always included
+        photos=[photo_to_out(p) for p in album.photos],
     )
 
 
-# ─── Creator Routes ───────────────────────────────────────────────────────────
+# ─── Create Album ─────────────────────────────────────────────────────────────
 
 @router.post("/", response_model=AlbumWithPhotos, status_code=status.HTTP_201_CREATED)
 async def create_album(
-    title:       str = Form(...),
+    title: str = Form(...),
     description: str = Form(None),
-    photos:      List[UploadFile] = File(...),
-    current_user: User = Depends(get_creator_user),
+    photos: List[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),   # unified — any logged-in user
     db: AsyncSession = Depends(get_db),
 ):
-    """Creates a new album and uploads photos. Creator only."""
     if not photos:
         raise HTTPException(400, detail="At least one photo is required")
     if len(photos) > 50:
         raise HTTPException(400, detail="Maximum 50 photos per album")
 
-    invite_code = secrets.token_urlsafe(16)
-    album = Album(
-        title=title,
-        description=description,
-        invite_code=invite_code,
-        creator_id=_str(current_user.id),
-    )
+    album = Album(title=title, description=description,
+                  invite_code=secrets.token_urlsafe(16),
+                  creator_id=_s(current_user.id))
     db.add(album)
     await db.flush()
 
-    for idx, photo_file in enumerate(photos):
-        if photo_file.content_type not in ALLOWED_TYPES:
-            raise HTTPException(
-                400,
-                detail=f"File type '{photo_file.content_type}' not allowed. Use JPEG, PNG or WebP."
-            )
-        ext = Path(photo_file.filename or "photo").suffix.lower() or ".jpg"
+    for idx, f in enumerate(photos):
+        if f.content_type not in ALLOWED_TYPES:
+            raise HTTPException(400, detail=f"'{f.content_type}' not allowed. Use JPEG/PNG/WebP")
+        ext = Path(f.filename or "photo").suffix.lower() or ".jpg"
         stored = f"{uuid.uuid4()}{ext}"
-        content = await photo_file.read()
+        content = await f.read()
         if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(400, detail=f"'{photo_file.filename}' exceeds 10 MB limit")
-        with open(UPLOAD_DIR / stored, "wb") as f:
-            f.write(content)
-        db.add(Photo(
-            album_id=_str(album.id),
-            filename=photo_file.filename or stored,
-            stored_filename=stored,
-            order=idx,
-        ))
+            raise HTTPException(400, detail=f"'{f.filename}' exceeds 10 MB")
+        with open(UPLOAD_DIR / stored, "wb") as out:
+            out.write(content)
+        db.add(Photo(album_id=_s(album.id), filename=f.filename or stored,
+                     stored_filename=stored, order=idx))
 
     await db.flush()
-
-    # Reload with relationships
     result = await db.execute(
         select(Album)
         .options(selectinload(Album.photos), selectinload(Album.creator))
-        .where(Album.id == _str(album.id))
+        .where(Album.id == _s(album.id))
     )
-    album = result.scalar_one()
-    return album_to_out(album)
+    return album_to_out(result.scalar_one())
 
+
+# ─── My Albums ────────────────────────────────────────────────────────────────
 
 @router.get("/my", response_model=List[AlbumOut])
 async def get_my_albums(
-    current_user: User = Depends(get_creator_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Returns all albums belonging to the current creator.
-    FIX: selectinload(Album.photos) included so previews render in AlbumCard.
-    """
     result = await db.execute(
         select(Album)
         .options(selectinload(Album.photos), selectinload(Album.creator))
-        .where(Album.creator_id == _str(current_user.id))
+        .where(Album.creator_id == _s(current_user.id))
         .order_by(Album.created_at.desc())
     )
-    albums = result.scalars().all()
-    return [album_to_out(a) for a in albums]
+    return [album_to_out(a) for a in result.scalars().all()]
 
+
+# ─── Public: Album by Invite Code ─────────────────────────────────────────────
 
 @router.get("/invite/{invite_code}", response_model=AlbumWithPhotos)
 async def get_album_by_invite(
@@ -155,13 +127,10 @@ async def get_album_by_invite(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns an album by its invite code. Any authenticated user."""
     result = await db.execute(
         select(Album)
         .options(selectinload(Album.photos), selectinload(Album.creator))
-        .where(
-            and_(Album.invite_code == invite_code, Album.is_active == True)  # noqa: E712
-        )
+        .where(and_(Album.invite_code == invite_code, Album.is_active == True))  # noqa
     )
     album = result.scalar_one_or_none()
     if not album:
@@ -169,41 +138,57 @@ async def get_album_by_invite(
     return album_to_out(album)
 
 
+# ─── Analytics (with voter usernames) ────────────────────────────────────────
+
 @router.get("/{album_id}/analytics", response_model=AlbumAnalytics)
 async def get_album_analytics(
     album_id: str,
-    current_user: User = Depends(get_creator_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Returns full vote analytics for an album. Creator only.
-    Eagerly loads photos → votes in a single query to avoid N+1.
+    Returns full analytics including:
+    - Per-photo reactions with voter username (for bottom-sheet drill-down)
+    - voter_summaries list for the icon-row voters sheet
+    - global_like_rate = total album likes / total album votes × 100
     """
     result = await db.execute(
         select(Album)
         .options(
-            selectinload(Album.photos).selectinload(Photo.votes),
+            selectinload(Album.photos).selectinload(Photo.votes).selectinload(Vote.voter),
             selectinload(Album.creator),
         )
-        .where(
-            and_(
-                Album.id == album_id,
-                Album.creator_id == _str(current_user.id),
-            )
-        )
+        .where(and_(Album.id == album_id, Album.creator_id == _s(current_user.id)))
     )
     album = result.scalar_one_or_none()
     if not album:
         raise HTTPException(404, detail="Album not found or access denied")
 
-    voter_ids: set = set()
+    total_likes = 0
     total_votes = 0
+    voter_map: dict[str, dict] = {}   # voter_id → {username, vote_count}
     photo_stats: List[PhotoStats] = []
 
     for photo in album.photos:
+        reactions: List[VoterReaction] = []
+
         for vote in photo.votes:
-            voter_ids.add(_str(vote.voter_id))
+            vid = _s(vote.voter_id)
+            uname = vote.voter.username if vote.voter else vid[:8]
+
+            reactions.append(VoterReaction(
+                voter_id=vid,
+                username=uname,
+                is_like=vote.is_like,
+            ))
+
             total_votes += 1
+            if vote.is_like:
+                total_likes += 1
+
+            if vid not in voter_map:
+                voter_map[vid] = {"username": uname, "vote_count": 0, "voter_id": vid}
+            voter_map[vid]["vote_count"] += 1
 
         photo_stats.append(PhotoStats(
             id=photo.id,
@@ -215,45 +200,48 @@ async def get_album_analytics(
             total_votes=photo.total_votes,
             like_percentage=photo.like_percentage,
             is_winner=False,
+            reactions=reactions,
         ))
 
-    # Winner = highest like_percentage, tie-break = more total votes
-    winner: PhotoStats | None = None
+    # Winner
+    winner = None
     voted = [p for p in photo_stats if p.total_votes > 0]
     if voted:
         best = max(voted, key=lambda p: (p.like_percentage, p.total_votes))
         best.is_winner = True
         winner = best
 
+    global_like_rate = round((total_likes / total_votes) * 100, 1) if total_votes else 0.0
+
+    voter_summaries = [
+        VoterSummary(voter_id=v["voter_id"], username=v["username"], vote_count=v["vote_count"])
+        for v in sorted(voter_map.values(), key=lambda x: x["vote_count"], reverse=True)
+    ]
+
     return AlbumAnalytics(
-        id=album.id,
-        title=album.title,
-        description=album.description,
+        id=album.id, title=album.title, description=album.description,
         total_photos=len(album.photos),
         total_votes=total_votes,
-        unique_voters=len(voter_ids),
+        unique_voters=len(voter_map),
+        global_like_rate=global_like_rate,
+        voter_summaries=voter_summaries,
         photos=photo_stats,
         winner=winner,
         created_at=album.created_at,
     )
 
 
+# ─── Delete ───────────────────────────────────────────────────────────────────
+
 @router.delete("/{album_id}", response_model=MessageResponse)
 async def delete_album(
     album_id: str,
-    current_user: User = Depends(get_creator_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Permanently deletes an album and all its uploaded files."""
     result = await db.execute(
-        select(Album)
-        .options(selectinload(Album.photos))
-        .where(
-            and_(
-                Album.id == album_id,
-                Album.creator_id == _str(current_user.id),
-            )
-        )
+        select(Album).options(selectinload(Album.photos))
+        .where(and_(Album.id == album_id, Album.creator_id == _s(current_user.id)))
     )
     album = result.scalar_one_or_none()
     if not album:

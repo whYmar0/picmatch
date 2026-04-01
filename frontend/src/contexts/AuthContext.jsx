@@ -1,8 +1,7 @@
 /**
- * contexts/AuthContext.jsx — Контекст аутентификации
- * Authentication context: user state, login, logout, register
+ * contexts/AuthContext.jsx — Unified auth context
+ * All users can create albums AND vote — no role distinction in UI.
  */
-
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { authApi } from "../api";
 
@@ -10,18 +9,16 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem("picmatch_user");
-    return stored ? JSON.parse(stored) : null;
+    try { return JSON.parse(localStorage.getItem("picmatch_user")); }
+    catch { return null; }
   });
   const [loading, setLoading] = useState(true);
 
-  // Verify token on mount / Проверяем токен при загрузке
   useEffect(() => {
     const token = localStorage.getItem("picmatch_token");
     if (!token) { setLoading(false); return; }
-
     authApi.me()
-      .then((data) => setUser(data))
+      .then(setUser)
       .catch(() => {
         localStorage.removeItem("picmatch_token");
         localStorage.removeItem("picmatch_user");
@@ -52,11 +49,8 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
-  const isCreator = user?.role === "creator";
-  const isVoter = user?.role === "voter";
-
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isCreator, isVoter }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -64,6 +58,6 @@ export function AuthProvider({ children }) {
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  if (!ctx) throw new Error("useAuth must be inside AuthProvider");
   return ctx;
 };
