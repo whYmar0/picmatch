@@ -1,12 +1,12 @@
 /**
- * contexts/LangContext.jsx — 100% bilingual translations (EN / RU)
- * Every key exists in both languages — no fallback mixing.
+ * contexts/LangContext.jsx — 100% bilingual EN / RU
+ * New keys: seeMore, seeLess, sort, filterBy, filterByVoter,
+ *           noVoters, selectVoters, sortMostLikes, sortMostDislikes
  */
 import { createContext, useContext, useState } from "react";
 
 const T = {
   en: {
-    // ── App ──────────────────────────────────────────────────────────────────
     appName: "PicMatch",
     login: "Log in",
     register: "Sign up",
@@ -14,7 +14,6 @@ const T = {
     dashboard: "My Albums",
     createAlbum: "New Album",
 
-    // ── Auth ─────────────────────────────────────────────────────────────────
     email: "Email",
     username: "Username",
     password: "Password",
@@ -25,7 +24,6 @@ const T = {
     registerTitle: "Create account",
     registerSubtitle: "Join PicMatch — it's free",
 
-    // ── Album ─────────────────────────────────────────────────────────────────
     albumTitle: "Album title",
     albumDescription: "Description (optional)",
     uploadPhotos: "Upload Photos",
@@ -42,14 +40,17 @@ const T = {
     viewAnalytics: "Results",
     deleteAlbum: "Delete",
 
-    // ── Swipe ─────────────────────────────────────────────────────────────────
     swipeHint: "Swipe right to like · left to skip",
-    allDone: "You rated all photos!",
-    allDoneSubtitle: "Thanks for voting",
+    allDone: "You've rated all photos!",
+    allDoneSubtitle: "Thanks for your votes",
     viewResults: "See results",
     swipeRemaining: "left",
 
-    // ── Analytics / Summary ──────────────────────────────────────────────────
+    // New: expandable description
+    seeMore: "See more",
+    seeLess: "See less",
+
+    // Analytics
     winner: "Winner",
     winnerBadge: "🏆 Best Shot",
     likes: "Likes",
@@ -61,6 +62,22 @@ const T = {
     noVotes: "No votes yet",
     analyticsTitle: "All photos",
     backToAlbums: "My albums",
+    // Sort & filter (button labels)
+    sort: "Sort",
+    filterBy: "Filter",
+    // Sort sheet options
+    sortMostLikes: "Most Likes",
+    sortMostDislikes: "Most Dislikes",
+    // View toggle inside sort sheet
+    gridView: "Grid",
+    listView: "List",
+    // Filter sheet
+    filterByVoter: "Filter by voter",
+    noVoters: "No voters yet",
+    selectVoters: "Select voters to filter",
+    clearFilter: "Clear",
+    applyFilter: "Apply",
+    // Kept for backwards compat
     sortBy: "Sort by",
     sortLikesDesc: "Most liked",
     sortLikesAsc: "Least liked",
@@ -68,8 +85,6 @@ const T = {
     filterAll: "All",
     filterLiked: "Liked only",
     filterDisliked: "Disliked only",
-    gridView: "Grid",
-    listView: "List",
     views: "Views",
     voters: "Voters",
     reactions: "Reactions",
@@ -77,7 +92,6 @@ const T = {
     share: "Share",
     shareTitle: "Check out this album on PicMatch",
 
-    // ── Landing ───────────────────────────────────────────────────────────────
     heroTitle: "Pick the best photo.",
     heroSubtitle: "Swipe right to like, left to pass. Your community crowns the winner.",
     getStarted: "Get started free",
@@ -89,14 +103,12 @@ const T = {
     step3Title: "Discover the winner",
     step3Desc: "The photo with the most likes wins — backed by full analytics.",
 
-    // ── Errors ────────────────────────────────────────────────────────────────
     errorGeneric: "Something went wrong. Please try again.",
     errorNotFound: "Page not found",
     errorAlbumNotFound: "Album not found or link has expired",
   },
 
   ru: {
-    // ── App ──────────────────────────────────────────────────────────────────
     appName: "PicMatch",
     login: "Войти",
     register: "Регистрация",
@@ -104,7 +116,6 @@ const T = {
     dashboard: "Мои альбомы",
     createAlbum: "Новый альбом",
 
-    // ── Auth ─────────────────────────────────────────────────────────────────
     email: "Email",
     username: "Имя пользователя",
     password: "Пароль",
@@ -115,7 +126,6 @@ const T = {
     registerTitle: "Создать аккаунт",
     registerSubtitle: "Присоединяйтесь к PicMatch — бесплатно",
 
-    // ── Album ─────────────────────────────────────────────────────────────────
     albumTitle: "Название альбома",
     albumDescription: "Описание (необязательно)",
     uploadPhotos: "Загрузить фото",
@@ -132,14 +142,15 @@ const T = {
     viewAnalytics: "Результаты",
     deleteAlbum: "Удалить",
 
-    // ── Swipe ─────────────────────────────────────────────────────────────────
     swipeHint: "Вправо — нравится · влево — пропустить",
     allDone: "Вы оценили все фото!",
     allDoneSubtitle: "Спасибо за ваши голоса",
     viewResults: "Посмотреть результаты",
     swipeRemaining: "осталось",
 
-    // ── Analytics / Summary ──────────────────────────────────────────────────
+    seeMore: "Подробнее",
+    seeLess: "Свернуть",
+
     winner: "Победитель",
     winnerBadge: "🏆 Лучший кадр",
     likes: "Лайки",
@@ -151,6 +162,17 @@ const T = {
     noVotes: "Пока нет голосов",
     analyticsTitle: "Все фото",
     backToAlbums: "Мои альбомы",
+    sort: "Сортировка",
+    filterBy: "Фильтр",
+    sortMostLikes: "Больше лайков",
+    sortMostDislikes: "Больше дизлайков",
+    gridView: "Сетка",
+    listView: "Список",
+    filterByVoter: "Фильтр по голосующему",
+    noVoters: "Голосующих пока нет",
+    selectVoters: "Выберите голосующих",
+    clearFilter: "Сбросить",
+    applyFilter: "Применить",
     sortBy: "Сортировка",
     sortLikesDesc: "Больше лайков",
     sortLikesAsc: "Меньше лайков",
@@ -158,8 +180,6 @@ const T = {
     filterAll: "Все",
     filterLiked: "Только лайки",
     filterDisliked: "Только дизлайки",
-    gridView: "Сетка",
-    listView: "Список",
     views: "Просмотры",
     voters: "Голосующие",
     reactions: "Реакции",
@@ -167,7 +187,6 @@ const T = {
     share: "Поделиться",
     shareTitle: "Посмотри этот альбом в PicMatch",
 
-    // ── Landing ───────────────────────────────────────────────────────────────
     heroTitle: "Выбери лучшее фото.",
     heroSubtitle: "Вправо — нравится, влево — нет. Сообщество выбирает победителя.",
     getStarted: "Начать бесплатно",
@@ -179,7 +198,6 @@ const T = {
     step3Title: "Узнай победителя",
     step3Desc: "Фото с наибольшим числом лайков побеждает — с полной аналитикой.",
 
-    // ── Errors ────────────────────────────────────────────────────────────────
     errorGeneric: "Что-то пошло не так. Попробуйте ещё раз.",
     errorNotFound: "Страница не найдена",
     errorAlbumNotFound: "Альбом не найден или ссылка устарела",
@@ -192,15 +210,8 @@ export function LangProvider({ children }) {
   const [lang, setLang] = useState(
     () => localStorage.getItem("picmatch_lang") || "en"
   );
-
-  const setLanguage = (l) => {
-    setLang(l);
-    localStorage.setItem("picmatch_lang", l);
-  };
-
-  // t() never returns undefined — always has both EN and RU for every key
+  const setLanguage = (l) => { setLang(l); localStorage.setItem("picmatch_lang", l); };
   const t = (key) => T[lang]?.[key] ?? T.en[key] ?? key;
-
   return (
     <LangContext.Provider value={{ lang, setLanguage, t }}>
       {children}
