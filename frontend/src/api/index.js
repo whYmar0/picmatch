@@ -24,7 +24,14 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !url.includes("/auth/")) {
       localStorage.removeItem("picmatch_token");
       localStorage.removeItem("picmatch_user");
-      window.location.href = "/login";
+      // Don't redirect if the 401 came from the /vote/ page itself —
+      // VotePage handles auth-gating with a friendly prompt
+      const onVotePage = window.location.pathname.startsWith("/vote/");
+      if (!onVotePage) {
+        // Preserve current path so user returns after login
+        const returnTo = window.location.pathname + window.location.search;
+        window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}`;
+      }
       return Promise.reject(new Error("Session expired. Please log in again."));
     }
     const detail = error.response?.data?.detail;
@@ -54,6 +61,7 @@ export const authApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  deleteAvatar: () => api.delete("/auth/avatar"),
 };
 
 export const albumsApi = {

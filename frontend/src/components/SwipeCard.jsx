@@ -1,16 +1,16 @@
 /**
- * SwipeCard.jsx — v5.1
+ * SwipeCard.jsx — v5.2
  *
- * CHANGES:
- *  - resetPosition() exposed via useImperativeHandle (used by VotePage jump fix)
- *  - Card bg: bg-gray-950 (vs bg-black) — intentional dark but not "broken" looking
- *  - Reliable tap: pointerDown/Up delta tracking, fires onImageClick on true tap
- *  - Removed "tap to view" chip
- *  - Back cards always opacity 1
- *  - zIndex: 20 - stackIndex (prevents overlap)
- *  - object-contain so ALL aspect ratios fit without cropping
+ * CHANGES (vs v5.1):
+ *  - stackY = 0 for ALL cards (no staircase/ladder offset)
+ *    Cards stack exactly on top of each other — depth shown only via scale
+ *  - Scale difference between cards is slightly more visible (0.05 per level)
+ *    so the user can feel depth without positional offset
+ *  - Card fills its container (absolute inset-0) — container in VotePage
+ *    controls the 3:4 aspect ratio and maximum size
+ *  - Font: uses inherited font (font-sans from the site theme) — no override
  */
-import { useRef, forwardRef, useImperativeHandle } from "react";
+import { useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 
@@ -20,18 +20,19 @@ const SwipeCard = forwardRef(function SwipeCard(
   { photo, isTop, stackIndex, onSwipe, onImageClick },
   ref
 ) {
-  const controls       = useAnimation();
-  const x              = useMotionValue(0);
-  const y              = useMotionValue(0);
-  const pointerDown    = useRef(null);
-  const hasDragged     = useRef(false);
+  const controls = useAnimation();
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const pointerDown = useRef(null);
+  const hasDragged = useRef(false);
+  const [aspectRatio, setAspectRatio] = useState(null);
 
-  const rotate      = useTransform(x, [-300, 0, 300], [-22, 0, 22]);
-  const likeOpacity = useTransform(x, [15, 80],  [0, 1]);
+  const rotate = useTransform(x, [-300, 0, 300], [-22, 0, 22]);
+  const likeOpacity = useTransform(x, [15, 80], [0, 1]);
   const nopeOpacity = useTransform(x, [-80, -15], [1, 0]);
 
-  const stackScale = 1 - stackIndex * 0.04;
-  const stackY     = stackIndex * 14;
+  // All cards aligned perfectly (no scale difference)
+  const stackScale = 1;
 
   useImperativeHandle(ref, () => ({
     swipeTo: async (isLike) => {
@@ -42,7 +43,6 @@ const SwipeCard = forwardRef(function SwipeCard(
       });
       onSwipe(photo.id, isLike);
     },
-    // Called by VotePage when user jumps via thumbnail — resets without remount
     resetPosition: () => {
       x.set(0);
       y.set(0);
@@ -53,7 +53,7 @@ const SwipeCard = forwardRef(function SwipeCard(
   const handlePointerDown = (e) => {
     if (!isTop) return;
     pointerDown.current = { x: e.clientX, y: e.clientY };
-    hasDragged.current  = false;
+    hasDragged.current = false;
   };
 
   const handlePointerUp = (e) => {
@@ -79,28 +79,36 @@ const SwipeCard = forwardRef(function SwipeCard(
       });
       onSwipe(photo.id, isLike);
     } else {
-      controls.start({
-        x: 0, y: 0, rotate: 0,
-        transition: { type: "spring", stiffness: 450, damping: 32 },
-      });
+      controls.start({ x: 0, y: 0, rotate: 0, transition: { type: "spring", stiffness: 280, damping: 25 } });
     }
   };
+
+  const onImageLoad = (e) => {
+    const { naturalWidth, naturalHeight } = e.target;
+    setAspectRatio(naturalWidth / naturalHeight);
+  };
+
+  // Determine object-fit based on ratio
+  // Target: 0.75 (3:4). If within [0.6, 1.0], use object-cover.
+  const isCloseToAspect = aspectRatio && Math.abs(aspectRatio - 0.75) < 0.22;
+  const objectFit = isCloseToAspect ? "object-cover" : "object-contain";
 
   return (
     <motion.div
       className="absolute inset-0 no-select touch-manipulation"
       style={{
-        x:      isTop ? x : 0,
-        y:      isTop ? y : stackY,
+        x: isTop ? x : 0,
+        y: isTop ? y : 0,
         rotate: isTop ? rotate : 0,
-        scale:  stackScale,
+        scale: stackScale,
         opacity: 1,               // always full opacity
-        zIndex:  20 - stackIndex, // wide range prevents overlap
+        zIndex: 20 - stackIndex, // top card in front
         pointerEvents: isTop ? "auto" : "none",
         cursor: isTop ? "grab" : "default",
       }}
       animate={isTop ? controls : {
-        y: stackY, scale: stackScale,
+        // Back cards: animate only scale when they come to front
+        scale: stackScale,
         transition: { type: "spring", stiffness: 280, damping: 28 },
       }}
       drag={isTop ? "x" : false}
@@ -112,40 +120,38 @@ const SwipeCard = forwardRef(function SwipeCard(
       onPointerUp={handlePointerUp}
     >
       {/*
-        bg-gray-950: dark but visibly different from page background,
-        so it's clear object-contain is intentional, not a broken state.
-        Black background ONLY inside this card container.
+        Dark background so object-contain images look intentional.
+        Only this card container is dark — page background stays themed.
+        rounded-3xl for a refined card feel.
       */}
-      <div className="relative w-full h-full rounded-4xl overflow-hidden shadow-swipe
-                      bg-gray-950">
+      <div className="relative w-full h-full rounded-3xl overflow-hidden shadow-swipe bg-gray-950">
+
         <img
           src={photo.url}
           alt={photo.filename}
-          className="w-full h-full object-contain select-none pointer-events-none"
+          onLoad={onImageLoad}
+          className={`w-full h-full ${objectFit} select-none pointer-events-none`}
           draggable={false}
           loading="eager"
         />
 
-        {/* Bottom gradient + filename */}
-        <div className="absolute inset-x-0 bottom-0 h-20
-                        bg-gradient-to-t from-black/60 to-transparent rounded-b-4xl" />
-        <p className="absolute bottom-3 left-4 right-4 text-white/70 text-xs truncate">
-          {photo.filename}
-        </p>
-
         {/* LIKE / NOPE stamps — top card only */}
         {isTop && (
           <>
-            <motion.div style={{ opacity: likeOpacity }}
-              className="absolute top-7 left-5 border-[3px] border-green-400 text-green-400
-                         font-display font-bold text-2xl tracking-widest rounded-xl
-                         px-3 py-0.5 -rotate-[20deg] select-none bg-black/20">
+            <motion.div
+              style={{ opacity: likeOpacity }}
+              className="absolute top-6 left-5 border-[3px] border-green-400 text-green-400
+                         font-sans font-bold text-xl tracking-widest rounded-xl
+                         px-3 py-1 -rotate-[20deg] select-none bg-black/20"
+            >
               LIKE
             </motion.div>
-            <motion.div style={{ opacity: nopeOpacity }}
-              className="absolute top-7 right-5 border-[3px] border-red-400 text-red-400
-                         font-display font-bold text-2xl tracking-widest rounded-xl
-                         px-3 py-0.5 rotate-[20deg] select-none bg-black/20">
+            <motion.div
+              style={{ opacity: nopeOpacity }}
+              className="absolute top-6 right-5 border-[3px] border-red-400 text-red-400
+                         font-sans font-bold text-xl tracking-widest rounded-xl
+                         px-3 py-1 rotate-[20deg] select-none bg-black/20"
+            >
               NOPE
             </motion.div>
           </>
@@ -157,12 +163,15 @@ const SwipeCard = forwardRef(function SwipeCard(
 
 export default SwipeCard;
 
-// ─── Equal-size buttons ────────────────────────────────────────────────────────
+// ─── Action buttons — equal size, site font ────────────────────────────────────
 export function SwipeButtons({ onLike, onDislike, disabled }) {
   return (
-    <div className="flex items-center justify-center gap-12">
+    <div className="flex items-center justify-center gap-14">
+
+      {/* Dislike */}
       <motion.button
-        onClick={onDislike} disabled={disabled}
+        onClick={onDislike}
+        disabled={disabled}
         whileHover={{ scale: disabled ? 1 : 1.1 }}
         whileTap={{ scale: 0.88 }}
         className="w-16 h-16 rounded-full flex items-center justify-center
@@ -176,8 +185,10 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
         <ThumbsDown size={22} />
       </motion.button>
 
+      {/* Like */}
       <motion.button
-        onClick={onLike} disabled={disabled}
+        onClick={onLike}
+        disabled={disabled}
         whileHover={{ scale: disabled ? 1 : 1.1 }}
         whileTap={{ scale: 0.88 }}
         className="w-16 h-16 rounded-full flex items-center justify-center
@@ -188,6 +199,7 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
       >
         <ThumbsUp size={22} />
       </motion.button>
+
     </div>
   );
 }

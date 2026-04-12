@@ -30,7 +30,10 @@ export default function App() {
                   borderRadius: "16px",
                   fontFamily: "'Outfit', sans-serif",
                   fontSize: "14px",
-                  boxShadow: "0 8px 32px -4px rgba(0,0,0,0.18)",
+                  boxShadow: "0 10px 40px -10px rgba(0,0,0,0.3)",
+                  background: "var(--card-bg)",
+                  color: "var(--text-main)",
+                  border: "1px solid rgba(128,128,128,0.15)",
                 },
                 success: { iconTheme: { primary: "#FFB347", secondary: "#fff" } },
                 duration: 3000,
@@ -45,9 +48,7 @@ export default function App() {
                   <Route path="/register" element={<Register />} />
 
                   {/* All auth-required routes — no role check */}
-                  <Route path="/vote/:inviteCode" element={
-                    <ProtectedRoute><VotePage /></ProtectedRoute>
-                  } />
+                  <Route path="/vote/:inviteCode" element={<VotePage />} />
                   <Route path="/dashboard" element={
                     <ProtectedRoute><Dashboard /></ProtectedRoute>
                   } />

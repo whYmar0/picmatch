@@ -3,7 +3,7 @@
  * All users get the same account — can create albums and vote.
  */
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, User, Eye, EyeOff, UserPlus, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
@@ -14,6 +14,8 @@ export default function Register() {
   const { register } = useAuth();
   const { t }        = useLang();
   const navigate     = useNavigate();
+  const location     = useLocation();
+  const from = location.state?.from?.pathname || "/dashboard";
 
   const [form, setForm] = useState({ email: "", username: "", password: "" });
   const [showPwd, setShowPwd] = useState(false);
@@ -32,7 +34,7 @@ export default function Register() {
     try {
       const user = await register({ ...form, role: "creator" });
       toast.success(`Welcome, ${user.username}! 🎉`);
-      navigate("/dashboard", { replace: true });
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

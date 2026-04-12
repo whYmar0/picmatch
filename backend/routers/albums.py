@@ -6,7 +6,8 @@ import os, uuid, secrets
 from typing import List
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
@@ -21,6 +22,28 @@ from schemas import (
 from auth import get_current_user
 
 router = APIRouter(prefix="/albums", tags=["Albums"])
+
+# Optional auth dependency — does NOT raise 401 if no token present
+_bearer = HTTPBearer(auto_error=False)
+
+async def get_optional_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Returns the current user if a valid token is provided, else None."""
+    if not credentials:
+        return None
+    from auth import decode_token
+    payload = decode_token(credentials.credentials)
+    if not payload:
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    from sqlalchemy import select as sa_select
+    result = await db.execute(sa_select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    return user if (user and user.is_active) else None
 
 UPLOAD_DIR   = Path(os.getenv("UPLOAD_DIR", "./uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -112,7 +135,8 @@ async def get_my_albums(
 @router.get("/invite/{invite_code}", response_model=AlbumWithPhotos)
 async def get_album_by_invite(
     invite_code: str,
-    current_user: User = Depends(get_current_user),
+    # Public endpoint — works with or without a token
+    current_user: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(

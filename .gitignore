@@ -10,6 +10,7 @@ dist/
 build/
 .pytest_cache/
 backend/uploads/
+backend/picmatch.db
 
 # Node / Frontend
 node_modules/

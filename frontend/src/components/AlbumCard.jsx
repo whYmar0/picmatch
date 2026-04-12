@@ -63,7 +63,8 @@ export default function AlbumCard({ album, onDelete, index }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.07, duration: 0.3 }}
         className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card
-                   hover:shadow-card-hover transition-shadow flex flex-col gap-3 p-4"
+                   hover:shadow-card-hover transition-shadow flex flex-col gap-3 p-4
+                   overflow-hidden w-full min-w-0"
       >
         {/* Thumbnail strip */}
         <div className="relative h-28 rounded-2xl overflow-hidden bg-border-light dark:bg-border-dark">
@@ -103,8 +104,8 @@ export default function AlbumCard({ album, onDelete, index }) {
 
         {/* Invite link */}
         <div className="flex items-center gap-2 bg-border-light dark:bg-border-dark
-                        rounded-xl px-3 py-2 min-w-0">
-          <span className="text-[10px] text-gray-400 truncate flex-1 font-mono">
+                        rounded-xl px-3 py-2 min-w-0 overflow-hidden">
+          <span className="text-[10px] text-gray-400 truncate flex-1 font-mono min-w-0">
             {album.invite_url.replace(/^https?:\/\//, "")}
           </span>
           <motion.button onClick={handleCopy} whileTap={{ scale: 0.82 }}

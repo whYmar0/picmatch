@@ -1,77 +1,104 @@
 /**
- * VotePage.jsx — v5.1
+ * VotePage.jsx — v5.3
  *
- * BLACK SCREEN FIX:
- *  Root cause: `stackKey` bump triggered full remount of AnimatePresence + SwipeCards.
- *  During the remount frame, `stackPhotos` briefly returned [] because React had
- *  unmounted all children, causing the bg-black card container to show as a black screen.
- *  Also: if getMyVotes() threw, the catch was silent and currentPhotoId might not get set.
- *
- *  Fix:
- *   1. Removed stackKey mechanism entirely.
- *   2. On thumbnail jump: call topCardRef.current.resetPosition() to reset animation
- *      state on the existing card, no remount needed.
- *   3. Added resetPosition() to SwipeCard's useImperativeHandle.
- *   4. getMyVotes is wrapped in its own try/catch that never blocks currentPhotoId.
- *   5. Added an explicit "no photos" guard that shows a friendly message.
- *
- * LARGER CARDS:
- *  Card container now uses max-h-[58vh] with auto aspect-ratio so images fill more
- *  of the viewport height on mobile.
+ * CHANGES:
+ *  1. Header: removed "by <author>" line → replaced with author avatar + username
+ *     in large format at the very top of the header
+ *  2. Title & description use `font-sans` (site font) — same as rest of site
+ *     Title/desc stay within max content width, "See more" smoothly pushes content down
+ *  3. Cards: 3:4 aspect ratio, larger size, stacked directly on top of each other
+ *     (no staircase/ladder offset — all cards share the same Y position)
  */
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { useParams, useNavigate }  from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import toast                       from "react-hot-toast";
-import { albumsApi, votesApi }     from "../api";
-import { useLang }                 from "../contexts/LangContext";
+import toast from "react-hot-toast";
+import { albumsApi, votesApi } from "../api";
+import { useLang } from "../contexts/LangContext";
+import { useAuth } from "../contexts/AuthContext";
 import SwipeCard, { SwipeButtons } from "../components/SwipeCard";
-import ImageLightbox               from "../components/ImageLightbox";
-import LoadingSpinner              from "../components/LoadingSpinner";
-import { ThumbsUp, ThumbsDown }   from "lucide-react";
+import ImageLightbox from "../components/ImageLightbox";
+import LoadingSpinner from "../components/LoadingSpinner";
+import { ThumbsUp, ThumbsDown, LogIn } from "lucide-react";
 
 const STACK_SIZE = 3;
 const DESC_LIMIT = 100;
+const TITLE_LIMIT = 40;
+
+// ── Small reusable avatar ──────────────────────────────────────────────────────
+function AuthorAvatar({ user, size = 36 }) {
+  if (!user) return null;
+  const initial = user.username?.[0]?.toUpperCase() ?? "?";
+  return (
+    <div
+      className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center
+                 bg-primary-100 dark:bg-primary-900/40 text-primary-600 font-bold"
+      style={{ width: size, height: size, fontSize: size * 0.42 }}
+    >
+      {user.avatar_url
+        ? <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+        : initial
+      }
+    </div>
+  );
+}
 
 export default function VotePage() {
   const { inviteCode } = useParams();
-  const navigate       = useNavigate();
-  const { t }          = useLang();
-  const thumbStripRef  = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { t } = useLang();
+  const { user, loading: authLoading } = useAuth();
+  const thumbStripRef = useRef(null);
 
-  const [album,          setAlbum]          = useState(null);
-  const [allPhotos,      setAllPhotos]      = useState([]);
-  const [votesMap,       setVotesMap]       = useState({});
+  const [album, setAlbum] = useState(null);
+  const [allPhotos, setAllPhotos] = useState([]);
+  const [votesMap, setVotesMap] = useState({});
   const [currentPhotoId, setCurrentPhotoId] = useState(null);
-  const [loading,        setLoading]        = useState(true);
-  const [finished,       setFinished]       = useState(false);
-  const [voting,         setVoting]         = useState(false);
-  const [descExpanded,   setDescExpanded]   = useState(false);
-  const [lightbox,       setLightbox]       = useState(null);
-  // Error state for album-not-found
-  const [albumError,     setAlbumError]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [finished, setFinished] = useState(false);
+  const [voting, setVoting] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [titleExpanded, setTitleExpanded] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
+  const [albumError, setAlbumError] = useState(null);
+  const [needsAuth, setNeedsAuth] = useState(false);
 
-  const votingRef    = useRef(false);
-  const votesMapRef  = useRef({});
+  const votingRef = useRef(false);
+  const votesMapRef = useRef({});
   const allPhotosRef = useRef([]);
-  const topCardRef   = useRef(null);
+  const topCardRef = useRef(null);
+
+  const shouldLoad = !authLoading;
 
   // ── Load ────────────────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!shouldLoad) return;
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       setAlbumError(null);
+      setNeedsAuth(false);
       try {
-        // Step 1: fetch album — if this fails, show error, don't show black screen
         let albumData, sessionData;
         try {
           [albumData, sessionData] = await Promise.all([
             albumsApi.getByInviteCode(inviteCode),
-            votesApi.getSession(inviteCode),
+            user
+              ? votesApi.getSession(inviteCode)
+              : Promise.resolve({ voted_photo_ids: [] }),
           ]);
         } catch (err) {
-          if (!cancelled) setAlbumError(err.message);
+          if (cancelled) return;
+          if (
+            err.message?.includes("Session expired") ||
+            err.message?.includes("401") ||
+            err.message?.includes("credentials")
+          ) {
+            setNeedsAuth(true);
+          } else {
+            setAlbumError(err.message);
+          }
           return;
         }
 
@@ -82,35 +109,24 @@ export default function VotePage() {
         setAllPhotos(photos);
         setAlbum(albumData);
 
-        // Step 2: fetch existing votes — isolated try/catch, NEVER blocks rendering
         let map = {};
         try {
           if (sessionData.voted_photo_ids?.length > 0) {
             const myVotes = await votesApi.getMyVotes(albumData.id);
             myVotes.forEach((v) => { map[String(v.photo_id)] = v.is_like; });
           }
-        } catch {
-          // Non-critical: if this fails, we just start from photo 0 with no prior votes
-        }
+        } catch { /* non-critical */ }
 
         if (cancelled) return;
 
         votesMapRef.current = map;
         setVotesMap(map);
 
-        if (photos.length === 0) {
-          // Album exists but has no photos — show finished state
-          setFinished(true);
-          return;
-        }
+        if (photos.length === 0) { setFinished(true); return; }
 
         const first = photos.find((p) => !(String(p.id) in map));
-        if (!first) {
-          // All photos already voted on
-          setFinished(true);
-        } else {
-          setCurrentPhotoId(String(first.id));
-        }
+        if (!first) setFinished(true);
+        else setCurrentPhotoId(String(first.id));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -118,15 +134,15 @@ export default function VotePage() {
 
     load();
     return () => { cancelled = true; };
-  }, [inviteCode]);
+  }, [inviteCode, shouldLoad, user]);
 
   // Auto-scroll thumbnail strip
   useEffect(() => {
     if (!currentPhotoId || !thumbStripRef.current) return;
-    const idx   = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
+    const idx = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
     if (idx < 0) return;
     const strip = thumbStripRef.current;
-    const thumbW = 68; // w-16 (64px) + gap (4px)
+    const thumbW = 68;
     strip.scrollTo({
       left: Math.max(0, idx * thumbW - strip.clientWidth / 2 + thumbW / 2),
       behavior: "smooth",
@@ -139,13 +155,12 @@ export default function VotePage() {
     votingRef.current = true;
     setVoting(true);
 
-    // Safety unlock after 3s regardless of outcome
     const safetyTimer = setTimeout(() => {
       votingRef.current = false;
       setVoting(false);
     }, 3000);
 
-    const pid    = String(photoId);
+    const pid = String(photoId);
     const newMap = { ...votesMapRef.current, [pid]: isLike };
     votesMapRef.current = newMap;
     setVotesMap(newMap);
@@ -155,7 +170,6 @@ export default function VotePage() {
       if (!err.message?.includes("timeout")) toast.error(err.message, { duration: 2000 });
     }
 
-    // Next unvoted AFTER current position, then wrap
     const photos = allPhotosRef.current;
     const curIdx = photos.findIndex((p) => String(p.id) === pid);
     const nextUnvoted =
@@ -166,23 +180,16 @@ export default function VotePage() {
     votingRef.current = false;
     setVoting(false);
 
-    if (nextUnvoted) {
-      setCurrentPhotoId(String(nextUnvoted.id));
-    } else {
-      setFinished(true);
-    }
+    if (nextUnvoted) setCurrentPhotoId(String(nextUnvoted.id));
+    else setFinished(true);
   }, []);
 
-  // ── Thumbnail jump — NO remount, just reset card position ──────────────────
+  // ── Thumbnail jump ──────────────────────────────────────────────────────────
   const jumpToPhoto = useCallback((photo) => {
     const pid = String(photo.id);
     if (pid === currentPhotoId) return;
     setCurrentPhotoId(pid);
-    // Reset the top card's animation state instead of remounting
-    // This prevents the black flash that occurred with stackKey remounts
-    requestAnimationFrame(() => {
-      topCardRef.current?.resetPosition?.();
-    });
+    requestAnimationFrame(() => { topCardRef.current?.resetPosition?.(); });
   }, [currentPhotoId]);
 
   // ── Button trigger ──────────────────────────────────────────────────────────
@@ -196,20 +203,70 @@ export default function VotePage() {
     }
   }, [currentPhotoId, handleSwipe]);
 
-  // ── Guards ──────────────────────────────────────────────────────────────────
-  if (loading) return <LoadingSpinner fullscreen />;
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const currentPhoto = allPhotos.find((p) => String(p.id) === currentPhotoId);
+  const currentIdx = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
+  const total = allPhotos.length;
+  const progress = total > 0 ? (Object.keys(votesMap).length / total) * 100 : 0;
 
-  // Album not found / access denied — friendly error, not black screen
+  const stackPhotos = useMemo(() => {
+    if (!currentPhoto) return [];
+    const rest = allPhotos
+      .filter((p) => !(String(p.id) in votesMap) && String(p.id) !== currentPhotoId)
+      .slice(0, STACK_SIZE - 1);
+    return [currentPhoto, ...rest];
+  }, [currentPhoto, allPhotos, votesMap, currentPhotoId]);
+
+  const title = album?.title || "";
+  const titleLong = title.length > TITLE_LIMIT;
+  const shownTitle = titleLong && !titleExpanded
+    ? title.slice(0, TITLE_LIMIT) + "…"
+    : title;
+
+  const desc = album?.description || "";
+  const descLong = desc.length > DESC_LIMIT;
+
+  // ── Guards ──────────────────────────────────────────────────────────────────
+  if (authLoading || loading) return <LoadingSpinner fullscreen />;
+
+  if (needsAuth || !user) return (
+    <div className="min-h-[calc(100dvh-4rem)] flex items-center justify-center text-center px-6
+                    bg-surface-light dark:bg-surface-dark">
+      <motion.div
+        initial={{ scale: 0.88, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 220, damping: 22 }}
+        className="card p-10 max-w-[360px] w-full"
+      >
+        <p className="text-5xl mb-4">🔐</p>
+        <h2 className="font-display font-bold text-2xl mb-2">Sign in to vote</h2>
+        <p className="text-gray-400 text-sm mb-6">You need an account to vote in this album.</p>
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={() => navigate("/login", { state: { from: location } })}
+            className="btn-primary w-full"
+          >
+            <LogIn size={16} /> Sign in
+          </button>
+          <button
+            onClick={() => navigate("/register", { state: { from: location } })}
+            className="btn-secondary w-full"
+          >
+            Create account
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+
   if (albumError || !album) return (
     <div className="h-[100dvh] flex items-center justify-center text-center px-6
                     bg-surface-light dark:bg-surface-dark">
-      <div>
+      <div className="max-w-[360px] w-full">
         <p className="text-5xl mb-4">🔗</p>
         <h2 className="font-display font-bold text-2xl mb-2">{t("errorAlbumNotFound")}</h2>
         {albumError && <p className="text-gray-400 text-sm mb-4">{albumError}</p>}
-        <button onClick={() => navigate("/")} className="btn-primary mt-2">
-          Go Home
-        </button>
+        <button onClick={() => navigate("/")} className="btn-primary mt-2">Go Home</button>
       </div>
     </div>
   );
@@ -221,7 +278,7 @@ export default function VotePage() {
         initial={{ scale: 0.85, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", stiffness: 240, damping: 22 }}
-        className="card p-10 text-center max-w-xs w-full mx-auto"
+        className="card p-10 text-center max-w-[360px] w-full mx-auto"
       >
         <motion.span animate={{ y: [0, -10, 0] }}
           transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
@@ -235,133 +292,123 @@ export default function VotePage() {
     </div>
   );
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
-  const currentPhoto = allPhotos.find((p) => String(p.id) === currentPhotoId);
-  const currentIdx   = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
-  const total        = allPhotos.length;
-  const progress     = total > 0 ? (Object.keys(votesMap).length / total) * 100 : 0;
-
-  const stackPhotos = useMemo(() => {
-    if (!currentPhoto) return [];
-    const rest = allPhotos
-      .filter((p) => !(String(p.id) in votesMap) && String(p.id) !== currentPhotoId)
-      .slice(0, STACK_SIZE - 1);
-    return [currentPhoto, ...rest];
-  }, [currentPhoto, allPhotos, votesMap, currentPhotoId]);
-
-  const desc     = album.description || "";
-  const descLong = desc.length > DESC_LIMIT;
-  const shownDesc = descLong && !descExpanded ? desc.slice(0, DESC_LIMIT) + "…" : desc;
-
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Main render ──────────────────────────────────────────────────────────────
   return (
     <>
-      <div className="h-[100dvh] flex flex-col overflow-hidden bg-surface-light dark:bg-surface-dark">
+      <div className="min-h-screen flex flex-col overflow-y-auto bg-surface-light dark:bg-surface-dark">
 
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <motion.div layout className="w-full max-w-[380px] mx-auto px-4 pt-3 flex-shrink-0">
-          <div className="flex items-start justify-between gap-3 mb-1">
-            <h2 className="font-display font-bold text-xl leading-tight truncate flex-1">
-              {album.title}
-            </h2>
-            <span className="badge-orange flex-shrink-0 font-mono font-bold text-sm mt-0.5">
-              {currentIdx + 1}/{total}
+        {/* ─── Header ──────────────────────────────────────────────────────────
+            Layout (top to bottom):
+              1. Author row: large avatar + username 
+              2. Album title (font-sans)
+              3. Expandable description 
+        */}
+        <div className="w-full max-w-[360px] mx-auto px-4 pt-3 pb-1 flex-shrink-0">
+          {/* 1. Author avatar + username — large, at the top */}
+          <div className="flex items-center gap-3 mb-4">
+            <AuthorAvatar user={album.creator} size={44} />
+            <span className="font-sans font-bold text-3xl text-gray-800 dark:text-gray-100 leading-tight">
+              {album.creator?.username}
             </span>
           </div>
-          <p className="text-xs text-gray-400 mb-1">by {album.creator?.username}</p>
 
-          <AnimatePresence initial={false}>
-            {desc && (
-              <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="overflow-hidden">
-                <motion.div layout>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                    {shownDesc}
-                    {descLong && (
-                      <button
-                        onClick={() => setDescExpanded(!descExpanded)}
-                        className="ml-1.5 text-primary-500 font-semibold hover:text-primary-600 transition-colors"
-                      >
-                        {descExpanded ? t("seeLess") : t("seeMore")}
-                      </button>
-                    )}
-                  </p>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Progress bar */}
-          <div className="h-1.5 bg-border-light dark:bg-border-dark rounded-full overflow-hidden mt-2 mb-2">
-            <motion.div
-              className="h-full bg-primary-400 rounded-full"
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
-            />
-          </div>
-        </motion.div>
-
-        {/* ── Thumbnail strip ─────────────────────────────────────────────── */}
-        <div
-          ref={thumbStripRef}
-          className="flex-shrink-0 w-full max-w-[380px] mx-auto pb-2 px-4"
-          style={{ overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none" }}
-        >
-          <div className="flex gap-1">
-            {allPhotos.map((photo) => {
-              const pid     = String(photo.id);
-              const isCur   = pid === currentPhotoId;
-              const reaction = votesMap[pid];
-              const hasVote  = pid in votesMap;
-
-              return (
-                <motion.button
-                  key={pid}
-                  onClick={() => jumpToPhoto(photo)}
-                  whileTap={{ scale: 0.9 }}
-                  className={`relative flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden
-                              transition-all duration-150
-                              ${isCur
-                                ? "ring-2 ring-primary-400 ring-offset-1 ring-offset-surface-light dark:ring-offset-surface-dark scale-105"
-                                : "opacity-75 hover:opacity-100 hover:scale-105"
-                              }`}
+          {/* 2. Album title */}
+          <div className="mb-1">
+            <h2 className="font-sans font-bold text-2xl leading-none min-w-0 break-words flex-1">
+              {shownTitle}
+              {titleLong && (
+                <button
+                  onClick={() => setTitleExpanded(!titleExpanded)}
+                  className="ml-0 text-primary-500 text-[11px] font-semibold hover:text-primary-600 transition-colors inline-block whitespace-nowrap"
                 >
-                  <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  {hasVote && (
-                    <div className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full
-                                     flex items-center justify-center
-                                     ${reaction ? "bg-green-500" : "bg-red-400"}`}>
-                      {reaction
-                        ? <ThumbsUp size={8} className="text-white" />
-                        : <ThumbsDown size={8} className="text-white" />
-                      }
-                    </div>
-                  )}
-                </motion.button>
-              );
-            })}
+                  {titleExpanded ? t("seeLess") : t("seeMore")}
+                </button>
+              )}
+            </h2>
+          </div>
+
+          {/* 3. Expandable description */}
+          {desc && (
+            <div className="mb-2 mt-1">
+              <p className={`font-sans text-sm text-gray-500 dark:text-gray-400 break-words leading-relaxed ${descExpanded ? "" : "line-clamp-2"}`}>
+                {desc}
+              </p>
+              {descLong && (
+                <button
+                  onClick={() => setDescExpanded(!descExpanded)}
+                  className="text-primary-500 text-[11px] font-semibold hover:text-primary-600 transition-colors mt-0 inline-block"
+                >
+                  {descExpanded ? t("seeLess") : t("seeMore")}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ─── Thumbnail strip ─────────────────────────────────────────────── */}
+        <div className="relative flex-shrink-0 w-full max-w-[360px] mx-auto">
+          {/* Edge gradients + light gaussian blur with refined boundaries */}
+          <div className="absolute -left-1 top-0 bottom-0 w-14 bg-gradient-to-r from-surface-light dark:from-surface-dark to-transparent z-10 pointer-events-none backdrop-blur-[2px] [mask-image:linear-gradient(to_right,black_35%,transparent)]" />
+          <div className="absolute -right-1 top-0 bottom-0 w-14 bg-gradient-to-l from-surface-light dark:from-surface-dark to-transparent z-10 pointer-events-none backdrop-blur-[2px] [mask-image:linear-gradient(to_left,black_35%,transparent)]" />
+
+          <div
+            ref={thumbStripRef}
+            className="w-full py-2 px-4 flex justify-center overflow-x-auto"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
+            <div className="flex gap-2 items-center min-w-max">
+              {allPhotos.map((photo) => {
+                const pid = String(photo.id);
+                const isCur = pid === currentPhotoId;
+                const reaction = votesMap[pid];
+                const hasVote = pid in votesMap;
+
+                return (
+                  <motion.button
+                    key={pid}
+                    onClick={() => jumpToPhoto(photo)}
+                    whileTap={{ scale: 0.9 }}
+                    className={`relative flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden
+                                transition-all duration-150
+                                ${isCur
+                        ? "ring-2 ring-primary-400 ring-offset-1 ring-offset-surface-light dark:ring-offset-surface-dark scale-105"
+                        : "opacity-70 hover:opacity-100 hover:scale-105"
+                      }`}
+                  >
+                    <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    {hasVote && (
+                      <div className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full
+                                       flex items-center justify-center border-2 border-surface-light dark:border-surface-dark
+                                       ${reaction ? "bg-green-500" : "bg-red-400"}`}>
+                        {reaction
+                          ? <ThumbsUp size={10} className="text-white" />
+                          : <ThumbsDown size={10} className="text-white" />
+                        }
+                      </div>
+                    )}
+                  </motion.button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* ── Card stack ─────────────────────────────────────────────── */}
-        <div className="flex-1 flex items-center justify-center px-4 min-h-0">
-          {/*
-            Card sizing: fills available height up to a max.
-            w-full with max-w keeps it centred.
-            aspectRatio 3/4 gives portrait framing.
-            No stackKey here — jumping resets the card via resetPosition() instead.
-          */}
+        {/* ─── Card stack ────────────────────────────────────────────────────── */}
+        <div className="flex-shrink-0 w-full flex items-center justify-center px-6 py-2">
           <div
-            className="relative w-full"
-            style={{
-              maxWidth: "340px",
-              height: "min(58vh, 480px)",
-            }}
+            className="relative w-full max-w-[340px] aspect-[3/4]"
           >
+            {/* n/m counter badge — now placed top-right on the cards */}
+            <div className="absolute top-3 right-3 z-30 pointer-events-none">
+              <span className="bg-black/75 backdrop-blur-md border border-white/20 text-white
+                               px-2.5 py-1 rounded-full font-mono font-bold text-[13px] shadow-sm">
+                {currentIdx >= 0 ? currentIdx + 1 : 0}/{total}
+              </span>
+            </div>
             <AnimatePresence mode="sync">
               {[...stackPhotos].reverse().map((photo, revIdx) => {
                 const stackIdx = stackPhotos.length - 1 - revIdx;
-                const isTop    = stackIdx === 0;
+                const isTop = stackIdx === 0;
                 return (
                   <SwipeCard
                     key={photo.id}
@@ -379,14 +426,14 @@ export default function VotePage() {
         </div>
 
         {/* Hint */}
-        <p className="text-center text-[11px] text-gray-400 py-1 flex-shrink-0">
+        <p className="text-center text-[11px] text-gray-400 py-1 flex-shrink-0 font-sans">
           {t("swipeHint")}
         </p>
 
-        {/* ── Buttons ──────────────────────────────────────────────────── */}
+        {/* ─── Buttons ─────────────────────────────────────────────────────── */}
         <div className="flex-shrink-0 pb-6 pt-1">
           <SwipeButtons
-            onLike={()   => triggerSwipe(true)}
+            onLike={() => triggerSwipe(true)}
             onDislike={() => triggerSwipe(false)}
             disabled={voting || !currentPhoto}
           />

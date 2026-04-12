@@ -18,12 +18,13 @@ export default function SharedAlbumCard({ album, index }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.07, duration: 0.3 }}
       className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card
-                 hover:shadow-card-hover transition-shadow flex flex-col gap-3 p-4"
+                 hover:shadow-card-hover transition-shadow flex flex-col gap-3 p-4
+                 overflow-hidden w-full min-w-0"
     >
       {/* Shared-by badge */}
-      <div className="flex items-center gap-1.5 text-xs text-gray-400">
-        <Share2 size={11} className="text-primary-400" />
-        <span>{t("sharedBy")} {album.creator?.username}</span>
+      <div className="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
+        <Share2 size={11} className="text-primary-400 flex-shrink-0" />
+        <span className="truncate">{t("sharedBy")} {album.creator?.username}</span>
       </div>
 
       {/* Thumbnails */}

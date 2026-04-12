@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
-export default function BottomSheet({ open, onClose, title, children }) {
+export default function BottomSheet({ open, onClose, title, topContent, children }) {
   const sheetRef = useRef(null);
 
   // Close on Escape key
@@ -20,24 +20,42 @@ export default function BottomSheet({ open, onClose, title, children }) {
 
   // Prevent body scroll while open
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
   return (
     <AnimatePresence>
       {open && (
-        <>
-          {/* Backdrop */}
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-end overflow-hidden">
+          {/* Backdrop (Blur + Dimming) */}
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            transition={{ duration: 0.28 }}
+            className="fixed inset-[-50vh] -inset-x-0 bg-black/60 backdrop-blur-xl"
             onClick={onClose}
           />
+
+          {/* Optional: Top content (e.g. image) sliding in from top or just fading */}
+          {topContent && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative flex-1 w-full flex items-center justify-center p-4 z-10 pointer-events-none"
+            >
+              <div className="pointer-events-auto max-w-full max-h-full">
+                {topContent}
+              </div>
+            </motion.div>
+          )}
 
           {/* Sheet */}
           <motion.div
@@ -46,41 +64,42 @@ export default function BottomSheet({ open, onClose, title, children }) {
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 340, damping: 34 }}
+            transition={{ type: "spring", stiffness: 300, damping: 32 }}
             drag="y"
             dragConstraints={{ top: 0 }}
             dragElastic={{ top: 0, bottom: 0.5 }}
             onDragEnd={(_, info) => { if (info.offset.y > 80) onClose(); }}
-            className="fixed bottom-0 left-0 right-0 z-50
+            className="relative w-full z-10
                        bg-card-light dark:bg-card-dark
-                       rounded-t-[2rem] shadow-[0_-8px_40px_-8px_rgba(0,0,0,0.24)]
-                       max-h-[85dvh] flex flex-col"
+                       rounded-t-[2.5rem] shadow-[0_-8px_40px_-8px_rgba(0,0,0,0.32)]
+                       max-h-[80dvh] flex flex-col"
           >
             {/* Drag handle */}
-            <div className="flex-shrink-0 pt-3 pb-1 flex justify-center">
-              <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+            <div className="flex-shrink-0 pt-4 pb-2 flex justify-center">
+              <div className="w-12 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700" />
             </div>
 
             {/* Header */}
-            <div className="flex-shrink-0 flex items-center justify-between px-5 py-3
+            <div className="flex-shrink-0 flex items-center justify-between px-6 py-4
                             border-b border-border-light dark:border-border-dark">
-              <h3 className="font-semibold text-base">{title}</h3>
+              <h3 className="font-bold text-lg">{title}</h3>
               <button
                 onClick={onClose}
-                className="w-8 h-8 rounded-xl flex items-center justify-center
+                className="w-10 h-10 rounded-2xl flex items-center justify-center
                            text-gray-400 hover:bg-border-light dark:hover:bg-border-dark
                            transition-colors"
+                aria-label="Close"
               >
-                <X size={16} />
+                <X size={20} />
               </button>
             </div>
 
             {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5">
               {children}
             </div>
           </motion.div>
-        </>
+        </div>
       )}
     </AnimatePresence>
   );

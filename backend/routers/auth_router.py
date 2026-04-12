@@ -101,3 +101,21 @@ async def upload_avatar(
     await db.flush()
     await db.refresh(current_user)
     return UserOut.model_validate(current_user)
+
+
+@router.delete("/avatar", response_model=UserOut)
+async def delete_avatar(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove the current user's profile picture."""
+    if current_user.avatar_url and "/uploads/" in current_user.avatar_url:
+        old_name = current_user.avatar_url.split("/uploads/")[-1]
+        old_path = UPLOAD_DIR / old_name
+        if old_path.is_file():
+            old_path.unlink()
+
+    current_user.avatar_url = None
+    await db.flush()
+    await db.refresh(current_user)
+    return UserOut.model_validate(current_user)

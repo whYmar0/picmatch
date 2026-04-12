@@ -16,10 +16,10 @@ import LoadingSpinner from "../components/LoadingSpinner";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { t }    = useLang();
-  const [albums,       setAlbums]       = useState([]);
+  const { t } = useLang();
+  const [albums, setAlbums] = useState([]);
   const [sharedAlbums, setSharedAlbums] = useState([]);
-  const [loading,      setLoading]      = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
@@ -62,9 +62,11 @@ export default function Dashboard() {
             {albums.length > 0 && ` · ${albums.length}`}
           </p>
         </div>
-        <Link to="/create" className="btn-primary flex-shrink-0 ml-4">
-          <Plus size={16} /> {t("createAlbum")}
-        </Link>
+        {albums.length > 0 && (
+          <Link to="/create" className="btn-primary flex-shrink-0 ml-4 px-8.5 py-3 sm:px-5 sm:py-2.5 text-s sm:text-sm">
+            <Plus size={16} className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> {t("createAlbum")}
+          </Link>
+        )}
       </motion.div>
 
       {albums.length === 0 ? (
@@ -78,7 +80,8 @@ export default function Dashboard() {
             <Image size={28} className="text-primary-300" />
           </div>
           <p className="text-gray-400 text-sm mb-5">{t("noAlbums")}</p>
-          <Link to="/create" className="btn-primary inline-flex">
+          {/* Button shown only on mobile — desktop has header button */}
+          <Link to="/create" className="btn-primary inline-flex sm:hidden">
             <Plus size={16} /> {t("createAlbum")}
           </Link>
         </motion.div>
