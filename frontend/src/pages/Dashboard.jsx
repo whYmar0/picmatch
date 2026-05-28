@@ -1,35 +1,34 @@
 /**
- * Dashboard.jsx — v2
- * Added: "Shared with me" section below user's own albums
+ * Dashboard.jsx — v3
+ * Added: "Recently Visited" section above own albums
  */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, Image, Share2 } from "lucide-react";
+import { Plus, Image, Clock } from "lucide-react";
 import toast from "react-hot-toast";
-import { albumsApi, sharedApi } from "../api";
+import { albumsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import AlbumCard from "../components/AlbumCard";
-import SharedAlbumCard from "../components/SharedAlbumCard";
+import RecentAlbumCard from "../components/RecentAlbumCard";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { getRecentAlbums } from "../hooks/useRecentAlbums.js";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { t } = useLang();
   const [albums, setAlbums] = useState([]);
-  const [sharedAlbums, setSharedAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Recently visited — filtered to exclude albums the user owns
+  const recentAll = user ? getRecentAlbums(user.id) : [];
+  const ownIds = new Set(albums.map((a) => a.id));
+  const recent = recentAll.filter((a) => !ownIds.has(a.id));
+
   useEffect(() => {
-    Promise.all([
-      albumsApi.getMyAlbums(),
-      sharedApi.sharedWithMe(),
-    ])
-      .then(([mine, shared]) => {
-        setAlbums(mine);
-        setSharedAlbums(shared);
-      })
+    albumsApi.getMyAlbums()
+      .then((mine) => setAlbums(mine))
       .catch((err) => toast.error(err.message))
       .finally(() => setLoading(false));
   }, []);
@@ -48,6 +47,27 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+
+      {/* ── Recently Visited ── */}
+      {recent.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-10"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Clock size={15} className="text-gray-400" />
+            <h2 className="font-semibold text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              {t("recentlyVisited")}
+            </h2>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recent.map((album, i) => (
+              <RecentAlbumCard key={album.id} album={album} index={i} />
+            ))}
+          </div>
+        </motion.section>
+      )}
 
       {/* ── My Albums ── */}
       <motion.div
@@ -80,8 +100,7 @@ export default function Dashboard() {
             <Image size={28} className="text-primary-300" />
           </div>
           <p className="text-gray-400 text-sm mb-5">{t("noAlbums")}</p>
-          {/* Button shown only on mobile — desktop has header button */}
-          <Link to="/create" className="btn-primary inline-flex sm:hidden">
+          <Link to="/create" className="btn-primary inline-flex">
             <Plus size={16} /> {t("createAlbum")}
           </Link>
         </motion.div>
@@ -93,25 +112,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Shared With Me ── */}
-      {sharedAlbums.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <div className="flex items-center gap-2 mb-5">
-            <Share2 size={16} className="text-primary-400" />
-            <h2 className="font-display font-bold text-xl">{t("sharedWithMe")}</h2>
-            <span className="badge-orange">{sharedAlbums.length}</span>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sharedAlbums.map((album, i) => (
-              <SharedAlbumCard key={album.id} album={album} index={i} />
-            ))}
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 }

@@ -114,6 +114,17 @@ const T = {
     errorGeneric: "Something went wrong. Please try again.",
     errorNotFound: "Page not found",
     errorAlbumNotFound: "Album not found or link has expired",
+
+    notifications: "Notifications",
+    replies: "Replies",
+    inbox: "Inbox",
+    inboxDetails: "Activity and notifications",
+    allCaughtUp: "You're all caught up!",
+    noNewNotifs: "No new notifications right now.",
+    Comments: "Comments",
+    recentlyVisited: "Recently Visited",
+    noRecentAlbums: "Albums you visit will appear here",
+    viewMyComments: "my thread",
   },
 
   ru: {
@@ -217,6 +228,17 @@ const T = {
     errorGeneric: "Что-то пошло не так. Попробуйте ещё раз.",
     errorNotFound: "Страница не найдена",
     errorAlbumNotFound: "Альбом не найден или ссылка устарела",
+
+    notifications: "Уведомления",
+    replies: "Ответы",
+    inbox: "Входящие",
+    inboxDetails: "Уведомления об активности",
+    allCaughtUp: "Отлично, всё прочитано!",
+    noNewNotifs: "Сейчас нет новых уведомлений.",
+    Comments: "Комментарии",
+    recentlyVisited: "Недавно посещённые",
+    noRecentAlbums: "Здесь появятся альбомы, которые вы посещали",
+    viewMyComments: "мои комментарии",
   },
 };
 

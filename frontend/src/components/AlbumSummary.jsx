@@ -1,22 +1,24 @@
 /**
- * AlbumSummary.jsx — v5 final
+ * AlbumSummary.jsx — v6
  *
- * FIXES:
- *  Ref 22 — Thumbnail click in stats → opens ImageLightbox
- *            (bottom sheet stays mounted underneath at z-50, lightbox at z-[100])
- *  Ref 23 — Filter strictly recomputes per-photo stats from selected voters only;
- *            photos with zero matching reactions are excluded
+ * CHANGES v6:
+ *  - Photo detail BottomSheet now has two tabs: Reactions | Comments
+ *  - Tab bar lives in the sheet header (headerChildren prop) — never stacks
+ *  - PhotoComments receives albumCreatorId so owner can delete any comment
+ *  - Album owner identity resolved from analytics.creator_id vs useAuth()
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, Eye, Users, LayoutGrid, List,
-  ThumbsUp, ThumbsDown, SlidersHorizontal, Filter, Share2, Check,
+  ArrowLeft, Users, LayoutGrid, List,
+  ThumbsUp, ThumbsDown, SlidersHorizontal, Filter, Share2, Check, MessageCircle,
 } from "lucide-react";
-import { useLang } from "../contexts/LangContext";
-import BottomSheet from "./BottomSheet";
-import ImageLightbox from "./ImageLightbox";
-import { UserAvatar } from "./Navbar";
+import { useLang }        from "../contexts/LangContext";
+import { useAuth }        from "../contexts/AuthContext";
+import BottomSheet        from "./BottomSheet";
+import ImageLightbox      from "./ImageLightbox";
+import PhotoComments      from "./PhotoComments";
+import { UserAvatar }     from "./Navbar";
 
 async function smartShare(title, url) {
   if (/Mobi|Android/i.test(navigator.userAgent) && navigator.share) {
@@ -33,11 +35,11 @@ async function smartShare(title, url) {
 function ReactionBadge({ isLike }) {
   return isLike
     ? <span className="inline-flex items-center gap-1 text-green-500 text-xs font-semibold">
-      <ThumbsUp size={10} /> Like
-    </span>
+        <ThumbsUp size={10} /> Like
+      </span>
     : <span className="inline-flex items-center gap-1 text-red-400 text-xs font-semibold">
-      <ThumbsDown size={10} /> Nope
-    </span>;
+        <ThumbsDown size={10} /> Nope
+      </span>;
 }
 
 function VoterRow({ username, avatarUrl, right }) {
@@ -54,25 +56,22 @@ function VoterRow({ username, avatarUrl, right }) {
   );
 }
 
-// Ref 22: thumbnail opens lightbox, stats row opens reaction sheet
-function PhotoListRow({ photo, rank, isWinner, onReactionClick, onImageClick }) {
+function PhotoListRow({ photo, rank, isWinner, onPhotoClick }) {
   return (
     <div className="flex items-center gap-3 py-2 px-2 rounded-2xl
                     hover:bg-border-light dark:hover:bg-border-dark transition-colors">
       <span className="w-6 text-center text-xs font-bold text-gray-400 flex-shrink-0">
         {isWinner ? "🏆" : `#${rank + 1}`}
       </span>
-      {/* Thumbnail + stats → unified sheet info */}
       <button
-        onClick={() => onReactionClick(photo)}
+        onClick={() => onPhotoClick(photo)}
         className="w-12 h-12 rounded-2xl overflow-hidden flex-shrink-0
                    bg-border-light dark:bg-border-dark
                    hover:ring-2 hover:ring-primary-400 transition-all"
       >
         <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
       </button>
-      {/* Stats → reaction sheet */}
-      <button onClick={() => onReactionClick(photo)} className="flex-1 min-w-0 text-left">
+      <button onClick={() => onPhotoClick(photo)} className="flex-1 min-w-0 text-left">
         <p className="text-sm font-medium truncate break-words">{photo.filename}</p>
         <div className="h-1.5 bg-border-light dark:bg-border-dark rounded-full mt-1.5 overflow-hidden">
           <motion.div
@@ -98,17 +97,15 @@ function PhotoListRow({ photo, rank, isWinner, onReactionClick, onImageClick }) 
   );
 }
 
-function PhotoGridCard({ photo, rank, isWinner, onReactionClick, onImageClick }) {
+function PhotoGridCard({ photo, rank, isWinner, onPhotoClick }) {
   return (
     <div className="relative aspect-square rounded-2xl overflow-hidden
                     bg-border-light dark:bg-border-dark group">
-      {/* Image + stats overlay → unified sheet info */}
-      <button onClick={() => onReactionClick(photo)} className="absolute inset-0 z-10">
+      <button onClick={() => onPhotoClick(photo)} className="absolute inset-0 z-10">
         <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
       </button>
-      {/* Stats overlay → reaction sheet */}
       <button
-        onClick={(e) => { e.stopPropagation(); onReactionClick(photo); }}
+        onClick={(e) => { e.stopPropagation(); onPhotoClick(photo); }}
         className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t
                    from-black/70 to-transparent p-2 pt-5 text-left"
       >
@@ -123,24 +120,79 @@ function PhotoGridCard({ photo, rank, isWinner, onReactionClick, onImageClick })
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-export default function AlbumSummary({ analytics, onBack }) {
-  const { t } = useLang();
+// ─── Tab Bar for photo detail sheet ─────────────────────────────────────────
+function PhotoTabBar({ tab, setTab, likeCount, dislikeCount, canViewStats }) {
+  return (
+    <div className="flex gap-2">
+      {canViewStats && (
+        <button
+          onClick={() => setTab("reactions")}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl
+                      text-sm font-semibold transition-colors
+                      ${tab === "reactions"
+                        ? "bg-primary-400 text-white"
+                        : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}
+        >
+          <ThumbsUp size={14} />
+          <span>{likeCount}</span>
+          <span className="text-xs opacity-70">·</span>
+          <ThumbsDown size={14} />
+          <span>{dislikeCount}</span>
+        </button>
+      )}
+      <button
+        onClick={() => setTab("comments")}
+        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl
+                    text-sm font-semibold transition-colors
+                    ${tab === "comments" || !canViewStats
+                      ? "bg-primary-400 text-white"
+                      : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}
+      >
+        <MessageCircle size={14} />
+        Comments
+      </button>
+    </div>
+  );
+}
 
-  const [sortKey, setSortKey] = useState("likes_desc");
-  const [viewMode, setViewMode] = useState("list");
-  const [sortOpen, setSortOpen] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
+// ─── Main ─────────────────────────────────────────────────────────────────────
+export default function AlbumSummary({ analytics, onBack, initialPhotoId = null, initialTab = "comments" }) {
+  const { t }    = useLang();
+  const { user } = useAuth();
+
+  const [sortKey,        setSortKey]        = useState("likes_desc");
+  const [viewMode,       setViewMode]       = useState("list");
+  const [sortOpen,       setSortOpen]       = useState(false);
+  const [filterOpen,     setFilterOpen]     = useState(false);
   const [selectedVoters, setSelectedVoters] = useState(new Set());
-  const [pendingVoters, setPendingVoters] = useState(new Set());
-  const [reactionSheet, setReactionSheet] = useState(null);
-  // Ref 22: lightbox state — separate from bottom sheet so sheet stays open
-  const [lightbox, setLightbox] = useState(null);
-  const [shareDone, setShareDone] = useState(false);
+  const [pendingVoters,  setPendingVoters]  = useState(new Set());
+  const [reactionSheet,  setReactionSheet]  = useState(null);  // null | "voters" | photo object
+  const [reactionTab,    setReactionTab]    = useState("reactions"); // "reactions" | "comments"
+  const [lightbox,       setLightbox]       = useState(null);
+  const [shareDone,      setShareDone]      = useState(false);
 
   if (!analytics) return null;
   const { title, description, total_votes, unique_voters,
-    global_like_rate, voter_summaries, photos, winner } = analytics;
+          global_like_rate, voter_summaries, photos, winner,
+          creator_id, is_public, can_view_stats } = analytics;
+
+  const isOwner = user && String(user.id) === String(creator_id);
+
+  // ── Open photo detail (always resets to reactions tab if authorized) ────────
+  const openPhotoSheet = (photo) => {
+    setReactionTab(can_view_stats ? "reactions" : "comments");
+    setReactionSheet(photo);
+  };
+
+  // Auto-open sheet when navigated from a notification deep-link
+  useEffect(() => {
+    if (!initialPhotoId || !photos?.length) return;
+    const photo = photos.find((p) => String(p.id) === String(initialPhotoId));
+    if (!photo) return;
+    setReactionSheet(photo);
+    setReactionTab(initialTab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount — analytics is already available as a prop
 
   // Sort
   const sorted = useMemo(() => [...photos].sort((a, b) =>
@@ -158,19 +210,16 @@ export default function AlbumSummary({ analytics, onBack }) {
           (r) => selectedVoters.has(String(r.voter_id))
         );
         if (filteredRx.length === 0) return null;
-        const likes = filteredRx.filter((r) => r.is_like).length;
+        const likes    = filteredRx.filter((r) => r.is_like).length;
         const dislikes = filteredRx.length - likes;
-        const pct = filteredRx.length > 0
+        const pct      = filteredRx.length > 0
           ? Math.round((likes / filteredRx.length) * 1000) / 10 : 0;
-        return {
-          ...photo, reactions: filteredRx, like_count: likes,
-          dislike_count: dislikes, total_votes: filteredRx.length, like_percentage: pct
-        };
+        return { ...photo, reactions: filteredRx, like_count: likes,
+                 dislike_count: dislikes, total_votes: filteredRx.length, like_percentage: pct };
       })
       .filter(Boolean);
   }, [sorted, selectedVoters]);
 
-  // Recalculate winner from filtered set when filter is active
   const activeWinner = useMemo(() => {
     if (selectedVoters.size === 0) return winner;
     const voted = filtered.filter((p) => p.total_votes > 0);
@@ -180,47 +229,58 @@ export default function AlbumSummary({ analytics, onBack }) {
     );
   }, [filtered, selectedVoters, winner]);
 
-  // Reaction sheet content
-  const renderReactionContent = () => {
-    if (!reactionSheet) return null;
-    if (reactionSheet === "voters" || reactionSheet === "viewers") {
-      return voter_summaries.length === 0
-        ? <p className="text-center text-gray-400 py-8 text-sm">{t("noVoters")}</p>
-        : voter_summaries.map((v) => (
+  // ── Reaction sheet content ───────────────────────────────────────────────────
+  const renderVotersList = () =>
+    voter_summaries.length === 0
+      ? <p className="text-center text-gray-400 py-8 text-sm">{t("noVoters")}</p>
+      : voter_summaries.map((v) => (
           <VoterRow key={v.voter_id} username={v.username}
             right={<span className="text-xs text-gray-400">{v.vote_count} {t("votes")}</span>} />
         ));
-    }
-    const photo = reactionSheet;
-    // Ref 23: when filter is active, show only filtered reactions
+
+  const renderPhotoReactions = (photo) => {
     const reactions = selectedVoters.size > 0
       ? (photo.reactions || []).filter((r) => selectedVoters.has(String(r.voter_id)))
       : (photo.reactions || []);
-    return (
-      <div>
-        <div className="flex items-center justify-center gap-6 mb-5 pb-3 border-b border-border-light dark:border-border-dark">
-          <span className="text-green-500 flex items-center gap-1.5 text-sm font-bold">
-            <ThumbsUp size={15} /> {photo.like_count}
-          </span>
-          <span className="text-red-400 flex items-center gap-1.5 text-sm font-bold">
-            <ThumbsDown size={15} /> {photo.dislike_count}
-          </span>
-        </div>
-        {reactions.length === 0
-          ? <p className="text-center text-gray-400 py-6 text-sm">{t("noReactions")}</p>
-          : reactions.map((r) => (
-            <VoterRow key={r.voter_id} username={r.username}
-              right={<ReactionBadge isLike={r.is_like} />} />
-          ))
-        }
-      </div>
-    );
+    return reactions.length === 0
+      ? <p className="text-center text-gray-400 py-6 text-sm">{t("noReactions")}</p>
+      : reactions.map((r) => (
+          <VoterRow key={r.voter_id} username={r.username}
+            right={<ReactionBadge isLike={r.is_like} />} />
+        ));
   };
+
+  const renderSheetContent = () => {
+    if (!reactionSheet) return null;
+    if (reactionSheet === "voters") return renderVotersList();
+
+    const photo = reactionSheet;
+    if (reactionTab === "comments") {
+      return (
+        <PhotoComments
+          photoId={String(photo.id)}
+          albumCreatorId={String(creator_id)}
+        />
+      );
+    }
+    return renderPhotoReactions(photo);
+  };
+
+  // ── Tab bar for photo sheet header ──────────────────────────────────────────
+  const photoSheetHeaderChildren = reactionSheet && reactionSheet !== "voters" ? (
+    <PhotoTabBar
+      tab={reactionTab}
+      setTab={setReactionTab}
+      likeCount={reactionSheet.like_count}
+      dislikeCount={reactionSheet.dislikeCount || reactionSheet.dislike_count}
+      canViewStats={can_view_stats}
+    />
+  ) : null;
 
   const togglePending = (id) => setPendingVoters((prev) => {
     const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
   });
-  const openFilter = () => { setPendingVoters(new Set(selectedVoters)); setFilterOpen(true); };
+  const openFilter  = () => { setPendingVoters(new Set(selectedVoters)); setFilterOpen(true); };
   const applyFilter = () => { setSelectedVoters(new Set(pendingVoters)); setFilterOpen(false); };
   const clearFilter = () => { setPendingVoters(new Set()); setSelectedVoters(new Set()); setFilterOpen(false); };
   const handleShare = async () => {
@@ -229,8 +289,8 @@ export default function AlbumSummary({ analytics, onBack }) {
   };
 
   const sheetTitle =
-    reactionSheet === "voters" || reactionSheet === "viewers" ? t("voters") :
-      reactionSheet?.filename ? t("reactions") : "";
+    reactionSheet === "voters" ? t("voters") :
+    reactionSheet?.filename    ? (reactionTab === "comments" ? "Comments" : t("reactions")) : "";
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
@@ -244,13 +304,15 @@ export default function AlbumSummary({ analytics, onBack }) {
             </button>
           )}
           <div className="ml-auto flex items-center gap-1">
-            <button onClick={() => setReactionSheet("voters")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl
-                         text-gray-500 dark:text-gray-400 hover:text-primary-500 hover:bg-primary-50 
-                         dark:hover:bg-primary-900/20 transition-all font-sans font-bold text-sm">
-              <Users size={15} />
-              <span>{unique_voters}</span>
-            </button>
+            {can_view_stats && (
+              <button onClick={() => setReactionSheet("voters")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl
+                           text-gray-500 dark:text-gray-400 hover:text-primary-500 hover:bg-primary-50 
+                           dark:hover:bg-primary-900/20 transition-all font-sans font-bold text-sm">
+                <Users size={15} />
+                <span>{unique_voters}</span>
+              </button>
+            )}
             <button onClick={handleShare}
               className="btn-ghost text-sm px-3 py-2 text-primary-500">
               <Share2 size={13} /> {shareDone ? t("copied") : t("share")}
@@ -263,10 +325,8 @@ export default function AlbumSummary({ analytics, onBack }) {
         )}
       </div>
 
-
-
-      {/* Winner hero — glow ONLY here */}
-      {activeWinner && (
+      {/* Winner hero */}
+      {(can_view_stats && activeWinner) && (
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -278,16 +338,15 @@ export default function AlbumSummary({ analytics, onBack }) {
             <span className="font-semibold text-primary-500 text-sm">{t("winnerBadge")}</span>
           </div>
           <div className="flex gap-4">
-            {/* Ref 22: winner thumbnail → reaction sheet (as per user request) */}
             <button
-              onClick={() => setReactionSheet(activeWinner)}
+              onClick={() => openPhotoSheet(activeWinner)}
               className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-orange
                          hover:ring-2 hover:ring-primary-400 transition-all"
             >
               <img src={activeWinner.url} alt="" className="w-full h-full object-cover" />
             </button>
             <button
-              onClick={() => setReactionSheet(activeWinner)}
+              onClick={() => openPhotoSheet(activeWinner)}
               className="flex-1 min-w-0 text-left group"
             >
               <p className="font-semibold truncate break-words group-hover:text-primary-500 transition-colors text-sm">
@@ -316,8 +375,8 @@ export default function AlbumSummary({ analytics, onBack }) {
           className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm
                       transition-colors
                       ${selectedVoters.size > 0
-              ? "bg-primary-400 text-white"
-              : "bg-border-light dark:bg-border-dark hover:bg-primary-50"}`}>
+                        ? "bg-primary-400 text-white"
+                        : "bg-border-light dark:bg-border-dark hover:bg-primary-50"}`}>
           <Filter size={15} /> {t("filterBy")}
           {selectedVoters.size > 0 && (
             <span className="bg-white/30 text-white text-xs font-bold px-1.5 rounded-md">
@@ -343,8 +402,7 @@ export default function AlbumSummary({ analytics, onBack }) {
             {filtered.map((photo, i) => (
               <PhotoListRow key={photo.id} photo={photo} rank={i}
                 isWinner={String(photo.id) === String(activeWinner?.id)}
-                onReactionClick={setReactionSheet}
-                onImageClick={setLightbox} />
+                onPhotoClick={openPhotoSheet} />
             ))}
           </div>
         ) : (
@@ -352,8 +410,7 @@ export default function AlbumSummary({ analytics, onBack }) {
             {filtered.map((photo, i) => (
               <PhotoGridCard key={photo.id} photo={photo} rank={i}
                 isWinner={String(photo.id) === String(activeWinner?.id)}
-                onReactionClick={setReactionSheet}
-                onImageClick={setLightbox} />
+                onPhotoClick={openPhotoSheet} />
             ))}
           </div>
         )}
@@ -363,30 +420,30 @@ export default function AlbumSummary({ analytics, onBack }) {
       <BottomSheet open={sortOpen} onClose={() => setSortOpen(false)} title={t("sort")}>
         <div className="flex gap-2 mb-5">
           {[
-            { key: "list", icon: <List size={15} />, label: t("listView") },
+            { key: "list", icon: <List size={15} />,       label: t("listView") },
             { key: "grid", icon: <LayoutGrid size={15} />, label: t("gridView") },
           ].map(({ key, icon, label }) => (
             <button key={key} onClick={() => { setViewMode(key); setSortOpen(false); }}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl
                           font-medium text-sm transition-colors
                           ${viewMode === key
-                  ? "bg-primary-400 text-white"
-                  : "bg-border-light dark:bg-border-dark hover:bg-primary-50"}`}>
+                            ? "bg-primary-400 text-white"
+                            : "bg-border-light dark:bg-border-dark hover:bg-primary-50"}`}>
               {icon} {label}
             </button>
           ))}
         </div>
         <div className="w-full h-px bg-border-light dark:bg-border-dark mb-4" />
         {[
-          { key: "likes_desc", label: t("sortMostLikes") },
+          { key: "likes_desc",    label: t("sortMostLikes") },
           { key: "dislikes_desc", label: t("sortMostDislikes") },
         ].map(({ key, label }) => (
           <button key={key} onClick={() => { setSortKey(key); setSortOpen(false); }}
             className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
                         text-sm font-medium transition-colors mb-2
                         ${sortKey === key
-                ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-                : "hover:bg-border-light dark:hover:bg-border-dark"}`}>
+                          ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
+                          : "hover:bg-border-light dark:hover:bg-border-dark"}`}>
             {label}
             {sortKey === key && <Check size={16} className="text-primary-400" />}
           </button>
@@ -402,15 +459,15 @@ export default function AlbumSummary({ analytics, onBack }) {
             <p className="text-xs text-gray-400 mb-3">{t("selectVoters")}</p>
             <div className="space-y-1 mb-6">
               {voter_summaries.map((v) => {
-                const vid = String(v.voter_id);
+                const vid      = String(v.voter_id);
                 const selected = pendingVoters.has(vid);
                 return (
                   <button key={vid} onClick={() => togglePending(vid)}
                     className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl
                                 text-sm transition-colors
                                 ${selected
-                        ? "bg-primary-50 dark:bg-primary-900/20"
-                        : "hover:bg-border-light dark:hover:bg-border-dark"}`}>
+                                  ? "bg-primary-50 dark:bg-primary-900/20"
+                                  : "hover:bg-border-light dark:hover:bg-border-dark"}`}>
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
                                        ${selected ? "bg-primary-400" : "bg-border-light dark:bg-border-dark"}`}>
@@ -433,13 +490,14 @@ export default function AlbumSummary({ analytics, onBack }) {
         )}
       </BottomSheet>
 
-      {/* Reaction sheet */}
+      {/* Photo detail sheet — with tab bar in header */}
       <BottomSheet
         open={!!reactionSheet}
         onClose={() => setReactionSheet(null)}
         title={sheetTitle}
+        headerChildren={photoSheetHeaderChildren}
         topContent={
-          (reactionSheet && reactionSheet !== "voters" && reactionSheet !== "viewers") ? (
+          (reactionSheet && reactionSheet !== "voters") ? (
             <motion.div className="w-full flex justify-center px-4">
               <img
                 src={reactionSheet.url}
@@ -450,13 +508,9 @@ export default function AlbumSummary({ analytics, onBack }) {
           ) : null
         }
       >
-        {renderReactionContent()}
+        {renderSheetContent()}
       </BottomSheet>
 
-      {/*
-        Ref 22: Lightbox at z-[100], BottomSheet at z-50.
-        Opening lightbox from inside a bottom sheet keeps the sheet mounted.
-      */}
       <ImageLightbox
         open={!!lightbox}
         src={lightbox?.url}

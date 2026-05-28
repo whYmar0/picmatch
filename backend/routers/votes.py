@@ -11,9 +11,10 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models import User, Photo, Vote, Album
+from models import User, Photo, Vote, Album, Notification, NotificationType
 from schemas import VoteCreate, VoteOut, SwipeSession
 from auth import get_current_user
 
@@ -41,9 +42,9 @@ async def cast_vote(
     photo_id_str = _str(vote_data.photo_id)
     voter_id_str = _str(current_user.id)
 
-    # Verify the photo exists
+    # Verify the photo exists and get album context
     result = await db.execute(
-        select(Photo).where(Photo.id == photo_id_str)
+        select(Photo).where(Photo.id == photo_id_str).options(selectinload(Photo.album))
     )
     photo = result.scalar_one_or_none()
 
@@ -77,8 +78,35 @@ async def cast_vote(
         is_like=vote_data.is_like,
     )
     db.add(vote)
+    
+    # Send notification if it's the first vote in this album by this user
+    try:
+        album = photo.album
+        if album and _str(album.creator_id) != voter_id_str:
+            # Check if notification already exists
+            notif_res = await db.execute(
+                select(Notification).where(
+                    and_(
+                        Notification.user_id == _str(album.creator_id),
+                        Notification.actor_id == voter_id_str,
+                        Notification.type == NotificationType.VOTE,
+                        Notification.album_id == _str(album.id)
+                    )
+                )
+            )
+            if not notif_res.scalar_one_or_none():
+                db.add(Notification(
+                    user_id=_str(album.creator_id),
+                    actor_id=voter_id_str,
+                    type=NotificationType.VOTE,
+                    album_id=_str(album.id)
+                ))
+    except Exception:
+        pass # fail silently
+
     await db.flush()
     await db.refresh(vote)
+    await db.commit()
     return VoteOut.model_validate(vote)
 
 

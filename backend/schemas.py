@@ -81,6 +81,7 @@ class PhotoStats(BaseModel):
 class AlbumCreate(BaseModel):
     title:       str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
+    is_public:   bool = True
 
 class AlbumOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -90,6 +91,7 @@ class AlbumOut(BaseModel):
     invite_code: str
     invite_url:  str
     is_active:   bool
+    is_public:   bool = True
     photo_count: int
     created_at:  datetime
     creator:     UserOut
@@ -108,6 +110,9 @@ class AlbumAnalytics(BaseModel):
     id:               AnyUUID
     title:            str
     description:      Optional[str] = None
+    creator_id:       AnyUUID
+    creator:          Optional[UserOut] = None
+    is_public:        bool = True
     total_photos:     int
     total_votes:      int
     unique_voters:    int
@@ -116,7 +121,8 @@ class AlbumAnalytics(BaseModel):
     photos:           List[PhotoStats] = []
     winner:           Optional[PhotoStats] = None
     created_at:       datetime
-    is_shared:        bool = False   # True when viewed by a non-owner shared user
+    is_shared:        bool = False
+    can_view_stats:   bool = False
 
 # ─── SharedAccess ─────────────────────────────────────────────────────────────
 
@@ -178,12 +184,39 @@ class CommentOut(BaseModel):
 
 CommentOut.model_rebuild()  # resolve forward ref
 
+class CommentThreadOut(BaseModel):
+    thread: List[CommentOut]
+    is_public: bool
+    is_owner: bool
+    photo_url: Optional[str] = None
+
 class CommentLikeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id:         AnyUUID
     user_id:    AnyUUID
     comment_id: AnyUUID
     created_at: datetime
+
+# ─── Notifications ────────────────────────────────────────────────────────────
+
+class NotificationType(str, enum.Enum):
+    REPLY   = "reply"
+    LIKE    = "like"
+    VOTE    = "vote"
+    COMMENT = "comment"
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: AnyUUID
+    type: NotificationType
+    is_read: bool
+    created_at: datetime
+    
+    actor: Optional[UserOut] = None
+    album_id: Optional[AnyUUID] = None
+    photo_id: Optional[AnyUUID] = None
+    comment_id: Optional[AnyUUID] = None
+    text: Optional[str] = None
 
 # ─── Generic ──────────────────────────────────────────────────────────────────
 

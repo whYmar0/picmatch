@@ -21,7 +21,7 @@ export default function CreateAlbum() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [createdAlbum, setCreatedAlbum] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
 
   // Dropzone setup / Настройка dropzone
   const onDrop = useCallback((accepted) => {
@@ -59,72 +59,16 @@ export default function CreateAlbum() {
       if (description) formData.append("description", description);
       files.forEach((f) => formData.append("photos", f));
 
+      formData.append("is_public", isPublic);
       const album = await albumsApi.create(formData);
-      setCreatedAlbum(album);
-      toast.success("Album created! 🎉 / Альбом создан!");
+      toast.success("Album created! 🎉");
+      navigate(`/dashboard`);
     } catch (err) {
       toast.error(err.message);
     } finally {
       setLoading(false);
     }
   };
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(createdAlbum.invite_url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // ── Success state ──────────────────────────────────────────────────────────
-  if (createdAlbum) {
-    return (
-      <div className="max-w-lg mx-auto px-4 py-12">
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="card p-8 text-center"
-        >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 300, delay: 0.1 }}
-            className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full
-                       flex items-center justify-center mx-auto mb-4 text-3xl"
-          >
-            🎉
-          </motion.div>
-          <h2 className="font-display font-bold text-2xl mb-1">{createdAlbum.title}</h2>
-          <p className="text-gray-400 text-sm mb-6">
-            {createdAlbum.photo_count} {t("photos")} uploaded
-          </p>
-
-          <div className="bg-border-light dark:bg-border-dark rounded-2xl p-3 mb-4">
-            <p className="text-xs text-gray-400 mb-2">{t("inviteLink")}</p>
-            <p className="font-mono text-sm break-all text-gray-700 dark:text-gray-300">
-              {createdAlbum.invite_url}
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <motion.button
-              onClick={handleCopy}
-              whileTap={{ scale: 0.95 }}
-              className="btn-primary flex-1"
-            >
-              {copied ? <Check size={16} /> : <Copy size={16} />}
-              {copied ? t("copied") : t("copyLink")}
-            </motion.button>
-            <button
-              onClick={() => navigate("/dashboard")}
-              className="btn-secondary flex-1"
-            >
-              {t("myAlbums")}
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
 
   // ── Form ───────────────────────────────────────────────────────────────────
   return (
@@ -169,6 +113,26 @@ export default function CreateAlbum() {
               placeholder="Tell voters what this album is about…"
               className="input-field resize-none"
             />
+          </div>
+          
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">Public access</p>
+              <p className="text-sm text-gray-500">Allow voters to see analytics</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsPublic(!isPublic)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                isPublic ? 'bg-primary-500' : 'bg-gray-200 dark:bg-gray-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isPublic ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
         </motion.div>
 

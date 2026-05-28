@@ -16,6 +16,8 @@ import Dashboard          from "./pages/Dashboard";
 import CreateAlbum        from "./pages/CreateAlbum";
 import VotePage           from "./pages/VotePage";
 import AnalyticsPage      from "./pages/AnalyticsPage";
+import Notifications      from "./pages/Notifications";
+import CommentThreadPage  from "./pages/CommentThreadPage";
 
 export default function App() {
   return (
@@ -49,15 +51,11 @@ export default function App() {
 
                   {/* All auth-required routes — no role check */}
                   <Route path="/vote/:inviteCode" element={<VotePage />} />
-                  <Route path="/dashboard" element={
-                    <ProtectedRoute><Dashboard /></ProtectedRoute>
-                  } />
-                  <Route path="/create" element={
-                    <ProtectedRoute><CreateAlbum /></ProtectedRoute>
-                  } />
-                  <Route path="/analytics/:albumId" element={
-                    <ProtectedRoute><AnalyticsPage /></ProtectedRoute>
-                  } />
+                  <Route path="/dashboard"         element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                  <Route path="/inbox"             element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                  <Route path="/create"            element={<ProtectedRoute><CreateAlbum /></ProtectedRoute>} />
+                  <Route path="/analytics/:albumId" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+                  <Route path="/comment/:commentId" element={<ProtectedRoute><CommentThreadPage /></ProtectedRoute>} />
 
                   <Route path="*" element={
                     <div className="min-h-[60vh] flex items-center justify-center text-center px-4">

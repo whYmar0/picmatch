@@ -70,6 +70,7 @@ class Album(Base):
     invite_code = Column(String(32), unique=True, nullable=False, index=True)
     creator_id  = uuid_column(foreign_key="users.id")
     is_active   = Column(Boolean, default=True)
+    is_public   = Column(Boolean, default=True, server_default="1")  # public = all can see all comments
     created_at  = Column(DateTime(timezone=True), default=_now)
 
     creator       = relationship("User",  back_populates="albums")
@@ -182,3 +183,32 @@ class CommentLike(Base):
 
     user    = relationship("User",    back_populates="comment_likes")
     comment = relationship("Comment", back_populates="likes")
+
+
+# ─── Notifications ────────────────────────────────────────────────────────────
+
+class NotificationType(str, enum.Enum):
+    REPLY   = "reply"   # someone replied to my comment
+    LIKE    = "like"    # someone liked my comment
+    VOTE    = "vote"    # someone voted on my album
+    COMMENT = "comment" # someone commented on my album
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id         = uuid_column(primary_key=True)
+    user_id    = uuid_column(foreign_key="users.id")      # Recipient
+    actor_id   = uuid_column(foreign_key="users.id", nullable=True) # Who did it
+    type       = Column(SAEnum(NotificationType), nullable=False)
+    
+    # Context references
+    album_id   = uuid_column(foreign_key="albums.id", nullable=True)
+    photo_id   = uuid_column(foreign_key="photos.id", nullable=True)
+    comment_id = uuid_column(foreign_key="comments.id", nullable=True)
+    text       = Column(Text, nullable=True) # Preview text for comments/replies
+    
+    is_read    = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=_now)
+
+    user       = relationship("User", foreign_keys=[user_id])
+    actor      = relationship("User", foreign_keys=[actor_id])

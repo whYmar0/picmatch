@@ -1,86 +1,89 @@
-/**
- * PhotoComments.jsx — v1.1
- *
- * CHANGES:
- *  - Uses UserAvatar from Navbar for avatar display (consistent across app)
- *  - Removed "@" prefix from usernames
- *  - Shows avatar_url if set, else initial letter
- */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ThumbsUp, Trash2, CornerDownRight, Send } from "lucide-react";
+import { Trash2, Send, X } from "lucide-react";
 import { commentsApi } from "../api";
-import { useAuth }     from "../contexts/AuthContext";
-import LoadingSpinner  from "./LoadingSpinner";
-import { UserAvatar }  from "./Navbar";
+import { useAuth } from "../contexts/AuthContext";
+import LoadingSpinner from "./LoadingSpinner";
+import { UserAvatar } from "./Navbar";
+import { useLang } from "../contexts/LangContext";
 
 // ─── Single comment row ───────────────────────────────────────────────────────
-function CommentItem({ comment, onDelete, onLike, onReply, depth = 0 }) {
-  const { user }     = useAuth();
+function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = false, rootComment = null }) {
+  const { user } = useAuth();
+  const { lang } = useLang();
   const [showReplies, setShowReplies] = useState(true);
   const isOwn = user && String(user.id) === String(comment.author?.id);
+  const canDelete = isOwn || isAlbumOwner;
+
+  const dateString = comment.created_at.endsWith("Z") ? comment.created_at : comment.created_at + "Z";
+  const s = Math.max(0, (Date.now() - new Date(dateString).getTime()) / 1000);
+  
+  let dateFormatted = "";
+  if (s < 60) {
+    dateFormatted = lang === "ru" ? "только что" : "now";
+  } else if (s < 3600) {
+    dateFormatted = `${Math.floor(s / 60)}${lang === "ru" ? "м" : "m"}`;
+  } else if (s < 86400) {
+    dateFormatted = `${Math.floor(s / 3600)}${lang === "ru" ? "ч" : "h"}`;
+  } else {
+    dateFormatted = `${Math.floor(s / 86400)}${lang === "ru" ? "д" : "d"}`;
+  }
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, height: 0 }}
-      className={depth > 0 ? "ml-8 border-l-2 border-border-light dark:border-border-dark pl-3" : ""}
+      className={depth > 0 ? "ml-[38px] mt-3" : "mt-4 first:mt-2"}
     >
-      <div className="flex gap-2.5 py-2">
-        {/* Avatar */}
-        <UserAvatar user={comment.author} size={28} className="mt-0.5 flex-shrink-0" />
+      <div className="flex items-start gap-2.5">
+        <UserAvatar user={comment.author} size={32} className="mt-0.5 flex-shrink-0" />
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            {/* No @ prefix */}
-            <span className="text-xs font-semibold">{comment.author?.username}</span>
-            <span className="text-[10px] text-gray-400">
-              {new Date(comment.created_at).toLocaleDateString()}
-            </span>
-          </div>
-          <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5 break-words leading-relaxed">
-            {comment.text}
+          <p className="text-[14px] leading-snug break-words">
+            <span className="font-bold text-gray-900 dark:text-gray-100 mr-2">{comment.author?.username}</span>
+            <span className="text-gray-800 dark:text-gray-200">{comment.text}</span>
           </p>
 
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            <button
-              onClick={() => onLike(comment.id)}
-              className={`flex items-center gap-1 text-[11px] font-medium transition-colors
-                          ${comment.liked_by_me ? "text-primary-500" : "text-gray-400 hover:text-primary-400"}`}
-            >
-              <ThumbsUp size={11} /> {comment.like_count > 0 ? comment.like_count : ""}
-            </button>
+          <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400 dark:text-gray-500 font-semibold">
+            <span>{dateFormatted}</span>
 
-            {depth === 0 && (
-              <button onClick={() => onReply(comment)}
-                className="text-[11px] text-gray-400 hover:text-primary-400 transition-colors
-                           flex items-center gap-1">
-                <CornerDownRight size={11} /> Reply
+            {depth < 2 && (
+              <button
+                onClick={() => onReply(comment, rootComment)}
+                className="hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                Reply
               </button>
             )}
 
-            {(comment.replies?.length ?? 0) > 0 && (
-              <button onClick={() => setShowReplies(!showReplies)}
-                className="text-[11px] text-gray-400 hover:text-primary-400 transition-colors">
-                {showReplies ? "Hide" : `${comment.replies.length} replies`}
-              </button>
-            )}
-
-            {isOwn && (
-              <button onClick={() => onDelete(comment.id)}
-                className="text-[11px] text-red-400 hover:text-red-500 transition-colors ml-auto">
-                <Trash2 size={11} />
+            {canDelete && (
+              <button
+                onClick={() => onDelete(comment.id)}
+                className="text-red-400/80 hover:text-red-500 transition-colors"
+              >
+                Delete
               </button>
             )}
           </div>
+
+          {(comment.replies?.length ?? 0) > 0 && (
+            <button
+              onClick={() => setShowReplies(!showReplies)}
+              className="flex items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400 font-bold group"
+            >
+              <div className="w-6 h-[1px] bg-gray-300 dark:bg-gray-600 group-hover:bg-gray-400 transition-colors" />
+              {showReplies ? "Hide replies" : `View ${comment.replies.length} more replies`}
+            </button>
+          )}
         </div>
       </div>
 
       <AnimatePresence>
         {showReplies && comment.replies?.map((reply) => (
           <CommentItem key={reply.id} comment={reply} depth={depth + 1}
-            onDelete={onDelete} onLike={onLike} onReply={onReply} />
+            onDelete={onDelete} onReply={onReply}
+            isAlbumOwner={isAlbumOwner} rootComment={rootComment || comment} />
         ))}
       </AnimatePresence>
     </motion.div>
@@ -88,23 +91,62 @@ function CommentItem({ comment, onDelete, onLike, onReply, depth = 0 }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function PhotoComments({ photoId }) {
-  const [comments,   setComments]   = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [text,       setText]       = useState("");
-  const [replyTo,    setReplyTo]    = useState(null);
+export default function PhotoComments({ photoId, albumCreatorId, initialComments = null }) {
+  const { user } = useAuth();
+  const isAlbumOwner = !!(user && albumCreatorId && String(user.id) === String(albumCreatorId));
+  // If initialComments is provided (pre-fetched from outside), use them and skip the first fetch.
+  // After submit/delete we still refresh via load().
+  const [comments, setComments] = useState(() => initialComments ?? []);
+  const [loading,  setLoading]  = useState(initialComments === null); // skip spinner if pre-loaded
+  const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const inputRef = useRef(null);
+
+  const startReply = (targetComment, rootComment) => {
+    // If replying to a nested comment, we attach it to the root comment to prevent disappearing comments
+    // But we keep the targetComment's author for the UI display
+    setReplyTo({
+      id: rootComment ? rootComment.id : targetComment.id,
+      author: targetComment.author
+    });
+    
+    setText((prev) => {
+      const mention = `@${targetComment.author?.username} `;
+      if (prev.startsWith('@')) {
+        const spaceIdx = prev.indexOf(' ');
+        if (spaceIdx !== -1) {
+          return mention + prev.slice(spaceIdx + 1);
+        }
+      }
+      return mention + prev;
+    });
+
+    // Focus with a small delay for smoother mobile keyboard opening
+    setTimeout(() => inputRef.current?.focus(), 10);
+  };
 
   const load = useCallback(() => {
     if (!photoId) return;
     setLoading(true);
     commentsApi.getForPhoto(photoId)
       .then(setComments)
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [photoId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Only auto-fetch if no pre-loaded data was provided at mount
+    if (initialComments !== null) return;
+    
+    // Delay the initial fetch slightly so it doesn't block the UI thread 
+    // during the 300ms BottomSheet slide-up animation
+    const timer = setTimeout(() => {
+      load();
+    }, 350);
+    
+    return () => clearTimeout(timer);
+  }, [load]); // intentionally omitting initialComments — it's only read at mount
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -112,8 +154,8 @@ export default function PhotoComments({ photoId }) {
     setSubmitting(true);
     try {
       await commentsApi.create({
-        photo_id:  photoId,
-        text:      text.trim(),
+        photo_id: photoId,
+        text: text.trim(),
         parent_id: replyTo?.id ?? null,
       });
       setText("");
@@ -128,20 +170,6 @@ export default function PhotoComments({ photoId }) {
     try { await commentsApi.delete(id); load(); } catch { /**/ }
   };
 
-  const handleLike = async (id) => {
-    try {
-      await commentsApi.toggleLike(id);
-      const toggle = (list) => list.map((c) => {
-        if (String(c.id) === String(id))
-          return { ...c, liked_by_me: !c.liked_by_me,
-                   like_count: c.liked_by_me ? c.like_count - 1 : c.like_count + 1 };
-        if (c.replies?.length) return { ...c, replies: toggle(c.replies) };
-        return c;
-      });
-      setComments((prev) => toggle(prev));
-    } catch { /**/ }
-  };
-
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -149,12 +177,13 @@ export default function PhotoComments({ photoId }) {
       {comments.length === 0
         ? <p className="text-center text-gray-400 text-sm py-6">No comments yet — be first!</p>
         : (
-          <div className="divide-y divide-border-light dark:divide-border-dark mb-3">
+          <div className="mb-4">
             <AnimatePresence>
               {comments.map((c) => (
                 <CommentItem key={c.id} comment={c}
-                  onDelete={handleDelete} onLike={handleLike}
-                  onReply={(parent) => setReplyTo(parent)} />
+                  onDelete={handleDelete}
+                  onReply={startReply}
+                  isAlbumOwner={isAlbumOwner} />
               ))}
             </AnimatePresence>
           </div>
@@ -164,19 +193,27 @@ export default function PhotoComments({ photoId }) {
       {/* Input */}
       <div className="sticky bottom-0 pt-2 pb-1 bg-card-light dark:bg-card-dark">
         {replyTo && (
-          <div className="flex items-center gap-2 mb-2 text-xs text-gray-400
-                          bg-border-light dark:bg-border-dark px-3 py-1.5 rounded-xl">
-            <CornerDownRight size={11} />
+          <div className="flex items-center gap-2 mb-2 text-xs text-gray-500 dark:text-gray-400
+                          bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-xl">
             <span>Replying to <strong>{replyTo.author?.username}</strong></span>
-            <button onClick={() => setReplyTo(null)} className="ml-auto text-gray-500 hover:text-gray-700">✕</button>
+            <button onClick={() => setReplyTo(null)} className="ml-auto p-1 hover:text-gray-700 dark:hover:text-gray-200"><X size={12} /></button>
           </div>
         )}
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
+            ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onFocus={(e) => {
+              // Ensure it's scrolled into view on mobile keyboard pop-up
+              setTimeout(() => {
+                e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }, 300);
+            }}
             placeholder="Add a comment…"
-            className="input-field flex-1 py-2 text-sm"
+            className="input-field flex-1 py-2.5 text-[15px]" 
+            autoComplete="off"
+            autoCorrect="off"
           />
           <motion.button type="submit"
             disabled={submitting || !text.trim()}

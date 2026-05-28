@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from database import init_db
 from routers import auth_router, albums, votes
-from routers import shared_access, comments   # NEW
+from routers import shared_access, comments, notifications   # NEW
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -45,8 +45,9 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 app.include_router(auth_router.router,    prefix="/api")
 app.include_router(albums.router,         prefix="/api")
 app.include_router(votes.router,          prefix="/api")
-app.include_router(shared_access.router,  prefix="/api")   # NEW
-app.include_router(comments.router,       prefix="/api")   # NEW
+app.include_router(shared_access.router,  prefix="/api")
+app.include_router(comments.router,       prefix="/api")
+app.include_router(notifications.router,  prefix="/api")   # NEW
 
 
 @app.get("/api/health", tags=["System"])

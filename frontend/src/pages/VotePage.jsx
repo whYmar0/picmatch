@@ -19,7 +19,9 @@ import { useAuth } from "../contexts/AuthContext";
 import SwipeCard, { SwipeButtons } from "../components/SwipeCard";
 import ImageLightbox from "../components/ImageLightbox";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { ThumbsUp, ThumbsDown, LogIn } from "lucide-react";
+import { ThumbsUp, ThumbsDown, LogIn, MessageCircle, Check } from "lucide-react";
+import BottomSheet from "../components/BottomSheet";
+import PhotoComments from "../components/PhotoComments";
 
 const STACK_SIZE = 3;
 const DESC_LIMIT = 100;
@@ -63,6 +65,7 @@ export default function VotePage() {
   const [lightbox, setLightbox] = useState(null);
   const [albumError, setAlbumError] = useState(null);
   const [needsAuth, setNeedsAuth] = useState(false);
+  const [commentSheet, setCommentSheet] = useState(null); // null | photo object
 
   const votingRef = useRef(false);
   const votesMapRef = useRef({});
@@ -108,6 +111,20 @@ export default function VotePage() {
         allPhotosRef.current = photos;
         setAllPhotos(photos);
         setAlbum(albumData);
+
+        // Record visit for the "Recently Visited" feature on Dashboard
+        if (user?.id) {
+          import("../hooks/useRecentAlbums.js").then(({ recordAlbumVisit }) => {
+            recordAlbumVisit(user.id, {
+              id: albumData.id,
+              title: albumData.title,
+              coverUrl: photos[0]?.url ?? null,
+              creatorUsername: albumData.creator?.username ?? null,
+              is_public: albumData.is_public,
+              hasAccess: true, // vote page = public access
+            });
+          });
+        }
 
         let map = {};
         try {
@@ -265,8 +282,10 @@ export default function VotePage() {
       <div className="max-w-[360px] w-full">
         <p className="text-5xl mb-4">🔗</p>
         <h2 className="font-display font-bold text-2xl mb-2">{t("errorAlbumNotFound")}</h2>
-        {albumError && <p className="text-gray-400 text-sm mb-4">{albumError}</p>}
-        <button onClick={() => navigate("/")} className="btn-primary mt-2">Go Home</button>
+        {albumError && <p className="text-gray-400 text-sm mb-6">{albumError}</p>}
+        <div className="flex justify-center">
+          <button onClick={() => navigate("/")} className="btn-primary">Go Home</button>
+        </div>
       </div>
     </div>
   );
@@ -280,12 +299,15 @@ export default function VotePage() {
         transition={{ type: "spring", stiffness: 240, damping: 22 }}
         className="card p-10 text-center max-w-[360px] w-full mx-auto"
       >
-        <motion.span animate={{ y: [0, -10, 0] }}
+        <motion.div animate={{ y: [0, -10, 0] }}
           transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
-          className="text-6xl block mb-4">🎉</motion.span>
+          className="w-20 h-20 bg-green-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-green"
+        >
+          <Check size={40} className="text-white" />
+        </motion.div>
         <h2 className="font-display font-bold text-2xl mb-2">{t("allDone")}</h2>
         <p className="text-gray-400 text-sm mb-6">{t("allDoneSubtitle")}</p>
-        <button onClick={() => navigate("/")} className="btn-primary w-full">
+        <button onClick={() => navigate("/analytics/" + album.id)} className="btn-primary w-full">
           {t("viewResults")}
         </button>
       </motion.div>
@@ -307,14 +329,14 @@ export default function VotePage() {
           {/* 1. Author avatar + username — large, at the top */}
           <div className="flex items-center gap-3 mb-4">
             <AuthorAvatar user={album.creator} size={44} />
-            <span className="font-sans font-bold text-3xl text-gray-800 dark:text-gray-100 leading-tight">
+            <span className="font-sans font-bold text-3xl text-gray-800 dark:text-gray-100 leading-[1.1] break-words min-w-0">
               {album.creator?.username}
             </span>
           </div>
 
           {/* 2. Album title */}
           <div className="mb-1">
-            <h2 className="font-sans font-bold text-2xl leading-none min-w-0 break-words flex-1">
+            <h2 className="font-sans font-bold text-2xl leading-[1.2] break-words w-full">
               {shownTitle}
               {titleLong && (
                 <button
@@ -410,15 +432,27 @@ export default function VotePage() {
                 const stackIdx = stackPhotos.length - 1 - revIdx;
                 const isTop = stackIdx === 0;
                 return (
-                  <SwipeCard
-                    key={photo.id}
-                    ref={isTop ? topCardRef : null}
-                    photo={photo}
-                    isTop={isTop}
-                    stackIndex={stackIdx}
-                    onSwipe={handleSwipe}
-                    onImageClick={(p) => setLightbox(p)}
-                  />
+                  <div key={photo.id} className="absolute inset-0">
+                    <SwipeCard
+                      ref={isTop ? topCardRef : null}
+                      photo={photo}
+                      isTop={isTop}
+                      stackIndex={stackIdx}
+                      onSwipe={handleSwipe}
+                      onImageClick={(p) => setLightbox(p)}
+                    />
+                    {isTop && (
+                      <button
+                        onClick={() => setCommentSheet(photo)}
+                        className="absolute bottom-4 right-4 z-30 p-3 rounded-full
+                                   bg-black/60 backdrop-blur-md border border-white/20
+                                   text-white hover:bg-black/80 transition-all active:scale-90"
+                        title="Comments"
+                      >
+                        <MessageCircle size={20} />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </AnimatePresence>
@@ -446,6 +480,30 @@ export default function VotePage() {
         alt={lightbox?.filename}
         onClose={() => setLightbox(null)}
       />
+
+      <BottomSheet
+        open={!!commentSheet}
+        onClose={() => setCommentSheet(null)}
+        title={t("Comments")}
+        topContent={
+          commentSheet ? (
+            <div className="w-full flex justify-center px-4">
+              <img
+                src={commentSheet.url}
+                className="max-h-[40dvh] rounded-2xl object-contain shadow-2xl border border-white/10"
+                alt=""
+              />
+            </div>
+          ) : null
+        }
+      >
+        {commentSheet && (
+          <PhotoComments
+            photoId={String(commentSheet.id)}
+            albumCreatorId={album?.creator_id}
+          />
+        )}
+      </BottomSheet>
     </>
   );
 }

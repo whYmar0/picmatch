@@ -9,11 +9,11 @@
 import { useRef, useState, useEffect } from "react";
 import { Link, useNavigate }  from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sun, Moon, LogOut, LayoutDashboard, Camera } from "lucide-react";
+import { Sun, Moon, LogOut, LayoutDashboard, Camera, Bell, MessageSquare, Heart, BarChart2, Languages } from "lucide-react";
 import { useTheme }           from "../contexts/ThemeContext";
 import { useAuth }            from "../contexts/AuthContext";
 import { useLang }            from "../contexts/LangContext";
-import { authApi }            from "../api";
+import { authApi, notificationsApi } from "../api";
 import toast                  from "react-hot-toast";
 import AvatarCropModal        from "./AvatarCropModal";
 
@@ -53,6 +53,49 @@ export default function Navbar() {
   // Crop modal state
   const [cropSrc,  setCropSrc]  = useState(null);   // data-url of chosen image
   const [cropping, setCropping] = useState(false);
+
+  // Notifications
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifToast, setShowNotifToast] = useState(false);
+
+  // Explicitly close menu on user change to prevent it being open accidentally after login
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [user]);
+
+  useEffect(() => {
+    let intervalId;
+    if (user) {
+      const fetchNotifs = () => {
+        notificationsApi.getMine().then((data) => {
+          setNotifications(data);
+          const unread = data.filter(n => !n.is_read);
+          const latestId = unread.length > 0 ? unread[0].id : null;
+          
+          // Only show toast if we have new unread notifications that haven't been shown
+          const lastSeenId = sessionStorage.getItem("notif_toast_last_id");
+          
+          if (latestId && lastSeenId !== latestId) {
+            setShowNotifToast(true);
+            sessionStorage.setItem("notif_toast_last_id", latestId);
+            setTimeout(() => setShowNotifToast(false), 5000); 
+          }
+        }).catch(console.error);
+      };
+      
+      fetchNotifs();
+      // Poll notifications every 10 seconds
+      intervalId = setInterval(fetchNotifs, 10000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [user]);
+
+  const unreadNotifs = notifications.filter(n => !n.is_read);
+  const repliesCount = unreadNotifs.filter(n => n.type === "reply" || n.type === "comment").length;
+  const likesCount   = unreadNotifs.filter(n => n.type === "like").length;
+  const votesCount   = unreadNotifs.filter(n => n.type === "vote").length;
 
   // Close menu on outside click
   useEffect(() => {
@@ -143,24 +186,75 @@ export default function Navbar() {
           {/* Controls */}
           <div className="flex items-center gap-1.5">
 
-            {/* Language */}
-            <button
-              onClick={() => setLanguage(lang === "en" ? "ru" : "en")}
-              className="btn-ghost text-xs font-bold w-9 h-9 rounded-xl tracking-wider"
-            >
-              {lang.toUpperCase()}
-            </button>
+            {/* Notifications */}
+            {user && (
+              <div className="relative">
+                <button
+                  onClick={() => navigate("/inbox")}
+                  className="btn-ghost relative flex items-center justify-center w-11 h-11 rounded-2xl"
+                >
+                  <Heart size={24} className="text-gray-900 dark:text-gray-100" />
+                  {unreadNotifs.length > 0 && (
+                    <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(255,255,255,1)] dark:shadow-[0_0_0_2px_rgba(30,41,59,1)]" />
+                  )}
+                </button>
+
+                {/* Mini notification bubble (TikTok/Instagram style) */}
+                <AnimatePresence>
+                  {showNotifToast && unreadNotifs.length > 0 && (
+                    <motion.div
+                      style={{ originY: 0, originX: 0.8 }}
+                      initial={{ opacity: 0, scale: 0 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0 }}
+                      transition={{ 
+                        type: "spring",
+                        stiffness: 500,
+                        damping: 15,
+                        mass: 0.5
+                      }}
+                      className="absolute top-full right-0 mt-2 flex flex-col items-end z-50 pointer-events-none"
+                    >
+                      {/* Triangle Pointer */}
+                      <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-[#ef4444] mr-3" />
+                      
+                      {/* Bubble Content */}
+                      <div className="bg-[#ef4444] rounded-2xl py-2 px-4 flex items-center shadow-2xl gap-4 text-white">
+                        {repliesCount > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <MessageSquare size={18} fill="white" className="text-white" />
+                            <span className="font-bold text-[16px] leading-none mb-[1px]">{repliesCount}</span>
+                          </div>
+                        )}
+                        {likesCount > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <Heart size={18} fill="white" className="text-white" />
+                            <span className="font-bold text-[16px] leading-none mb-[1px]">{likesCount}</span>
+                          </div>
+                        )}
+                        {votesCount > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <BarChart2 size={18} fill="white" className="text-white" />
+                            <span className="font-bold text-[16px] leading-none mb-[1px]">{votesCount}</span>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
 
             {/* Theme */}
             <motion.button onClick={toggle} whileTap={{ scale: 0.9 }}
-              className="btn-ghost w-9 h-9 rounded-xl">
+              className="btn-ghost w-11 h-11 rounded-2xl">
               <motion.div
                 key={isDark ? "sun" : "moon"}
                 initial={{ rotate: -20, opacity: 0 }}
                 animate={{ rotate: 0, opacity: 1 }}
                 transition={{ duration: 0.18 }}
               >
-                {isDark ? <Sun size={16} /> : <Moon size={16} />}
+                {isDark ? <Sun size={20} /> : <Moon size={20} />}
               </motion.div>
             </motion.button>
 
@@ -180,21 +274,25 @@ export default function Navbar() {
                     {/* Mobile: smaller avatar */}
                     <UserAvatar
                       user={user}
-                      size={32}
+                      size={36}
                       className="sm:hidden border border-border-light dark:border-border-dark"
                     />
                     {/* Desktop: slightly larger avatar */}
                     <UserAvatar
                       user={user}
-                      size={36}
+                      size={40}
                       className="hidden sm:flex border border-border-light dark:border-border-dark"
                     />
                     {/* Small arrow indicator */}
                     <motion.div 
+                      initial={{ rotate: 0 }}
                       animate={{ rotate: menuOpen ? 180 : 0 }}
-                      className="absolute -right-1 -bottom-1 bg-white dark:bg-card-dark rounded-full shadow-sm border border-border-light dark:border-border-dark p-0.5"
+                      transition={{ duration: 0.2 }}
+                      className="absolute -right-1 -bottom-1 bg-white dark:bg-card-dark rounded-full shadow-sm border border-border-light dark:border-border-dark p-0.5 flex items-center justify-center w-4 h-4"
                     >
-                      <div className="w-1.5 h-1.5 border-r-2 border-b-2 border-primary-400 rotate-45 mb-1 ml-0.5" />
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-primary-500">
+                        <path d="m6 9 6 6 6-6"/>
+                      </svg>
                     </motion.div>
                   </div>
 
@@ -232,6 +330,25 @@ export default function Navbar() {
                               Remove Photo
                             </button>
                           )}
+                          
+                          <div className="h-px bg-border-light dark:bg-border-dark my-1" />
+                          
+                          <button
+                            onClick={() => {
+                              setLanguage(lang === "en" ? "ru" : "en");
+                              setMenuOpen(false);
+                            }}
+                            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm 
+                                       hover:bg-primary-50 dark:hover:bg-primary-900/20 text-gray-700 dark:text-gray-200 transition-colors"
+                          >
+                            <span className="flex items-center gap-3">
+                              <Languages size={16} className="text-gray-400" />
+                              {t("language", "Language")}
+                            </span>
+                            <span className="text-xs font-bold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-md">
+                              {lang.toUpperCase()}
+                            </span>
+                          </button>
                           
                           <div className="h-px bg-border-light dark:bg-border-dark my-1" />
                           

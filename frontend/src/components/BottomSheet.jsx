@@ -3,30 +3,67 @@
  * Slides up from the bottom with a backdrop, draggable to dismiss.
  * Used for: voter list, per-photo reaction drill-down.
  */
-import { useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from "framer-motion";
 import { X } from "lucide-react";
 
-export default function BottomSheet({ open, onClose, title, topContent, children }) {
+export default function BottomSheet({ open, onClose, title, topContent, headerChildren, children }) {
   const sheetRef = useRef(null);
+  const controls = useAnimation();
+  const y = useMotionValue(0);
+  // Calculate vh once on mount to prevent mobile address bar from triggering resize re-renders and stuttering animations
+  const [vh] = useState(typeof window !== "undefined" ? window.innerHeight : 800);
+
+  // Snap points: 
+  // - 0 means fully expanded (95vh height)
+  // - defaultOffset means 60vh visible (sheet is translated down by 35vh)
+  const defaultOffset = vh * 0.35;
+  const dismissOffset = vh * 0.8;
+
+  // Scale top content as we drag. 
+  // It stops shrinking once the sheet takes 60% space (y reaches defaultOffset).
+  const scale = useTransform(y, [0, defaultOffset, dismissOffset], [0.85, 1, 1]);
+  // Fade out top content only when dragging DOWN to dismiss
+  const topOpacity = useTransform(y, [defaultOffset, dismissOffset], [1, 0]);
 
   // Close on Escape key
   useEffect(() => {
     if (!open) return;
-    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    controls.start({ y: defaultOffset, transition: { type: "spring", stiffness: 350, damping: 35 } });
+    const handler = (e) => { if (e.key === "Escape") handleClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+  }, [open, controls, defaultOffset]);
 
-  // Prevent body scroll while open
+  // Prevent body scroll
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [open]);
+
+  const handleClose = async () => {
+    await controls.start({ y: vh, transition: { duration: 0.25 } });
+    onClose();
+  };
+
+  const onDragEnd = (_, info) => {
+    const velocity = info.velocity.y;
+    const currentY = y.get();
+
+    // If swiped down fast, close
+    if (velocity > 500) {
+      handleClose();
+    } else if (currentY > defaultOffset + 100) {
+      // Dragged down past threshold, close
+      handleClose();
+    } else if (currentY < defaultOffset - 80 || velocity < -500) {
+      // Dragged up or swiped up, expand fully
+      controls.start({ y: 0, transition: { type: "spring", stiffness: 350, damping: 35 } });
+    } else {
+      // Snap back to default
+      controls.start({ y: defaultOffset, transition: { type: "spring", stiffness: 350, damping: 35 } });
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -43,17 +80,18 @@ export default function BottomSheet({ open, onClose, title, topContent, children
             onClick={onClose}
           />
 
-          {/* Optional: Top content (e.g. image) sliding in from top or just fading */}
+          {/* Optional: Top content (e.g. image) */}
           {topContent && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative flex-1 w-full flex items-center justify-center p-4 z-10 pointer-events-none"
+            <motion.div 
+              style={{ opacity: topOpacity }}
+              className="absolute top-0 left-0 w-full h-[40dvh] flex items-center justify-center p-4 z-10 pointer-events-none"
             >
-              <div className="pointer-events-auto max-w-full max-h-full">
+              <motion.div
+                style={{ scale }}
+                className="pointer-events-auto max-w-full max-h-full"
+              >
                 {topContent}
-              </div>
+              </motion.div>
             </motion.div>
           )}
 
@@ -61,18 +99,18 @@ export default function BottomSheet({ open, onClose, title, topContent, children
           <motion.div
             key="sheet"
             ref={sheetRef}
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 300, damping: 32 }}
+            initial={{ y: vh }}
+            animate={controls}
+            exit={{ y: vh }}
+            style={{ y, height: "95dvh", marginTop: "auto" }}
             drag="y"
-            dragConstraints={{ top: 0 }}
-            dragElastic={{ top: 0, bottom: 0.5 }}
-            onDragEnd={(_, info) => { if (info.offset.y > 80) onClose(); }}
-            className="relative w-full z-10
+            dragConstraints={{ top: 0, bottom: vh }}
+            dragElastic={0.1}
+            onDragEnd={onDragEnd}
+            className="absolute bottom-0 w-full z-20
                        bg-card-light dark:bg-card-dark
                        rounded-t-[2.5rem] shadow-[0_-8px_40px_-8px_rgba(0,0,0,0.32)]
-                       max-h-[80dvh] flex flex-col"
+                       flex flex-col"
           >
             {/* Drag handle */}
             <div className="flex-shrink-0 pt-4 pb-2 flex justify-center">
@@ -80,18 +118,22 @@ export default function BottomSheet({ open, onClose, title, topContent, children
             </div>
 
             {/* Header */}
-            <div className="flex-shrink-0 flex items-center justify-between px-6 py-4
-                            border-b border-border-light dark:border-border-dark">
-              <h3 className="font-bold text-lg">{title}</h3>
-              <button
-                onClick={onClose}
-                className="w-10 h-10 rounded-2xl flex items-center justify-center
-                           text-gray-400 hover:bg-border-light dark:hover:bg-border-dark
-                           transition-colors"
-                aria-label="Close"
-              >
-                <X size={20} />
-              </button>
+            <div className="flex-shrink-0 border-b border-border-light dark:border-border-dark">
+              <div className="flex items-center justify-between px-6 py-4">
+                <h3 className="font-bold text-lg">{title}</h3>
+                <button
+                  onClick={handleClose}
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center
+                             text-gray-400 hover:bg-border-light dark:hover:bg-border-dark
+                             transition-colors"
+                  aria-label="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              {headerChildren && (
+                <div className="px-6 pb-3">{headerChildren}</div>
+              )}
             </div>
 
             {/* Scrollable content */}

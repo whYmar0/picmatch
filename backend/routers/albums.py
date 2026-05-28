@@ -13,7 +13,7 @@ from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models import User, Album, Photo, Vote, SharedAccess
+from models import User, Album, Photo, Vote, SharedAccess, Comment
 from schemas import (
     AlbumOut, AlbumWithPhotos, AlbumAnalytics,
     PhotoStats, PhotoOut, MessageResponse,
@@ -70,6 +70,7 @@ def album_to_out(album: Album) -> AlbumOut:
         invite_code=album.invite_code,
         invite_url=f"{FRONTEND_URL}/vote/{album.invite_code}",
         is_active=album.is_active,
+        is_public=album.is_public,
         photo_count=len(album.photos),
         created_at=album.created_at,
         creator=album.creator,
@@ -81,6 +82,7 @@ def album_to_out(album: Album) -> AlbumOut:
 async def create_album(
     title: str = Form(...),
     description: str = Form(None),
+    is_public: bool = Form(True),
     photos: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -92,6 +94,7 @@ async def create_album(
 
     album = Album(title=title, description=description,
                   invite_code=secrets.token_urlsafe(16),
+                  is_public=is_public,
                   creator_id=_s(current_user.id))
     db.add(album)
     await db.flush()
@@ -178,17 +181,20 @@ async def get_album_analytics(
 
     is_owner = _s(album.creator_id) == uid
 
-    if not is_owner:
-        # Check shared access
-        acc_res = await db.execute(
-            select(SharedAccess).where(
-                and_(SharedAccess.album_id == album_id,
-                     SharedAccess.user_id == uid,
-                     SharedAccess.can_view_stats == True)  # noqa
-            )
-        )
-        if not acc_res.scalar_one_or_none():
-            raise HTTPException(403, detail="Access denied")
+    if is_owner:
+        pass
+    elif album.is_public:
+        # In a public album, we still might want users to vote first? 
+        # The user said "если альбом открытый, то у него доступ есть".
+        # Let's check if they voted just to be sure we follow the flow, 
+        # but the prompt says they have access if it's open.
+        pass
+    else:
+        # Private album - only owner
+        raise HTTPException(403, detail="Access denied. This album is private.")
+
+    is_shared = False
+    can_view_stats = True
 
     total_likes = 0
     total_votes = 0
@@ -235,14 +241,77 @@ async def get_album_analytics(
 
     return AlbumAnalytics(
         id=album.id, title=album.title, description=album.description,
+        creator_id=album.creator_id,
+        creator=album.creator,
+        is_public=album.is_public,
         total_photos=len(album.photos),
         total_votes=total_votes, unique_voters=len(voter_map),
         global_like_rate=global_like_rate,
         voter_summaries=voter_summaries,
         photos=photo_stats, winner=winner,
         created_at=album.created_at,
-        is_shared=not is_owner,
+        is_shared=is_shared,
+        can_view_stats=can_view_stats,
     )
+
+
+@router.get("/{album_id}/my-comments")
+async def get_my_comments_in_album(
+    album_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns info about the current user's first comment thread in an album.
+    Used by the "Recently Visited" feature to open a LockedCommentSheet
+    when the user has no analytics access but did participate in comments.
+    Response: { has_comments: bool, comment_id: str|None, photo_id: str|None, photo_url: str|None }
+    """
+    from sqlalchemy.orm import selectinload as sil
+    uid = _s(current_user.id)
+
+    # Find the album's photos
+    album_res = await db.execute(
+        select(Album)
+        .options(selectinload(Album.photos))
+        .where(Album.id == album_id)
+    )
+    album = album_res.scalar_one_or_none()
+    if not album:
+        raise HTTPException(404, detail="Album not found")
+
+    photo_ids = [_s(p.id) for p in album.photos]
+    if not photo_ids:
+        return {"has_comments": False, "comment_id": None, "photo_id": None, "photo_url": None}
+
+    # Find user's oldest comment in this album (any photo, root level)
+    from sqlalchemy import or_
+    comment_res = await db.execute(
+        select(Comment)
+        .where(
+            and_(
+                Comment.photo_id.in_(photo_ids),
+                Comment.user_id == uid,
+                Comment.parent_id == None,  # noqa — root comments only
+            )
+        )
+        .order_by(Comment.created_at.asc())
+        .limit(1)
+    )
+    first_comment = comment_res.scalar_one_or_none()
+    if not first_comment:
+        return {"has_comments": False, "comment_id": None, "photo_id": None, "photo_url": None}
+
+    # Get photo URL
+    photo = next((p for p in album.photos if _s(p.id) == _s(first_comment.photo_id)), None)
+    photo_url_val = photo_url(photo.stored_filename) if photo else None
+
+    return {
+        "has_comments": True,
+        "comment_id": _s(first_comment.id),
+        "photo_id": _s(first_comment.photo_id),
+        "photo_url": photo_url_val,
+    }
 
 
 @router.delete("/{album_id}", response_model=MessageResponse)
@@ -264,4 +333,28 @@ async def delete_album(
         if p.exists():
             p.unlink()
     await db.delete(album)
+    await db.commit()
     return MessageResponse(message="Album deleted successfully")
+
+
+@router.patch("/{album_id}/privacy", response_model=AlbumOut)
+async def toggle_album_privacy(
+    album_id: str,
+    is_public: bool = Form(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggles album's public/private status."""
+    result = await db.execute(
+        select(Album)
+        .options(selectinload(Album.photos), selectinload(Album.creator))
+        .where(and_(Album.id == album_id, Album.creator_id == _s(current_user.id)))
+    )
+    album = result.scalar_one_or_none()
+    if not album:
+        raise HTTPException(404, detail="Album not found or access denied")
+
+    album.is_public = is_public
+    await db.commit()
+    await db.refresh(album)
+    return album_to_out(album)

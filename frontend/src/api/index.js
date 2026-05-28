@@ -72,6 +72,14 @@ export const albumsApi = {
   getByInviteCode: (code)    => api.get(`/albums/invite/${code}`),
   getAnalytics:    (albumId) => api.get(`/albums/${albumId}/analytics`),
   delete:          (albumId) => api.delete(`/albums/${albumId}`),
+  updatePrivacy:   (albumId, isPublic) => {
+    const form = new FormData();
+    form.append("is_public", isPublic);
+    return api.patch(`/albums/${albumId}/privacy`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  getMyCommentsInAlbum: (albumId) => api.get(`/albums/${albumId}/my-comments`),
 };
 
 export const votesApi = {
@@ -89,9 +97,15 @@ export const sharedApi = {
 
 export const commentsApi = {
   getForPhoto: (photoId)   => api.get(`/comments/photo/${photoId}`),
+  getThread:   (commentId) => api.get(`/comments/thread/${commentId}`),
   create:      (body)      => api.post("/comments/", body),
   delete:      (commentId) => api.delete(`/comments/${commentId}`),
   toggleLike:  (commentId) => api.post(`/comments/${commentId}/like`),
+};
+
+export const notificationsApi = {
+  getMine: () => api.get("/notifications/"),
+  markAllRead: () => api.post("/notifications/read"),
 };
 
 export default api;

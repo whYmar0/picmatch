@@ -6,9 +6,10 @@
 import { useState } from "react";
 import { motion }   from "framer-motion";
 import { Link }     from "react-router-dom";
-import { Copy, Check, BarChart2, Trash2, Image, Clock, Share2 } from "lucide-react";
+import { Copy, Check, BarChart2, Trash2, Image, Clock, Share2, Globe, Lock } from "lucide-react";
 import { useLang }  from "../contexts/LangContext";
-import ShareModal   from "./ShareModal";
+import { albumsApi } from "../api";
+import toast       from "react-hot-toast";
 
 function parseUTC(dateStr) {
   if (!dateStr) return new Date();
@@ -36,15 +37,31 @@ async function smartCopy(text) {
   }
 }
 
-export default function AlbumCard({ album, onDelete, index }) {
+export default function AlbumCard({ album: initialAlbum, onDelete, index }) {
   const { t } = useLang();
+  const [album, setAlbum] = useState(initialAlbum);
   const [copied,     setCopied]     = useState(false);
-  const [shareOpen,  setShareOpen]  = useState(false);
+  const [updating,   setUpdating]   = useState(false);
 
   const handleCopy = async (e) => {
     e.preventDefault();
     if (await smartCopy(album.invite_url)) {
       setCopied(true); setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const togglePrivacy = async (e) => {
+    e.preventDefault();
+    setUpdating(true);
+    try {
+      const nextPublic = !album.is_public;
+      const updated = await albumsApi.updatePrivacy(album.id, nextPublic);
+      setAlbum(updated);
+      toast.success(nextPublic ? "Album is now Public ✓" : "Album is now Private ✓");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -95,11 +112,32 @@ export default function AlbumCard({ album, onDelete, index }) {
         </div>
 
         {/* Meta */}
-        <div className="min-w-0">
-          <h3 className="font-semibold text-sm truncate">{album.title}</h3>
-          <span className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-            <Clock size={10} /> {timeAgo(album.created_at)}
-          </span>
+        <div className="flex items-center justify-between min-w-0">
+          <div className="min-w-0 pr-2 flex-1">
+            <h3 className="font-semibold text-sm leading-tight break-words">{album.title}</h3>
+            <span className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+              <Clock size={10} /> {timeAgo(album.created_at)}
+            </span>
+          </div>
+          <motion.button
+            onClick={togglePrivacy}
+            disabled={updating}
+            whileTap={{ scale: 0.9 }}
+            className={`flex items-center justify-center p-2 rounded-xl transition-colors ${
+              album.is_public 
+                ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500" 
+                : "bg-gray-100 dark:bg-gray-800 text-gray-500"
+            }`}
+            title={album.is_public ? "Public Album" : "Private Album"}
+          >
+            {updating ? (
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full" />
+            ) : album.is_public ? (
+              <Globe size={14} />
+            ) : (
+              <Lock size={14} />
+            )}
+          </motion.button>
         </div>
 
         {/* Invite link */}
@@ -121,17 +159,6 @@ export default function AlbumCard({ album, onDelete, index }) {
             className="flex-1 btn-primary text-xs py-2 justify-center">
             <BarChart2 size={13} /> {t("viewAnalytics")}
           </Link>
-          {/* Share button */}
-          <motion.button
-            onClick={() => setShareOpen(true)}
-            whileTap={{ scale: 0.9 }}
-            className="w-9 h-9 flex items-center justify-center rounded-xl
-                       text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20
-                       transition-colors"
-            aria-label={t("shareAlbum")}
-          >
-            <Share2 size={14} />
-          </motion.button>
           <motion.button onClick={handleDelete} whileTap={{ scale: 0.9 }}
             className="w-9 h-9 flex items-center justify-center rounded-xl
                        text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
@@ -141,11 +168,6 @@ export default function AlbumCard({ album, onDelete, index }) {
         </div>
       </motion.div>
 
-      <ShareModal
-        album={album}
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-      />
     </>
   );
 }
