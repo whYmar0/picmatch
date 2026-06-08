@@ -1,4 +1,4 @@
-# PicMatch v5 — Handoff
+﻿# Pickmatch v5 — Handoff
 
 ## Цель
 
@@ -71,7 +71,7 @@
 Две причины: (1) `window.resize` listener вызывал ре-рендер при появлении адресной строки браузера — убран, `vh` теперь статичен. (2) Fetch комментариев происходил одновременно с анимацией 300ms — добавлена задержка 350ms.
 
 ### Недавние альбомы
-Хранятся в `localStorage` по ключу `picmatch_recent_${userId}`. Обновляются при каждом посещении (`VotePage` и `AnalyticsPage`). При 404 альбом автоматически удаляется. При 403 без params — проверяем наличие комментариев через `GET /albums/:id/my-comments` и показываем `LockedCommentSheet`.
+Хранятся в `localStorage` по ключу `pickmatch_recent_${userId}`. Обновляются при каждом посещении (`VotePage` и `AnalyticsPage`). При 404 альбом автоматически удаляется. При 403 без params — проверяем наличие комментариев через `GET /albums/:id/my-comments` и показываем `LockedCommentSheet`.
 
 ---
 

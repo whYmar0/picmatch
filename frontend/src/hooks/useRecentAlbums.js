@@ -1,4 +1,4 @@
-/**
+﻿/**
  * hooks/useRecentAlbums.js
  *
  * Stores up to 10 recently visited albums in localStorage, keyed per userId.
@@ -8,7 +8,7 @@
 const MAX = 10;
 
 function storageKey(userId) {
-  return `picmatch_recent_${userId}`;
+  return `pickmatch_recent_${userId}`;
 }
 
 export function getRecentAlbums(userId) {

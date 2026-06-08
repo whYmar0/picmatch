@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AlbumCard.jsx — v2
  * Added: Share button → opens ShareModal
  * Fixed: timeAgo UTC parsing (Ref 34 — appends Z for SQLite strings)
@@ -27,7 +27,7 @@ function timeAgo(dateStr) {
 
 async function smartCopy(text) {
   if (/Mobi|Android/i.test(navigator.userAgent) && navigator.share) {
-    try { await navigator.share({ title: "PicMatch invite", url: text }); return true; } catch { /**/ }
+    try { await navigator.share({ title: "Pickmatch invite", url: text }); return true; } catch { /**/ }
   }
   try { await navigator.clipboard.writeText(text); return true; }
   catch {

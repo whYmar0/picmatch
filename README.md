@@ -1,4 +1,4 @@
-# 📸 PicMatch
+# 📸 Pickmatch
 
 > **EN:** A photo-rating platform where creators upload albums and invited users vote using a Tinder-like swipe interface to determine the best shot.
 >
@@ -7,8 +7,8 @@
 ---
 
 ## 🌐 Live Demo / Демо
-- Frontend (Vercel): `https://picmatch.vercel.app`
-- Backend (Render): `https://picmatch-api.onrender.com`
+- Frontend (Vercel): `https://pickmatch.vercel.app`
+- Backend (Render): `https://pickmatch-api.onrender.com`
 
 ---
 
@@ -29,7 +29,7 @@
 ## 🗂 Project Structure / Структура проекта
 
 ```
-picmatch/
+pickmatch/
 ├── backend/                  # Python FastAPI
 │   ├── main.py               # App entry point / Точка входа
 │   ├── database.py           # DB engine + session / Движок и сессии БД
@@ -88,7 +88,7 @@ picmatch/
 
 ```bash
 # 1. Navigate / Перейти
-cd picmatch/backend
+cd pickmatch/backend
 
 # 2. Create virtual environment / Создать виртуальное окружение
 python -m venv venv
@@ -103,7 +103,7 @@ cp .env.example .env
 # Edit .env with your database credentials
 
 # 5. Create PostgreSQL database / Создать базу данных
-psql -U postgres -c "CREATE DATABASE picmatch;"
+psql -U postgres -c "CREATE DATABASE pickmatch;"
 
 # 6. Run / Запустить
 uvicorn main:app --reload --port 8000
@@ -117,7 +117,7 @@ API docs available at: `http://localhost:8000/docs`
 
 ```bash
 # 1. Navigate / Перейти
-cd picmatch/frontend
+cd pickmatch/frontend
 
 # 2. Install / Установить
 npm install
@@ -230,12 +230,12 @@ created_at     created_at
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| Primary | `#FFB347` | Buttons, accents |
+| Primary | `#9966CC` | Buttons, accents |
 | Surface Light | `#FAFAF8` | Page background |
 | Surface Dark | `#141412` | Dark page bg |
 | Card Light | `#FFFFFF` | Card background |
 | Card Dark | `#1E1C1A` | Dark card bg |
-| Font Display | Fraunces | Headings |
+| Font Display | Rubik | Headings |
 | Font Sans | Outfit | Body text |
 
 ---

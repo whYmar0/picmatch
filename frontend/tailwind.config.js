@@ -5,18 +5,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Фирменный пастельный оранжевый / Brand pastel orange
+        // Фирменный аметистовый фиолетовый / Brand amethyst purple
         primary: {
-          50:  "#FFF8F0",
-          100: "#FFEFD9",
-          200: "#FFD9A8",
-          300: "#FFC278",
-          400: "#FFB347",  // Main brand color
-          500: "#FDB347",
-          600: "#F09020",
-          700: "#C97010",
-          800: "#A05010",
-          900: "#7A3810",
+          50:  "#F5F0FA",
+          100: "#EBE0F5",
+          200: "#D6C2EB",
+          300: "#C2A3E0",
+          400: "#9966CC",  // Main brand color
+          500: "#8A57BD",
+          600: "#7545A3",
+          700: "#5F348A",
+          800: "#49246E",
+          900: "#341552",
         },
         // Нейтральные оттенки / Neutral tones
         surface: {
@@ -35,7 +35,7 @@ export default {
       fontFamily: {
         // Современный, чистый шрифт / Modern clean font
         sans: ["'Outfit'", "system-ui", "sans-serif"],
-        display: ["'Fraunces'", "serif"],
+        display: ["'Rubik'", "sans-serif"],
       },
       borderRadius: {
         "4xl": "2rem",
@@ -67,8 +67,8 @@ export default {
           "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
         },
         winnerGlow: {
-          "0%, 100%": { boxShadow: "0 0 20px 4px rgba(255,179,71,0.4)" },
-          "50%": { boxShadow: "0 0 40px 8px rgba(255,179,71,0.7)" },
+          "0%, 100%": { boxShadow: "0 0 20px 4px rgba(153,102,204,0.4)" },
+          "50%": { boxShadow: "0 0 40px 8px rgba(153,102,204,0.7)" },
         },
         float: {
           "0%, 100%": { transform: "translateY(0)" },
@@ -78,7 +78,7 @@ export default {
       boxShadow: {
         "card": "0 4px 24px -4px rgba(0,0,0,0.08), 0 1px 4px -1px rgba(0,0,0,0.04)",
         "card-hover": "0 12px 40px -8px rgba(0,0,0,0.14), 0 4px 12px -4px rgba(0,0,0,0.06)",
-        "orange": "0 8px 32px -4px rgba(255,179,71,0.4)",
+        "orange": "0 8px 32px -4px rgba(153,102,204,0.4)",
         "swipe": "0 24px 64px -12px rgba(0,0,0,0.28)",
       },
     },

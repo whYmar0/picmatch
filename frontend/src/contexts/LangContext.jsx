@@ -1,4 +1,4 @@
-/**
+﻿/**
  * contexts/LangContext.jsx — 100% bilingual EN / RU
  * New keys: seeMore, seeLess, sort, filterBy, filterByVoter,
  *           noVoters, selectVoters, sortMostLikes, sortMostDislikes
@@ -7,7 +7,7 @@ import { createContext, useContext, useState } from "react";
 
 const T = {
   en: {
-    appName: "PicMatch",
+    appName: "Pickmatch",
     login: "Log in",
     register: "Sign up",
     logout: "Log out",
@@ -22,7 +22,7 @@ const T = {
     loginTitle: "Welcome back",
     loginSubtitle: "Sign in to continue",
     registerTitle: "Create account",
-    registerSubtitle: "Join PicMatch — it's free",
+    registerSubtitle: "Join Pickmatch — it's free",
 
     albumTitle: "Album title",
     albumDescription: "Description (optional)",
@@ -60,7 +60,7 @@ const T = {
 
     // Analytics
     winner: "Winner",
-    winnerBadge: "🏆 Best Shot",
+    winnerBadge: "Winner",
     likes: "Likes",
     dislikes: "Dislikes",
     totalVotes: "Votes",
@@ -98,18 +98,18 @@ const T = {
     reactions: "Reactions",
     noReactions: "No reactions yet",
     share: "Share",
-    shareTitle: "Check out this album on PicMatch",
+    shareTitle: "Check out this album on Pickmatch",
 
-    heroTitle: "Pick the best photo.",
-    heroSubtitle: "Swipe right to like, left to pass. Your community crowns the winner.",
-    getStarted: "Get started free",
+    heroTitle: "Pick the best photo",
+    heroSubtitle: "Swipe right to like, left to pass. Easier like never before!",
+    getStarted: "Get started",
     howItWorks: "How it works",
     step1Title: "Upload your album",
-    step1Desc: "Add your photos and get a unique invite link in seconds.",
+    step1Desc: "Add your photos and get an invite link.",
     step2Title: "Share & collect votes",
-    step2Desc: "Send the link to friends, clients, or your audience.",
+    step2Desc: "Send the link to your audience.",
     step3Title: "Discover the winner",
-    step3Desc: "The photo with the most likes wins — backed by full analytics.",
+    step3Desc: "The photo with the most likes wins!",
 
     errorGeneric: "Something went wrong. Please try again.",
     errorNotFound: "Page not found",
@@ -128,7 +128,7 @@ const T = {
   },
 
   ru: {
-    appName: "PicMatch",
+    appName: "Pickmatch",
     login: "Войти",
     register: "Регистрация",
     logout: "Выйти",
@@ -143,7 +143,7 @@ const T = {
     loginTitle: "С возвращением",
     loginSubtitle: "Войдите, чтобы продолжить",
     registerTitle: "Создать аккаунт",
-    registerSubtitle: "Присоединяйтесь к PicMatch — бесплатно",
+    registerSubtitle: "Присоединяйтесь к Pickmatch",
 
     albumTitle: "Название альбома",
     albumDescription: "Описание (необязательно)",
@@ -179,7 +179,7 @@ const T = {
     seeLess: "Свернуть",
 
     winner: "Победитель",
-    winnerBadge: "🏆 Лучший кадр",
+    winnerBadge: "Лучшее фото",
     likes: "Лайки",
     dislikes: "Дизлайки",
     totalVotes: "Голосов",
@@ -212,18 +212,18 @@ const T = {
     reactions: "Реакции",
     noReactions: "Реакций пока нет",
     share: "Поделиться",
-    shareTitle: "Посмотри этот альбом в PicMatch",
+    shareTitle: "Посмотри этот альбом в Pickmatch",
 
     heroTitle: "Выбери лучшее фото.",
-    heroSubtitle: "Вправо — нравится, влево — нет. Сообщество выбирает победителя.",
-    getStarted: "Начать бесплатно",
+    heroSubtitle: "Вправо — нравится, влево — нет. Быстро и удобно!",
+    getStarted: "Начать",
     howItWorks: "Как это работает",
     step1Title: "Загрузи альбом",
-    step1Desc: "Добавь фотографии и получи уникальную ссылку за секунды.",
+    step1Desc: "Добавь фотографии и получи ссылку.",
     step2Title: "Поделись и собери голоса",
-    step2Desc: "Отправь ссылку друзьям, клиентам или своей аудитории.",
+    step2Desc: "Отправь ссылку своей аудитории.",
     step3Title: "Узнай победителя",
-    step3Desc: "Фото с наибольшим числом лайков побеждает — с полной аналитикой.",
+    step3Desc: "Фото с наибольшим числом лайков побеждает!",
 
     errorGeneric: "Что-то пошло не так. Попробуйте ещё раз.",
     errorNotFound: "Страница не найдена",
@@ -246,9 +246,9 @@ const LangContext = createContext(null);
 
 export function LangProvider({ children }) {
   const [lang, setLang] = useState(
-    () => localStorage.getItem("picmatch_lang") || "en"
+    () => localStorage.getItem("pickmatch_lang") || "en"
   );
-  const setLanguage = (l) => { setLang(l); localStorage.setItem("picmatch_lang", l); };
+  const setLanguage = (l) => { setLang(l); localStorage.setItem("pickmatch_lang", l); };
   const t = (key) => T[lang]?.[key] ?? T.en[key] ?? key;
   return (
     <LangContext.Provider value={{ lang, setLanguage, t }}>

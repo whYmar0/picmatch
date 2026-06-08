@@ -1,6 +1,6 @@
-version: "3.9"
+﻿version: "3.9"
 
-# ─── PicMatch Docker Compose ─────────────────────────────────────────────────
+# ─── Pickmatch Docker Compose ─────────────────────────────────────────────────
 # Runs the full stack locally: PostgreSQL + FastAPI backend + React frontend
 # Запускает весь стек локально: PostgreSQL + FastAPI бэкенд + React фронтенд
 #
@@ -15,7 +15,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: picmatch
+      POSTGRES_DB: pickmatch
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -37,8 +37,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/picmatch
-      SECRET_KEY: local-dev-secret-32-chars-picmatch
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pickmatch
+      SECRET_KEY: local-dev-secret-32-chars-pickmatch
       BASE_URL: http://localhost:8000
       FRONTEND_URL: http://localhost:5173
       UPLOAD_DIR: /app/uploads

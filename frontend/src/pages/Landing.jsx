@@ -27,24 +27,25 @@ import { useAuth } from "../contexts/AuthContext";
  * MockCard — centered via translate(-50%, -50%) so CSS rotate()
  * spins around the card's visual center, preventing corner clipping.
  */
-function MockCard({ rotate = 0, zIndex = 1 }) {
+function MockCard({ rotate = 0, zIndex = 1, bgImage, className = "", style = {} }) {
   return (
     <div
-      className="rounded-3xl shadow-swipe
-                 bg-gradient-to-br from-primary-200 to-primary-400
-                 flex items-center justify-center"
+      className={`rounded-3xl shadow-swipe bg-cover bg-center bg-no-repeat
+                 bg-gradient-to-br from-primary-200 to-primary-400 ${className}`}
       style={{
         position: "absolute",
         left: "50%",
         top: "50%",
-        width: "clamp(140px, 30vw, 200px)",
-        height: "clamp(186px, 40vw, 266px)",
-        transform: `translate(-50%, -50%) rotate(${rotate}deg)`,
+        width: "clamp(180px, 36vw, 250px)",
+        height: "clamp(240px, 48vw, 333px)",
+        transform: `translate(-50%, -50%) translateZ(1px) rotate(${rotate}deg)`,
+        backgroundImage: bgImage ? `url(${bgImage})` : undefined,
         zIndex,
+        backfaceVisibility: "hidden",
+        WebkitBackfaceVisibility: "hidden",
+        ...style,
       }}
-    >
-      <span style={{ fontSize: "clamp(2rem, 5vw, 3rem)" }}>📸</span>
-    </div>
+    />
   );
 }
 
@@ -128,22 +129,46 @@ export default function Landing() {
           initial={{ opacity: 0, scale: 0.94 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.15, duration: 0.5 }}
-          className="relative flex items-center justify-center"
+          className="relative flex items-center justify-center -translate-y-6 lg:-translate-y-10"
           style={{
             /* Extra height = card height + max rotation overhang (~30px each side) */
-            height: "clamp(260px, 55vw, 360px)",
+            height: "clamp(340px, 65vw, 440px)",
             /* No overflow clipping here — page root handles horizontal scroll */
           }}
         >
-          {/* Back card */}
-          <MockCard rotate={-12} zIndex={1} />
+          {/* Back card (hidden/deepest) — floats up and down */}
+          <motion.div
+            animate={{ y: [0, 4, 0] }}
+            transition={{ repeat: Infinity, duration: 3.6, ease: "easeInOut" }}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 1,
+            }}
+          >
+            <MockCard rotate={-18} zIndex={1} bgImage="/back_card2.jpg" />
+          </motion.div>
 
-          {/* Middle card */}
-          <MockCard rotate={-3} zIndex={2} />
+          {/* Middle card (protruding background) — floats up and down */}
+          <motion.div
+            animate={{ y: [0, -6, 0] }}
+            transition={{ repeat: Infinity, duration: 3.4, ease: "easeInOut" }}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 2,
+            }}
+          >
+            <MockCard rotate={-3} zIndex={2} bgImage="/back_card1.jpg" />
+          </motion.div>
 
           {/* Front card — floats up and down */}
           <motion.div
-            animate={{ y: [0, -10, 0] }}
+            animate={{ y: [0, -12, 0] }}
             transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
             style={{
               position: "absolute",
@@ -155,39 +180,53 @@ export default function Landing() {
           >
             {/* Inline div so the float animation doesn't fight with the centering */}
             <div
-              className="rounded-3xl shadow-swipe
-                         bg-gradient-to-br from-primary-200 to-primary-400
-                         flex items-center justify-center"
+              className="rounded-3xl shadow-swipe bg-cover bg-center bg-no-repeat
+                         bg-gradient-to-br from-primary-200 to-primary-400"
               style={{
-                width: "clamp(140px, 30vw, 200px)",
-                height: "clamp(186px, 40vw, 266px)",
-                transform: "rotate(2deg)",
+                width: "clamp(180px, 36vw, 250px)",
+                height: "clamp(240px, 48vw, 333px)",
+                transform: "rotate(2deg) translateZ(1px)",
+                backgroundImage: "url(/front_card.jpg)",
+                backfaceVisibility: "hidden",
+                WebkitBackfaceVisibility: "hidden"
               }}
-            >
-              <span style={{ fontSize: "clamp(2rem, 5vw, 3rem)" }}>📸</span>
-            </div>
+            />
           </motion.div>
 
-          {/* Floating LIKE chip */}
+          {/* SVG Definitions for Gradients */}
+          <svg width="0" height="0" className="absolute">
+            <defs>
+              <linearGradient id="redHeartGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#FF4B72" />
+                <stop offset="100%" stopColor="#FF2A54" />
+              </linearGradient>
+              <linearGradient id="purpleHeartGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#C293FF" />
+                <stop offset="100%" stopColor="#8A46FF" />
+              </linearGradient>
+            </defs>
+          </svg>
+
+          {/* Floating Red Heart (Like) */}
           <motion.div
-            animate={{ x: [0, 5, 0], y: [0, -4, 0] }}
-            transition={{ repeat: Infinity, duration: 2.6, ease: "easeInOut" }}
-            className="absolute top-4 right-4 z-20
-                       bg-card-light dark:bg-card-dark
-                       rounded-2xl px-3 py-1.5 shadow-card"
+            animate={{ x: [0, 8, 0], y: [0, -6, 0] }}
+            transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
+            className="absolute top-2 right-2 sm:-right-4 z-20 drop-shadow-[0_10px_20px_rgba(255,42,84,0.35)]"
           >
-            <span className="text-sm font-semibold text-green-500">👍 LIKE</span>
+            <svg width="clamp(44px, 8vw, 56px)" height="clamp(44px, 8vw, 56px)" viewBox="0 0 24 24" fill="url(#redHeartGrad)" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
           </motion.div>
 
-          {/* Floating NOPE chip */}
+          {/* Floating Purple Heart (Nope/Secondary Favorite) */}
           <motion.div
-            animate={{ x: [0, -5, 0], y: [0, 4, 0] }}
-            transition={{ repeat: Infinity, duration: 2.1, ease: "easeInOut" }}
-            className="absolute bottom-4 left-4 z-20
-                       bg-card-light dark:bg-card-dark
-                       rounded-2xl px-3 py-1.5 shadow-card"
+            animate={{ x: [0, -8, 0], y: [0, 6, 0] }}
+            transition={{ repeat: Infinity, duration: 2.3, ease: "easeInOut" }}
+            className="absolute bottom-2 left-2 sm:-left-4 z-20 drop-shadow-[0_10px_20px_rgba(138,70,255,0.35)]"
           >
-            <span className="text-sm font-semibold text-red-400">✕ NOPE</span>
+            <svg width="clamp(44px, 8vw, 56px)" height="clamp(44px, 8vw, 56px)" viewBox="0 0 24 24" fill="url(#purpleHeartGrad)" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
           </motion.div>
         </motion.div>
       </section>

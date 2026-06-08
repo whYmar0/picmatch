@@ -37,7 +37,7 @@ export default function App() {
                   color: "var(--text-main)",
                   border: "1px solid rgba(128,128,128,0.15)",
                 },
-                success: { iconTheme: { primary: "#FFB347", secondary: "#fff" } },
+                success: { iconTheme: { primary: "#9966CC", secondary: "#fff" } },
                 duration: 3000,
               }}
             />

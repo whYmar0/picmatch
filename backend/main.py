@@ -1,4 +1,4 @@
-"""
+﻿"""
 main.py — FastAPI application entry point
 """
 import os
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="PicMatch API",
+    title="Pickmatch API",
     description="Photo rating platform with swipe voting, shared access, and comments.",
     version="2.0.0",
     lifespan=lifespan,
@@ -56,7 +56,7 @@ async def health():
 
 @app.get("/", tags=["System"])
 async def root():
-    return {"message": "PicMatch API v2", "docs": "/docs"}
+    return {"message": "Pickmatch API v2", "docs": "/docs"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * api/index.js — v2 with avatar upload
  */
 import axios from "axios";
@@ -12,7 +12,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("picmatch_token");
+  const token = localStorage.getItem("pickmatch_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -22,8 +22,8 @@ api.interceptors.response.use(
   (error) => {
     const url = error.config?.url || "";
     if (error.response?.status === 401 && !url.includes("/auth/")) {
-      localStorage.removeItem("picmatch_token");
-      localStorage.removeItem("picmatch_user");
+      localStorage.removeItem("pickmatch_token");
+      localStorage.removeItem("pickmatch_user");
       // Don't redirect if the 401 came from the /vote/ page itself —
       // VotePage handles auth-gating with a friendly prompt
       const onVotePage = window.location.pathname.startsWith("/vote/");

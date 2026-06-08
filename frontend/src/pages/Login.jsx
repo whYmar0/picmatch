@@ -45,9 +45,8 @@ export default function Login() {
         className="w-full max-w-sm"
       >
         <div className="text-center mb-7">
-          <div className="w-14 h-14 bg-primary-400 rounded-3xl flex items-center
-                          justify-center mx-auto mb-3 shadow-orange">
-            <span className="text-2xl">📸</span>
+          <div className="flex items-center justify-center mx-auto mb-4">
+            <img src="/pickmatch_logo.png" alt="Pickmatch Logo" className="h-16 w-auto object-contain" />
           </div>
           <h1 className="font-display font-bold text-3xl">{t("loginTitle")}</h1>
           <p className="text-gray-400 text-sm mt-1">{t("loginSubtitle")}</p>

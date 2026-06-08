@@ -115,7 +115,7 @@ export default function Navbar() {
     setMenuOpen(false);
     try {
       const updated = await authApi.deleteAvatar();
-      localStorage.setItem("picmatch_user", JSON.stringify(updated));
+      localStorage.setItem("pickmatch_user", JSON.stringify(updated));
       toast.success("Avatar removed.");
       window.location.reload();
     } catch (err) {
@@ -144,7 +144,7 @@ export default function Navbar() {
     setCropSrc(null);
     try {
       const updated = await authApi.uploadAvatar(croppedFile);
-      localStorage.setItem("picmatch_user", JSON.stringify(updated));
+      localStorage.setItem("pickmatch_user", JSON.stringify(updated));
       toast.success("Avatar updated!");
       window.location.reload();
     } catch (err) {
@@ -173,9 +173,9 @@ export default function Navbar() {
             <motion.div
               whileHover={{ rotate: [0, -10, 10, 0] }}
               transition={{ duration: 0.4 }}
-              className="w-8 h-8 bg-primary-400 rounded-xl flex items-center justify-center shadow-orange"
+              className="flex items-center justify-center"
             >
-              <span className="text-white text-sm">📸</span>
+              <img src="/pickmatch_logo.png" alt="Pickmatch Logo" className="h-8 w-auto object-contain" />
             </motion.div>
             <span className="font-display font-bold text-xl text-gray-900 dark:text-white
                              hover:text-primary-500 transition-colors">
@@ -258,6 +258,19 @@ export default function Navbar() {
               </motion.div>
             </motion.button>
 
+            {/* Global Language Toggle */}
+            <motion.button
+              onClick={() => setLanguage(lang === "en" ? "ru" : "en")}
+              whileTap={{ scale: 0.9 }}
+              className="btn-ghost w-11 h-11 rounded-2xl flex items-center justify-center relative group"
+              title={t("language", "Language")}
+            >
+              <Languages size={20} />
+              <span className="absolute -bottom-1 -right-1 text-[9px] font-bold bg-primary-100 dark:bg-primary-900/60 text-primary-700 dark:text-primary-300 px-1 py-0.2 rounded-md border border-white dark:border-card-dark shadow-sm">
+                {lang.toUpperCase()}
+              </span>
+            </motion.button>
+
             {user ? (
               <>
                 <Link to="/dashboard" className="btn-ghost hidden sm:flex text-sm">
@@ -330,25 +343,6 @@ export default function Navbar() {
                               Remove Photo
                             </button>
                           )}
-                          
-                          <div className="h-px bg-border-light dark:bg-border-dark my-1" />
-                          
-                          <button
-                            onClick={() => {
-                              setLanguage(lang === "en" ? "ru" : "en");
-                              setMenuOpen(false);
-                            }}
-                            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm 
-                                       hover:bg-primary-50 dark:hover:bg-primary-900/20 text-gray-700 dark:text-gray-200 transition-colors"
-                          >
-                            <span className="flex items-center gap-3">
-                              <Languages size={16} className="text-gray-400" />
-                              {t("language", "Language")}
-                            </span>
-                            <span className="text-xs font-bold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-md">
-                              {lang.toUpperCase()}
-                            </span>
-                          </button>
                           
                           <div className="h-px bg-border-light dark:bg-border-dark my-1" />
                           

@@ -1,4 +1,4 @@
-"""
+﻿"""
 database.py — Конфигурация подключения к базе данных / Database connection configuration
 
 Поддерживает два режима / Supports two modes:
@@ -6,10 +6,10 @@ database.py — Конфигурация подключения к базе да
   - PRODUCTION: PostgreSQL via asyncpg
 
   SQLite (default / по умолчанию):
-    DATABASE_URL=sqlite+aiosqlite:///./picmatch.db
+    DATABASE_URL=sqlite+aiosqlite:///./pickmatch.db
 
   PostgreSQL (production / продакшн):
-    DATABASE_URL=postgresql+asyncpg://user:password@host:5432/picmatch
+    DATABASE_URL=postgresql+asyncpg://user:password@host:5432/pickmatch
 """
 
 import os
@@ -22,7 +22,7 @@ load_dotenv()
 # Default -> SQLite for local dev (zero setup)
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "sqlite+aiosqlite:///./picmatch.db"
+    "sqlite+aiosqlite:///./pickmatch.db"
 )
 
 IS_SQLITE = DATABASE_URL.startswith("sqlite")

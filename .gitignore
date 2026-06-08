@@ -1,4 +1,4 @@
-# Python / Backend
+﻿# Python / Backend
 __pycache__/
 *.py[cod]
 *.pyo
@@ -10,7 +10,7 @@ dist/
 build/
 .pytest_cache/
 backend/uploads/
-backend/picmatch.db
+backend/pickmatch.db
 
 # Node / Frontend
 node_modules/

@@ -1,8 +1,8 @@
-# 🚀 PicMatch — Deployment Guide / Руководство по деплою
+﻿# 🚀 Pickmatch — Deployment Guide / Руководство по деплою
 
-> Step-by-step instructions for deploying PicMatch for free using **Render** (backend) and **Vercel** (frontend).
+> Step-by-step instructions for deploying Pickmatch for free using **Render** (backend) and **Vercel** (frontend).
 >
-> Пошаговые инструкции для бесплатного деплоя PicMatch с помощью **Render** (бэкенд) и **Vercel** (фронтенд).
+> Пошаговые инструкции для бесплатного деплоя Pickmatch с помощью **Render** (бэкенд) и **Vercel** (фронтенд).
 
 ---
 
@@ -65,10 +65,10 @@ Render's free tier supports Python web services with automatic deploys from GitH
 # Initialize git in the project root / Инициализировать git
 git init
 git add .
-git commit -m "feat: initial PicMatch MVP"
+git commit -m "feat: initial Pickmatch MVP"
 
 # Create a new repo on github.com, then:
-git remote add origin https://github.com/YOUR_USERNAME/picmatch.git
+git remote add origin https://github.com/YOUR_USERNAME/pickmatch.git
 git push -u origin main
 ```
 
@@ -80,7 +80,7 @@ git push -u origin main
 
 | Setting | Value |
 |---------|-------|
-| **Name** | `picmatch-api` |
+| **Name** | `pickmatch-api` |
 | **Root Directory** | `backend` |
 | **Runtime** | `Python 3` |
 | **Build Command** | `pip install -r requirements.txt` |
@@ -94,8 +94,8 @@ In Render dashboard → **Environment** tab, add:
 ```env
 DATABASE_URL       = postgresql+asyncpg://postgres.[ref]:[pwd]@...supabase.com:5432/postgres
 SECRET_KEY         = <generate with: python -c "import secrets; print(secrets.token_hex(32))">
-BASE_URL           = https://picmatch-api.onrender.com
-FRONTEND_URL       = https://picmatch.vercel.app
+BASE_URL           = https://pickmatch-api.onrender.com
+FRONTEND_URL       = https://pickmatch.vercel.app
 UPLOAD_DIR         = /tmp/uploads
 ACCESS_TOKEN_EXPIRE_MINUTES = 10080
 DEBUG              = false
@@ -113,8 +113,8 @@ Click **Create Web Service**. Render will:
 3. Start the server
 4. Auto-deploy on every `git push`
 
-Your API will be live at: `https://picmatch-api.onrender.com`
-API docs: `https://picmatch-api.onrender.com/docs`
+Your API will be live at: `https://pickmatch-api.onrender.com`
+API docs: `https://pickmatch-api.onrender.com/docs`
 
 > **RU:** После создания сервиса Render автоматически развернёт API. Каждый `git push` триггерит новый деплой.
 
@@ -128,7 +128,7 @@ Vercel is purpose-built for frontend apps and has an excellent free tier.
 
 Create `frontend/.env.production`:
 ```env
-VITE_API_URL=https://picmatch-api.onrender.com/api
+VITE_API_URL=https://pickmatch-api.onrender.com/api
 ```
 
 Commit and push / Зафиксировать и запушить:
@@ -153,7 +153,7 @@ vercel
 # → Set up and deploy? Yes
 # → Which scope? Your account
 # → Link to existing project? No
-# → Project name: picmatch
+# → Project name: pickmatch
 # → Root directory: ./ (we're already in frontend/)
 # → Build command: npm run build
 # → Output directory: dist
@@ -165,10 +165,10 @@ vercel
 3. Set **Root Directory** to `frontend`
 4. Framework Preset: **Vite**
 5. Add environment variable:
-   - `VITE_API_URL` = `https://picmatch-api.onrender.com/api`
+   - `VITE_API_URL` = `https://pickmatch-api.onrender.com/api`
 6. Click **Deploy**
 
-Your frontend will be live at: `https://picmatch.vercel.app`
+Your frontend will be live at: `https://pickmatch.vercel.app`
 
 > **RU:** Vercel автоматически определит Vite и настроит сборку. Каждый `git push` в `main` запускает новый деплой.
 
@@ -189,12 +189,12 @@ Then trigger a redeploy on Render (Dashboard → Manual Deploy).
 
 In Render environment variables:
 ```env
-BASE_URL = https://picmatch-api.onrender.com
+BASE_URL = https://pickmatch-api.onrender.com
 ```
 
 This is used to generate invite URLs pointing to the correct frontend:
 ```
-https://picmatch.vercel.app/vote/{invite_code}
+https://pickmatch.vercel.app/vote/{invite_code}
 ```
 
 ---
@@ -203,13 +203,13 @@ https://picmatch.vercel.app/vote/{invite_code}
 
 ### Vercel (Frontend)
 1. Dashboard → Your project → **Settings → Domains**
-2. Add your domain (e.g., `picmatch.app`)
+2. Add your domain (e.g., `pickmatch.app`)
 3. Update DNS records as instructed
 4. SSL certificate is provisioned automatically
 
 ### Render (Backend)
 1. Dashboard → Your service → **Settings → Custom Domains**
-2. Add domain (e.g., `api.picmatch.app`)
+2. Add domain (e.g., `api.pickmatch.app`)
 3. Update DNS CNAME record
 4. Free SSL via Let's Encrypt
 
@@ -252,7 +252,7 @@ f"https://{os.getenv('R2_PUBLIC_DOMAIN')}/{stored_name}"
 R2_ENDPOINT    = https://ACCOUNT_ID.r2.cloudflarestorage.com
 R2_ACCESS_KEY  = your_key
 R2_SECRET_KEY  = your_secret
-R2_BUCKET      = picmatch-uploads
+R2_BUCKET      = pickmatch-uploads
 R2_PUBLIC_DOMAIN = pub-xxx.r2.dev
 ```
 
@@ -268,7 +268,7 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: picmatch
+      POSTGRES_DB: pickmatch
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -281,7 +281,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/picmatch
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pickmatch
       SECRET_KEY: local-dev-secret-key-32-chars-minimum
       BASE_URL: http://localhost:8000
       FRONTEND_URL: http://localhost:5173

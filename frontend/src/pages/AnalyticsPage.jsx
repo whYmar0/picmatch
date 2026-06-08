@@ -1,4 +1,4 @@
-/**
+﻿/**
  * pages/AnalyticsPage.jsx
  *
  * Normal mode: loads analytics → AlbumSummary (auto-opens photo comment sheet if ?photo= set)
@@ -167,7 +167,7 @@ export default function AnalyticsPage() {
         setAnalytics(data);
 
         // Record visit for the "Recently Visited" feature
-        const storedUser = JSON.parse(localStorage.getItem("picmatch_user") || "null");
+        const storedUser = JSON.parse(localStorage.getItem("pickmatch_user") || "null");
         if (storedUser?.id) {
           const { recordAlbumVisit } = await import("../hooks/useRecentAlbums.js");
           const coverUrl = data.photos?.[0]?.url ?? null;
@@ -188,7 +188,7 @@ export default function AnalyticsPage() {
 
         // ── Album deleted ─────────────────────────────────────────────────────
         if (isNotFound) {
-          const storedUser = JSON.parse(localStorage.getItem("picmatch_user") || "null");
+          const storedUser = JSON.parse(localStorage.getItem("pickmatch_user") || "null");
           if (storedUser?.id) {
             const { removeRecentAlbum } = await import("../hooks/useRecentAlbums.js");
             removeRecentAlbum(storedUser.id, albumId);
@@ -223,11 +223,11 @@ export default function AnalyticsPage() {
             if (cancelled) return;
 
             // Update the stored visit to reflect accurate limited-access state
-            const storedUser = JSON.parse(localStorage.getItem("picmatch_user") || "null");
+            const storedUser = JSON.parse(localStorage.getItem("pickmatch_user") || "null");
             if (storedUser?.id) {
               const { recordAlbumVisit } = await import("../hooks/useRecentAlbums.js");
               // Use album title from existing recent entry if available, fall back to generic
-              const existing = JSON.parse(localStorage.getItem(`picmatch_recent_${storedUser.id}`) || "[]");
+              const existing = JSON.parse(localStorage.getItem(`pickmatch_recent_${storedUser.id}`) || "[]");
               const existingEntry = existing.find((a) => a.id === albumId);
               recordAlbumVisit(storedUser.id, {
                 id: albumId,
@@ -252,7 +252,7 @@ export default function AnalyticsPage() {
             const inner = String(innerErr?.message || "").toLowerCase();
             if (inner.includes("not found")) {
               // Album was deleted while we were checking comments
-              const storedUser = JSON.parse(localStorage.getItem("picmatch_user") || "null");
+              const storedUser = JSON.parse(localStorage.getItem("pickmatch_user") || "null");
               if (storedUser?.id) {
                 const { removeRecentAlbum } = await import("../hooks/useRecentAlbums.js");
                 removeRecentAlbum(storedUser.id, albumId);

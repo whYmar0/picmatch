@@ -1,4 +1,4 @@
-/**
+﻿/**
  * contexts/ThemeContext.jsx — Контекст светлой/тёмной темы
  * Light/Dark theme context with localStorage persistence
  */
@@ -9,7 +9,7 @@ const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
-    const stored = localStorage.getItem("picmatch_theme");
+    const stored = localStorage.getItem("pickmatch_theme");
     if (stored) return stored;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
@@ -21,7 +21,7 @@ export function ThemeProvider({ children }) {
     } else {
       root.classList.remove("dark");
     }
-    localStorage.setItem("picmatch_theme", theme);
+    localStorage.setItem("pickmatch_theme", theme);
   }, [theme]);
 
   const toggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
