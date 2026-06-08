@@ -32,7 +32,7 @@ if IS_SQLITE:
     engine = create_async_engine(
         DATABASE_URL,
         echo=os.getenv("DEBUG", "false").lower() == "true",
-        connect_args={"check_same_thread": False},
+        connect_args={"check_same_thread": False, "ssl": False},
     )
 else:
     # PostgreSQL with connection pool
