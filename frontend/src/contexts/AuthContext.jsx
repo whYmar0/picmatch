@@ -1,4 +1,4 @@
-﻿/**
+/**
  * contexts/AuthContext.jsx — Unified auth context
  * All users can create albums AND vote — no role distinction in UI.
  */
@@ -37,10 +37,8 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(async (formData) => {
     const data = await authApi.register(formData);
-    localStorage.setItem("pickmatch_token", data.access_token);
-    localStorage.setItem("pickmatch_user", JSON.stringify(data.user));
-    setUser(data.user);
-    return data.user;
+    // Since registration now requires email verification, we don't log in immediately.
+    return data;
   }, []);
 
   const logout = useCallback(() => {

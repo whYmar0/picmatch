@@ -51,6 +51,11 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role            = Column(SAEnum(UserRole), default=UserRole.CREATOR, nullable=False)
     is_active       = Column(Boolean, default=True)
+    is_verified     = Column(Boolean, default=False, server_default="1") # default 1 for existing users
+    verification_code = Column(String(6), nullable=True)
+    verification_code_expires_at = Column(DateTime(timezone=True), nullable=True)
+    reset_token     = Column(String(255), nullable=True)
+    reset_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     avatar_url      = Column(String(500), nullable=True)      # NEW: profile avatar
     created_at      = Column(DateTime(timezone=True), default=_now)
 

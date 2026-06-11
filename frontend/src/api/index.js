@@ -1,4 +1,4 @@
-﻿/**
+/**
  * api/index.js — v2 with avatar upload
  */
 import axios from "axios";
@@ -51,9 +51,13 @@ api.interceptors.response.use(
 );
 
 export const authApi = {
-  register:     (data) => api.post("/auth/register", data),
-  login:        (data) => api.post("/auth/login",    data),
-  me:           ()     => api.get("/auth/me"),
+  register:           (data) => api.post("/auth/register", data),
+  login:              (data) => api.post("/auth/login",    data),
+  verifyEmail:        (data) => api.post("/auth/verify-email", data),
+  resendVerification: (data) => api.post("/auth/resend-verification", data),
+  forgotPassword:     (data) => api.post("/auth/forgot-password", data),
+  resetPassword:      (data) => api.post("/auth/reset-password", data),
+  me:                 ()     => api.get("/auth/me"),
   uploadAvatar: (file) => {
     const form = new FormData();
     form.append("file", file);

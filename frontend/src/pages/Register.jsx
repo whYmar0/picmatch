@@ -1,11 +1,10 @@
 /**
- * pages/Register.jsx — Unified registration (no role selector)
- * All users get the same account — can create albums and vote.
+ * pages/Register.jsx — Unified registration with email verification & password requirements
  */
-import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, User, Eye, EyeOff, UserPlus, AlertCircle } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
@@ -14,13 +13,26 @@ export default function Register() {
   const { register } = useAuth();
   const { t }        = useLang();
   const navigate     = useNavigate();
-  const location     = useLocation();
-  const from = location.state?.from?.pathname || "/dashboard";
 
   const [form, setForm] = useState({ email: "", username: "", password: "" });
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
+  
+  // Password validation state
+  const [pwdStrength, setPwdStrength] = useState({
+    length: false,
+    uppercase: false,
+    special: false
+  });
+
+  useEffect(() => {
+    setPwdStrength({
+      length: form.password.length >= 8,
+      uppercase: /[A-Z]/.test(form.password),
+      special: /[!@#$%^&*()_+\-=\[\]{}|;':",./<>?]/.test(form.password)
+    });
+  }, [form.password]);
 
   const update = (key) => (e) => {
     setError("");
@@ -29,12 +41,19 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (!pwdStrength.length || !pwdStrength.uppercase || !pwdStrength.special) {
+      setError("Please ensure your password meets all requirements.");
+      return;
+    }
     setLoading(true);
     try {
-      const user = await register({ ...form, role: "creator" });
-      toast.success(`Welcome, ${user.username}! 🎉`);
-      navigate(from, { replace: true });
+      const res = await register({ ...form, role: "creator" });
+      if (res.requires_verification) {
+        toast.success(res.message || "Registration successful! Please verify your email.");
+        navigate(`/verify-email?email=${encodeURIComponent(form.email)}`, { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -54,8 +73,8 @@ export default function Register() {
           <div className="flex items-center justify-center mx-auto mb-4">
             <img src="/pickmatch_logo.png" alt="Pickmatch Logo" className="h-16 w-auto object-contain" />
           </div>
-          <h1 className="font-display font-bold text-3xl">{t("registerTitle")}</h1>
-          <p className="text-gray-400 text-sm mt-1">{t("registerSubtitle")}</p>
+          <h1 className="font-display font-bold text-3xl">{t("registerTitle") || "Create an Account"}</h1>
+          <p className="text-gray-400 text-sm mt-1">{t("registerSubtitle") || "Join Pickmatch to share and vote."}</p>
         </div>
 
         <AnimatePresence>
@@ -112,10 +131,10 @@ export default function Register() {
               </label>
               <div className="relative">
                 <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type={showPwd ? "text" : "password"} required minLength={6}
+                <input type={showPwd ? "text" : "password"} required minLength={8}
                   autoComplete="new-password"
                   value={form.password} onChange={update("password")}
-                  placeholder="Min. 6 characters" className="input-field pl-10 pr-11" />
+                  placeholder="Create password" className="input-field pl-10 pr-11" />
                 <button type="button" tabIndex={-1}
                   onClick={() => setShowPwd(!showPwd)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2
@@ -123,15 +142,34 @@ export default function Register() {
                   {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
+              
+              {/* Password Strength Indicator */}
+              {form.password.length > 0 && (
+                <div className="mt-2 space-y-1 text-xs px-1">
+                  <p className="text-gray-500 mb-1">Password must contain:</p>
+                  <div className={`flex items-center gap-1.5 ${pwdStrength.length ? 'text-green-500' : 'text-gray-400'}`}>
+                    {pwdStrength.length ? <CheckCircle size={12} /> : <div className="w-3 h-3 rounded-full border border-current" />}
+                    At least 8 characters
+                  </div>
+                  <div className={`flex items-center gap-1.5 ${pwdStrength.uppercase ? 'text-green-500' : 'text-gray-400'}`}>
+                    {pwdStrength.uppercase ? <CheckCircle size={12} /> : <div className="w-3 h-3 rounded-full border border-current" />}
+                    At least 1 uppercase letter
+                  </div>
+                  <div className={`flex items-center gap-1.5 ${pwdStrength.special ? 'text-green-500' : 'text-gray-400'}`}>
+                    {pwdStrength.special ? <CheckCircle size={12} /> : <div className="w-3 h-3 rounded-full border border-current" />}
+                    At least 1 special character
+                  </div>
+                </div>
+              )}
             </div>
 
             <motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}
-              className="btn-primary w-full py-3 mt-1">
+              className="btn-primary w-full py-3 mt-1 rounded-full shadow-[0px_4px_10px_rgba(153,102,204,0.3)]">
               {loading
                 ? <motion.div animate={{ rotate: 360 }}
                     transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
-                    className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
-                : <><UserPlus size={16} /> {t("register")}</>
+                    className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full mx-auto" />
+                : <><UserPlus size={16} /> {t("register") || "Register"}</>
               }
             </motion.button>
           </form>

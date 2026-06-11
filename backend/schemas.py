@@ -20,7 +20,7 @@ class UserRole(str, enum.Enum):
 class UserRegister(BaseModel):
     email:    EmailStr
     username: str = Field(..., min_length=3, max_length=50)
-    password: str = Field(..., min_length=6, max_length=100)
+    password: str = Field(..., min_length=8, max_length=100)
     role: UserRole = UserRole.CREATOR
 
     @field_validator("username")
@@ -28,6 +28,40 @@ class UserRegister(BaseModel):
     def username_valid(cls, v: str) -> str:
         if not v.replace("_", "").replace("-", "").isalnum():
             raise ValueError("Username may only contain letters, numbers, _ and -")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def password_valid(cls, v: str) -> str:
+        if not any(char.isupper() for char in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        special_chars = "!@#$%^&*()_+-=[]{}|;':\",./<>?"
+        if not any(char in special_chars for char in v):
+            raise ValueError("Password must contain at least one special character")
+        return v
+
+class VerifyEmailRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str = Field(..., min_length=8, max_length=100)
+
+    @field_validator("password")
+    @classmethod
+    def password_valid(cls, v: str) -> str:
+        if not any(char.isupper() for char in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        special_chars = "!@#$%^&*()_+-=[]{}|;':\",./<>?"
+        if not any(char in special_chars for char in v):
+            raise ValueError("Password must contain at least one special character")
         return v
 
 class UserLogin(BaseModel):
