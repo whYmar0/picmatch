@@ -1,4 +1,4 @@
-﻿"""
+"""
 main.py — FastAPI application entry point
 """
 import os
@@ -20,7 +20,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    print("✅ Database ready")
+    print("[OK] Database ready")
     yield
 
 
