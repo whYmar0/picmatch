@@ -58,7 +58,7 @@ async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
     await db.flush()
 
     # Send email in background (or inline for simplicity)
-    send_verification_email(user.email, code)
+    # send_verification_email(user.email, code)
 
     return {"message": "User registered successfully. Please verify your email.", "requires_verification": True}
 
@@ -120,7 +120,7 @@ async def resend_verification(req: ResendVerificationRequest, db: AsyncSession =
     user.verification_code_expires_at = expires_at
     await db.flush()
     
-    send_verification_email(user.email, code)
+    # send_verification_email(user.email, code)
     return {"message": "A new verification code has been sent to your email."}
 
 @router.post("/forgot-password")
