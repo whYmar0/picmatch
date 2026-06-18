@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import smtplib
 from email.message import EmailMessage
 
@@ -22,6 +23,19 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+RESEND_ALLOWED_DOMAIN = os.getenv("RESEND_ALLOWED_DOMAIN", "").strip().lower()
+_FREE_MAIL_DOMAINS = {
+    "gmail.com",
+    "googlemail.com",
+    "yahoo.com",
+    "hotmail.com",
+    "outlook.com",
+    "live.com",
+    "aol.com",
+    "icloud.com",
+    "proton.me",
+    "protonmail.com",
+}
 
 
 def _configured_sender() -> str | None:
@@ -30,12 +44,31 @@ def _configured_sender() -> str | None:
     return None
 
 
+def _sender_domain(sender: str) -> str:
+    return sender.rsplit("@", 1)[-1].lower()
+
+
+def _resend_sender_allowed(sender: str) -> bool:
+    if not sender or "@" not in sender:
+        return False
+    domain = _sender_domain(sender)
+    if RESEND_ALLOWED_DOMAIN:
+        return domain == RESEND_ALLOWED_DOMAIN
+    return domain not in _FREE_MAIL_DOMAINS and bool(re.match(r"^[a-z0-9.-]+\.[a-z]{2,}$", domain))
+
+
 def _send_via_resend(to_email: str, subject: str, html_content: str) -> bool:
     if not resend or not RESEND_API_KEY:
         return False
     sender = _configured_sender()
     if not sender:
         logger.warning("FROM_EMAIL is missing or invalid; skipping Resend send")
+        return False
+    if not _resend_sender_allowed(sender):
+        logger.warning(
+            "FROM_EMAIL domain is not eligible for Resend (%s); skipping Resend send",
+            sender,
+        )
         return False
     try:
         resend.api_key = RESEND_API_KEY

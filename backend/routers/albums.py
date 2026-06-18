@@ -64,7 +64,8 @@ def photo_to_out(p: Photo) -> PhotoOut:
                     url=photo_url(p.stored_filename),
                     order=p.order, created_at=p.created_at)
 
-def album_to_out(album: Album) -> AlbumOut:
+def album_to_out(album: Album, creator: User | None = None) -> AlbumOut:
+    resolved_creator = album.creator or creator
     return AlbumOut(
         id=album.id, title=album.title, description=album.description,
         invite_code=album.invite_code,
@@ -73,7 +74,7 @@ def album_to_out(album: Album) -> AlbumOut:
         is_public=album.is_public,
         photo_count=len(album.photos),
         created_at=album.created_at,
-        creator=album.creator,
+        creator=resolved_creator,
         photos=[photo_to_out(p) for p in album.photos],
     )
 
@@ -119,7 +120,7 @@ async def create_album(
         .options(selectinload(Album.photos), selectinload(Album.creator))
         .where(Album.id == _s(album.id))
     )
-    return album_to_out(result.scalar_one())
+    return album_to_out(result.scalar_one(), creator=current_user)
 
 
 @router.get("/my", response_model=List[AlbumOut])
