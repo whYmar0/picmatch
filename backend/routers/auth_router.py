@@ -34,16 +34,34 @@ def get_now():
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
-    r = await db.execute(select(User).where(User.email == user_data.email))
-    if r.scalar_one_or_none():
-        raise HTTPException(400, detail="This email is already registered.")
-
-    r = await db.execute(select(User).where(User.username == user_data.username))
-    if r.scalar_one_or_none():
-        raise HTTPException(400, detail="This username is already taken.")
-
     code = generate_verification_code()
     expires_at = get_now() + timedelta(minutes=15)
+
+    # Check if email already exists
+    r = await db.execute(select(User).where(User.email == user_data.email))
+    existing_by_email = r.scalar_one_or_none()
+
+    if existing_by_email:
+        if existing_by_email.is_verified:
+            raise HTTPException(400, detail="This email is already registered.")
+        # Unverified — reuse the record, update credentials and send a new code
+        existing_by_email.username = user_data.username
+        existing_by_email.hashed_password = hash_password(user_data.password)
+        existing_by_email.verification_code = code
+        existing_by_email.verification_code_expires_at = expires_at
+        await db.flush()
+        send_verification_email(existing_by_email.email, code)
+        return {"message": "Registration updated. Please verify your email.", "requires_verification": True}
+
+    # Check if username already exists
+    r = await db.execute(select(User).where(User.username == user_data.username))
+    existing_by_username = r.scalar_one_or_none()
+
+    if existing_by_username:
+        if existing_by_username.is_verified:
+            raise HTTPException(400, detail="This username is already taken.")
+        # Username taken by an unverified user — let them pick another
+        raise HTTPException(400, detail="This username is already taken. Please choose another.")
 
     user = User(
         email=user_data.email,
@@ -57,7 +75,6 @@ async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
     db.add(user)
     await db.flush()
 
-    # Send email in background (or inline for simplicity)
     send_verification_email(user.email, code)
 
     return {"message": "User registered successfully. Please verify your email.", "requires_verification": True}
@@ -83,6 +100,12 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
         user=UserOut.model_validate(user),
     )
 
+def _make_aware(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware (UTC). Postgres may return naive datetimes."""
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
 @router.post("/verify-email")
 async def verify_email(req: VerifyEmailRequest, db: AsyncSession = Depends(get_db)):
     r = await db.execute(select(User).where(User.email == req.email))
@@ -94,7 +117,7 @@ async def verify_email(req: VerifyEmailRequest, db: AsyncSession = Depends(get_d
         raise HTTPException(400, detail="Email is already verified.")
     if user.verification_code != req.code:
         raise HTTPException(400, detail="Invalid verification code.")
-    if user.verification_code_expires_at and user.verification_code_expires_at < get_now():
+    if user.verification_code_expires_at and _make_aware(user.verification_code_expires_at) < get_now():
         raise HTTPException(400, detail="Verification code has expired. Please request a new one.")
         
     user.is_verified = True
@@ -145,7 +168,7 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
     
     if not user:
         raise HTTPException(400, detail="Invalid reset token.")
-    if user.reset_token_expires_at and user.reset_token_expires_at < get_now():
+    if user.reset_token_expires_at and _make_aware(user.reset_token_expires_at) < get_now():
         raise HTTPException(400, detail="Reset token has expired.")
         
     user.hashed_password = hash_password(req.password)
