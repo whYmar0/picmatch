@@ -103,7 +103,7 @@ export default function ResetPassword() {
           )}
         </AnimatePresence>
 
-        <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card p-6">
+        <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card p-5 sm:p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Password */}
             <div className="space-y-1.5">
@@ -131,23 +131,57 @@ export default function ResetPassword() {
                 </button>
               </div>
               
-              {/* Password Strength Indicator */}
+              {/* Premium Password Strength Indicator */}
               {password.length > 0 && (
-                <div className="mt-2 space-y-1 text-xs px-1">
-                  <p className="text-gray-500 mb-1">Password must contain:</p>
-                  <div className={`flex items-center gap-1.5 ${pwdStrength.length ? 'text-green-500' : 'text-gray-400'}`}>
-                    {pwdStrength.length ? <CheckCircle size={12} /> : <div className="w-3 h-3 rounded-full border border-current" />}
-                    At least 8 characters
+                <motion.div 
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-3 bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-white/5 rounded-2xl p-3.5 space-y-2.5"
+                >
+                  {/* Strength Bar */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-[10px] uppercase tracking-wider font-semibold text-gray-400 dark:text-gray-500">
+                      <span>Password Strength</span>
+                      <span className={
+                        (pwdStrength.length && pwdStrength.uppercase && pwdStrength.special) ? "text-green-500" :
+                        (pwdStrength.length && (pwdStrength.uppercase || pwdStrength.special)) ? "text-primary-500" : "text-red-400"
+                      }>
+                        {(pwdStrength.length && pwdStrength.uppercase && pwdStrength.special) ? "Strong" :
+                         (pwdStrength.length && (pwdStrength.uppercase || pwdStrength.special)) ? "Medium" : "Weak"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 h-1.5">
+                      <div className={`rounded-full transition-all duration-300 ${password.length > 0 ? (pwdStrength.length ? "bg-primary-500" : "bg-red-400") : "bg-gray-200 dark:bg-gray-800"}`} />
+                      <div className={`rounded-full transition-all duration-300 ${pwdStrength.length && pwdStrength.uppercase ? "bg-primary-500" : "bg-gray-200 dark:bg-gray-800"}`} />
+                      <div className={`rounded-full transition-all duration-300 ${pwdStrength.length && pwdStrength.uppercase && pwdStrength.special ? "bg-green-500" : "bg-gray-200 dark:bg-gray-800"}`} />
+                    </div>
                   </div>
-                  <div className={`flex items-center gap-1.5 ${pwdStrength.uppercase ? 'text-green-500' : 'text-gray-400'}`}>
-                    {pwdStrength.uppercase ? <CheckCircle size={12} /> : <div className="w-3 h-3 rounded-full border border-current" />}
-                    At least 1 uppercase letter
+
+                  {/* Requirements List */}
+                  <div className="space-y-1.5 text-xs">
+                    <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.length ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {pwdStrength.length 
+                        ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
+                        : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">1</div>
+                      }
+                      <span className="truncate">At least 8 characters</span>
+                    </div>
+                    <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.uppercase ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {pwdStrength.uppercase 
+                        ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
+                        : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">2</div>
+                      }
+                      <span className="truncate">At least 1 uppercase letter</span>
+                    </div>
+                    <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.special ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                      {pwdStrength.special 
+                        ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
+                        : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">3</div>
+                      }
+                      <span className="truncate">At least 1 special character</span>
+                    </div>
                   </div>
-                  <div className={`flex items-center gap-1.5 ${pwdStrength.special ? 'text-green-500' : 'text-gray-400'}`}>
-                    {pwdStrength.special ? <CheckCircle size={12} /> : <div className="w-3 h-3 rounded-full border border-current" />}
-                    At least 1 special character
-                  </div>
-                </div>
+                </motion.div>
               )}
             </div>
 
@@ -155,7 +189,7 @@ export default function ResetPassword() {
               type="submit" 
               disabled={loading || success || !pwdStrength.length || !pwdStrength.uppercase || !pwdStrength.special} 
               whileTap={{ scale: 0.97 }}
-              className="btn-primary w-full py-3 mt-1 rounded-full shadow-[0px_4px_10px_rgba(153,102,204,0.3)] disabled:opacity-50"
+              className="btn-primary w-full py-3 mt-2 rounded-full shadow-[0px_4px_10px_rgba(153,102,204,0.3)] disabled:opacity-50 whitespace-nowrap text-sm sm:text-base"
             >
               {loading
                 ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }} className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full mx-auto" />

@@ -1,45 +1,22 @@
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 from dotenv import load_dotenv
 import logging
 
 load_dotenv()
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-FROM_EMAIL = os.getenv("FROM_EMAIL", SMTP_USER)
+resend.api_key = os.getenv("RESEND_API_KEY", "")
+FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@pickmatch.site")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 logger = logging.getLogger(__name__)
 
-def send_email_smtp(to_email: str, subject: str, html_content: str):
-    """Sends an email using SMTP with STARTTLS."""
-    if not SMTP_USER or not SMTP_PASSWORD or SMTP_USER == "your_email@gmail.com":
-        logger.warning(f"SMTP_USER/SMTP_PASSWORD not configured. Outputting email body instead:\nTo: {to_email}\nSubject: {subject}\n")
+def send_verification_email(to_email: str, code: str):
+    """Sends a 6-digit verification code to the user's email using Resend API."""
+    if not resend.api_key:
+        logger.warning(f"RESEND_API_KEY not set. Would have sent code {code} to {to_email}")
         return
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"Pickmatch <{FROM_EMAIL}>"
-    msg["To"] = to_email
-
-    msg.attach(MIMEText(html_content, "html", "utf-8"))
-
-    try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(FROM_EMAIL, [to_email], msg.as_string())
-        logger.info(f"Email sent successfully via SMTP to {to_email}")
-    except Exception as e:
-        logger.error(f"Failed to send email to {to_email} via SMTP: {e}")
-
-def send_verification_email(to_email: str, code: str):
-    """Sends a 6-digit verification code to the user's email."""
     subject = "Verify your Pickmatch account"
     html_content = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -54,10 +31,24 @@ def send_verification_email(to_email: str, code: str):
         <p style="color: #888; font-size: 12px; text-align: center;">The Pickmatch Team</p>
     </div>
     """
-    send_email_smtp(to_email, subject, html_content)
+    
+    try:
+        r = resend.Emails.send({
+            "from": f"Pickmatch <{FROM_EMAIL}>",
+            "to": to_email,
+            "subject": subject,
+            "html": html_content
+        })
+        logger.info(f"Verification email sent to {to_email} via Resend: {r}")
+    except Exception as e:
+        logger.error(f"Failed to send verification email to {to_email} via Resend: {e}")
 
 def send_password_reset_email(to_email: str, token: str):
-    """Sends a password reset link to the user's email."""
+    """Sends a password reset link to the user's email using Resend API."""
+    if not resend.api_key:
+        logger.warning(f"RESEND_API_KEY not set. Would have sent reset token {token} to {to_email}")
+        return
+
     reset_link = f"{FRONTEND_URL}/reset-password?token={token}"
     subject = "Reset your Pickmatch password"
     html_content = f"""
@@ -75,4 +66,14 @@ def send_password_reset_email(to_email: str, token: str):
         <p style="color: #888; font-size: 12px; text-align: center;">The Pickmatch Team</p>
     </div>
     """
-    send_email_smtp(to_email, subject, html_content)
+    
+    try:
+        r = resend.Emails.send({
+            "from": f"Pickmatch <{FROM_EMAIL}>",
+            "to": to_email,
+            "subject": subject,
+            "html": html_content
+        })
+        logger.info(f"Password reset email sent to {to_email} via Resend: {r}")
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {to_email} via Resend: {e}")

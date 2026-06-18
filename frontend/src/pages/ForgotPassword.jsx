@@ -78,7 +78,7 @@ export default function ForgotPassword() {
           )}
         </AnimatePresence>
 
-        <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card p-6">
+        <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card p-5 sm:p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-600 dark:text-gray-400">

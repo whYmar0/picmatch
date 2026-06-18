@@ -178,7 +178,7 @@ export default function Navbar() {
               <img src="/pickmatch_logo.png" alt="Pickmatch Logo" className="h-8 w-auto object-contain" />
             </motion.div>
             <span className="font-display font-bold text-xl text-gray-900 dark:text-white
-                             hover:text-primary-500 transition-colors">
+                             hover:text-primary-500 transition-colors hidden min-[400px]:inline">
               {t("appName")}
             </span>
           </Link>
@@ -377,10 +377,10 @@ export default function Navbar() {
                 </div>
               </>
             ) : (
-              <>
-                <Link to="/login"    className="btn-ghost text-sm px-3 py-2">{t("login")}</Link>
-                <Link to="/register" className="btn-primary text-sm px-3 py-2">{t("register")}</Link>
-              </>
+              <div className="flex items-center gap-1">
+                <Link to="/login"    className="btn-ghost text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 flex-shrink-0">{t("login")}</Link>
+                <Link to="/register" className="btn-primary text-xs sm:text-sm px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex-shrink-0">{t("register")}</Link>
+              </div>
             )}
           </div>
         </div>

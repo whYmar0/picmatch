@@ -12,8 +12,8 @@ asyncpg==0.30.0          # PRODUCTION — uncomment for PostgreSQL on Python 3.1
 
 # ─── Auth & Security ─────────────────────────────────────────────────────────
 PyJWT==2.10.1              # JWT — pure Python, no Rust required
-passlib==1.7.4             # Password hashing framework
-bcrypt==4.2.1              # bcrypt backend for passlib
+bcrypt==4.0.1
+passlib[bcrypt]==1.7.4
 
 # ─── Validation ──────────────────────────────────────────────────────────────
 pydantic[email]==2.10.3
