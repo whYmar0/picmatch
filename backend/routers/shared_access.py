@@ -70,7 +70,13 @@ async def share_album(
         )
         db.add(access)
 
-    await db.flush()
+    try:
+        await db.flush()
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="This album is already shared with that user.") from exc
+
     await db.refresh(access)
 
     # Reload with user
@@ -131,6 +137,7 @@ async def revoke_share(
         raise HTTPException(404, detail="Shared access not found")
 
     await db.delete(access)
+    await db.commit()
     return MessageResponse(message="Access revoked")
 
 

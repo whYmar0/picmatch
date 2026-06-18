@@ -1,36 +1,32 @@
 """
-auth.py — Утилиты аутентификации JWT / JWT Authentication utilities
-Использует PyJWT (pure Python) + passlib[bcrypt]
-Uses PyJWT (pure Python) + passlib[bcrypt]
+JWT and password utilities.
 """
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
 import jwt
-from jwt.exceptions import InvalidTokenError as JWTError
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import InvalidTokenError as JWTError
 from passlib.context import CryptContext
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from models import User
 
-# ─── Configuration ────────────────────────────────────────────────────────────
-
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production-32-chars")
-ALGORITHM = "HS256"   # Pure Python — no Rust/cryptography package needed
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY:
+    SECRET_KEY = "dev-secret-key-change-in-production-32-chars"
+ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-
-# ─── Password Utilities ───────────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
@@ -40,29 +36,23 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-# ─── JWT Utilities ─────────────────────────────────────────────────────────────
-
 def create_access_token(user_id: UUID, role: str) -> str:
-    """Creates a JWT token. PyJWT with HS256 is pure Python — no Rust needed."""
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
         "role": role,
-        "exp": expire,
-        "iat": datetime.utcnow(),
+        "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        "iat": now,
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> Optional[dict]:
-    """Decodes and validates a JWT token."""
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
 
-
-# ─── FastAPI Dependencies ──────────────────────────────────────────────────────
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -70,7 +60,7 @@ async def get_current_user(
 ) -> User:
     exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials / Не удалось проверить учётные данные",
+        detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     payload = decode_token(credentials.credentials)
@@ -92,6 +82,6 @@ async def get_creator_user(current_user: User = Depends(get_current_user)) -> Us
     if current_user.role.value != "creator":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Creators only / Только для создателей",
+            detail="Creators only",
         )
     return current_user

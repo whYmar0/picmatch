@@ -70,6 +70,7 @@ async def cast_vote(
         existing.is_like = vote_data.is_like
         await db.flush()
         await db.refresh(existing)
+        await db.commit()
         return VoteOut.model_validate(existing)
 
     vote = Vote(

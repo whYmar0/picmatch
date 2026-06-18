@@ -336,6 +336,7 @@ async def delete_comment(
         raise HTTPException(403, detail="Not allowed to delete this comment")
 
     await db.delete(comment)
+    await db.commit()
     return MessageResponse(message="Comment deleted")
 
 

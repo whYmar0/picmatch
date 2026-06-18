@@ -113,6 +113,7 @@ async def create_album(
                      stored_filename=stored, order=idx))
 
     await db.flush()
+    await db.commit()
     result = await db.execute(
         select(Album)
         .options(selectinload(Album.photos), selectinload(Album.creator))

@@ -9,7 +9,7 @@ New in this version:
 """
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 import enum
@@ -51,7 +51,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role            = Column(SAEnum(UserRole), default=UserRole.CREATOR, nullable=False)
     is_active       = Column(Boolean, default=True)
-    is_verified     = Column(Boolean, default=False, server_default="1") # default 1 for existing users
+    is_verified     = Column(Boolean, default=False, server_default=text("false"))
     verification_code = Column(String(6), nullable=True)
     verification_code_expires_at = Column(DateTime(timezone=True), nullable=True)
     reset_token     = Column(String(255), nullable=True)
@@ -75,7 +75,7 @@ class Album(Base):
     invite_code = Column(String(32), unique=True, nullable=False, index=True)
     creator_id  = uuid_column(foreign_key="users.id")
     is_active   = Column(Boolean, default=True)
-    is_public   = Column(Boolean, default=True, server_default="1")  # public = all can see all comments
+    is_public   = Column(Boolean, default=True, server_default=text("true"))
     created_at  = Column(DateTime(timezone=True), default=_now)
 
     creator       = relationship("User",  back_populates="albums")
@@ -158,9 +158,11 @@ class Comment(Base):
     created_at = Column(DateTime(timezone=True), default=_now)
 
     # Self-referential FK for threading (nullable — top-level comments have no parent)
-    parent_id  = Column(String(36) if IS_SQLITE else None,
-                        ForeignKey("comments.id", ondelete="CASCADE"),
-                        nullable=True, index=True)
+    if IS_SQLITE:
+        parent_id = Column(String(36), ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
+    else:
+        from sqlalchemy.dialects.postgresql import UUID as PgUUID
+        parent_id = Column(PgUUID(as_uuid=True), ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
 
     photo    = relationship("Photo",   back_populates="comments")
     author   = relationship("User",    back_populates="comments")
