@@ -1,11 +1,12 @@
 """
 routers/auth_router.py - Auth + Avatar Upload
 """
-import os
+import os, io
 import random
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from PIL import Image
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form, status
 from sqlalchemy.exc import IntegrityError
@@ -30,7 +31,14 @@ from schemas import (
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
+BASE_DIR = Path(__file__).resolve().parent.parent
+raw_upload_dir = os.getenv("UPLOAD_DIR", "./uploads")
+if Path(raw_upload_dir).is_absolute():
+    UPLOAD_DIR = Path(raw_upload_dir)
+else:
+    UPLOAD_DIR = BASE_DIR / raw_upload_dir
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
 ALLOWED_IMG = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_AVATAR = 5 * 1024 * 1024
@@ -79,33 +87,38 @@ async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
 
     try:
         if existing_by_email:
-            existing_by_email.username = user_data.username
-            existing_by_email.hashed_password = hash_password(user_data.password)
-            existing_by_email.role = UserRole.CREATOR
-            existing_by_email.is_verified = False
-            existing_by_email.verification_code = code
-            existing_by_email.verification_code_expires_at = expires_at
+            user = existing_by_email
+            user.username = user_data.username
+            user.hashed_password = hash_password(user_data.password)
+            user.role = UserRole.CREATOR
+            user.is_verified = True
+            user.verification_code = None
+            user.verification_code_expires_at = None
             await db.flush()
         else:
-            db.add(
-                User(
-                    email=user_data.email,
-                    username=user_data.username,
-                    hashed_password=hash_password(user_data.password),
-                    role=UserRole.CREATOR,
-                    is_verified=False,
-                    verification_code=code,
-                    verification_code_expires_at=expires_at,
-                )
+            user = User(
+                email=user_data.email,
+                username=user_data.username,
+                hashed_password=hash_password(user_data.password),
+                role=UserRole.CREATOR,
+                is_verified=True,
+                verification_code=None,
+                verification_code_expires_at=None,
             )
+            db.add(user)
             await db.flush()
         await _commit_or_conflict(db)
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=409, detail="A user with this email or username already exists.") from exc
 
-    send_verification_email(user_data.email, code)
-    return {"message": "User registered successfully. Please verify your email.", "requires_verification": True}
+    return {
+        "access_token": create_access_token(user.id, user.role.value),
+        "token_type": "bearer",
+        "user": UserOut.model_validate(user),
+        "message": "User registered successfully.",
+        "requires_verification": False,
+    }
 
 
 @router.post("/login")
@@ -190,7 +203,13 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
     user.reset_token = None
     user.reset_token_expires_at = None
     await _commit_or_conflict(db)
-    return {"message": "Password reset successfully. You can now log in."}
+    await db.refresh(user)
+    return {
+        "message": "Password reset successfully.",
+        "access_token": create_access_token(user.id, user.role.value),
+        "token_type": "bearer",
+        "user": UserOut.model_validate(user),
+    }
 
 
 @router.get("/me", response_model=UserOut)
@@ -211,9 +230,19 @@ async def upload_avatar(
     if len(content) > MAX_AVATAR:
         raise HTTPException(status_code=400, detail="Avatar must be under 5 MB.")
 
+    try:
+        img = Image.open(io.BytesIO(content))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.thumbnail((400, 400), Image.Resampling.LANCZOS)
+        out_io = io.BytesIO()
+        img.save(out_io, format="JPEG", quality=80, optimize=True)
+        content = out_io.getvalue()
+    except Exception:
+        pass
+
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    ext = Path(file.filename or "avatar").suffix.lower() or ".jpg"
-    stored = f"avatar_{uuid.uuid4()}{ext}"
+    stored = f"avatar_{uuid.uuid4()}.jpg"
     with open(UPLOAD_DIR / stored, "wb") as f:
         f.write(content)
 

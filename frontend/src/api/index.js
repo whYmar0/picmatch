@@ -8,11 +8,30 @@ const BASE_URL = import.meta.env.VITE_API_URL || "/api";
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
-  timeout: 30000,
+  timeout: 15000,
 });
 
+export const authStorage = {
+  getToken: () => localStorage.getItem("pickmatch_token") || sessionStorage.getItem("pickmatch_token"),
+  getUser: () => localStorage.getItem("pickmatch_user") || sessionStorage.getItem("pickmatch_user"),
+  setSession: (token, user, remember = true) => {
+    const primary = remember ? localStorage : sessionStorage;
+    const secondary = remember ? sessionStorage : localStorage;
+    secondary.removeItem("pickmatch_token");
+    secondary.removeItem("pickmatch_user");
+    primary.setItem("pickmatch_token", token);
+    primary.setItem("pickmatch_user", JSON.stringify(user));
+  },
+  clear: () => {
+    localStorage.removeItem("pickmatch_token");
+    localStorage.removeItem("pickmatch_user");
+    sessionStorage.removeItem("pickmatch_token");
+    sessionStorage.removeItem("pickmatch_user");
+  },
+};
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("pickmatch_token");
+  const token = authStorage.getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -22,8 +41,7 @@ api.interceptors.response.use(
   (error) => {
     const url = error.config?.url || "";
     if (error.response?.status === 401 && !url.includes("/auth/")) {
-      localStorage.removeItem("pickmatch_token");
-      localStorage.removeItem("pickmatch_user");
+      authStorage.clear();
       // Don't redirect if the 401 came from the /vote/ page itself —
       // VotePage handles auth-gating with a friendly prompt
       const onVotePage = window.location.pathname.startsWith("/vote/");
@@ -32,10 +50,10 @@ api.interceptors.response.use(
         const returnTo = window.location.pathname + window.location.search;
         window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}`;
       }
-      return Promise.reject(new Error("Session expired. Please log in again."));
+      return Promise.reject(new Error("Сессия истекла. Войдите снова."));
     }
     const detail = error.response?.data?.detail;
-    let message = "Something went wrong. Please try again.";
+    let message = "Что-то пошло не так. Попробуйте ещё раз.";
     if (typeof detail === "string") {
       message = detail;
     } else if (Array.isArray(detail) && detail.length > 0) {
@@ -43,6 +61,10 @@ api.interceptors.response.use(
         const field = e.loc?.slice(1).join(" → ") || "";
         return field ? `${field}: ${e.msg}` : e.msg;
       }).join(" · ");
+    } else if (error.code === "ECONNABORTED") {
+      message = "Сервер долго не отвечает. Попробуйте ещё раз.";
+    } else if (error.message === "Network Error") {
+      message = "Ошибка сети. Проверьте соединение и повторите попытку.";
     } else if (error.message) {
       message = error.message;
     }

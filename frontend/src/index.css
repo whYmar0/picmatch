@@ -10,6 +10,7 @@
   --primary-light: #D6C2EB;
   --primary-dark: #7545A3;
   --radius-card: 1.5rem;
+  --radius-control: 0.75rem;
   --shadow-card: 0 4px 24px -4px rgba(0, 0, 0, 0.08);
   --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
@@ -69,11 +70,11 @@ body {
 
   /* Buttons */
   .btn-primary {
-    @apply bg-primary-400 hover:bg-primary-500 active:bg-primary-600 text-white font-semibold px-5 py-2.5 rounded-2xl shadow-orange hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2;
+    @apply bg-primary-400 hover:bg-primary-500 active:bg-primary-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-orange hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2;
   }
 
   .btn-secondary {
-    @apply bg-border-light dark:bg-border-dark hover:bg-primary-50 dark:hover:bg-primary-900/20 text-gray-700 dark:text-gray-300 font-medium px-5 py-2.5 rounded-2xl transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2;
+    @apply bg-border-light dark:bg-border-dark hover:bg-primary-50 dark:hover:bg-primary-900/20 text-gray-700 dark:text-gray-300 font-medium px-5 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2;
   }
 
   .btn-ghost {

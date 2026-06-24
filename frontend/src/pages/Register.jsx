@@ -14,7 +14,7 @@ export default function Register() {
   const { t }        = useLang();
   const navigate     = useNavigate();
 
-  const [form, setForm] = useState({ email: "", username: "", password: "" });
+  const [form, setForm] = useState({ email: "", username: "", password: "", remember: true });
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
@@ -42,18 +42,15 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!pwdStrength.length || !pwdStrength.uppercase || !pwdStrength.special) {
-      setError("Please ensure your password meets all requirements.");
+      setError("Проверьте, что пароль соответствует всем требованиям.");
       return;
     }
     setLoading(true);
     try {
-      const res = await register({ ...form, role: "creator" });
-      if (res.requires_verification) {
-        toast.success(res.message || "Registration successful! Please verify your email.");
-        navigate(`/verify-email?email=${encodeURIComponent(form.email)}`, { replace: true });
-      } else {
-        navigate("/dashboard", { replace: true });
-      }
+      const { remember, ...payload } = form;
+      const res = await register({ ...payload, role: "creator" }, remember);
+      toast.success(res.message || "Аккаунт создан");
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -196,6 +193,16 @@ export default function Register() {
                 </motion.div>
               )}
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 select-none">
+              <input
+                type="checkbox"
+                checked={form.remember}
+                onChange={(e) => setForm({ ...form, remember: e.target.checked })}
+                className="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-400"
+              />
+              Запомнить меня
+            </label>
 
             <motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}
               className="btn-primary w-full py-3 mt-2 rounded-full shadow-[0px_4px_10px_rgba(153,102,204,0.3)] whitespace-nowrap text-sm sm:text-base">

@@ -1,6 +1,7 @@
 """
 main.py - FastAPI application entry point
 """
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,8 +13,14 @@ from fastapi.staticfiles import StaticFiles
 from database import init_db
 from routers import albums, auth_router, comments, notifications, shared_access, votes
 
-UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
+BASE_DIR = Path(__file__).resolve().parent
+raw_upload_dir = os.getenv("UPLOAD_DIR", "./uploads")
+if Path(raw_upload_dir).is_absolute():
+    UPLOAD_DIR = Path(raw_upload_dir)
+else:
+    UPLOAD_DIR = BASE_DIR / raw_upload_dir
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+logger = logging.getLogger("pickmatch")
 
 
 def _parse_origins(raw: str | None) -> list[str]:
@@ -25,7 +32,14 @@ def _parse_origins(raw: str | None) -> list[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    print("[OK] Database ready")
+    if os.getenv("ENVIRONMENT", "").lower() == "production" and not Path(
+        os.getenv("UPLOAD_DIR", "")
+    ).is_absolute():
+        logger.warning(
+            "UPLOAD_DIR is not persistent. On Render, mount a disk at /var/data "
+            "and set UPLOAD_DIR=/var/data/uploads."
+        )
+    logger.info("Database ready; uploads directory: %s", UPLOAD_DIR)
     yield
 
 
@@ -72,7 +86,12 @@ app.include_router(notifications.router, prefix="/api")
 
 @app.get("/api/health", tags=["System"])
 async def health():
-    return {"status": "healthy", "version": "2.0.0"}
+    return {
+        "status": "healthy",
+        "version": "2.0.0",
+        "uploads_directory": str(UPLOAD_DIR),
+        "uploads_writable": os.access(UPLOAD_DIR, os.W_OK),
+    }
 
 
 @app.get("/", tags=["System"])

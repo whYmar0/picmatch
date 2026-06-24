@@ -377,6 +377,7 @@ async def toggle_like(
                 actor_id=_s(current_user.id),
                 type=NotificationType.LIKE,
                 album_id=_s(p_obj.album_id) if p_obj else None,
+                photo_id=_s(comment_obj.photo_id),
                 comment_id=comment_id,
             )
             db.add(notif)

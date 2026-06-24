@@ -183,8 +183,9 @@ export default function CreateAlbum() {
                 >
                   <img
                     src={file.preview}
-                    alt={file.name}
+                    alt={`Фото ${idx + 1}`}
                     className="w-full h-full object-cover"
+                    decoding="async"
                   />
                   <button
                     type="button"
@@ -195,10 +196,6 @@ export default function CreateAlbum() {
                   >
                     <X size={12} />
                   </button>
-                  <div className="absolute bottom-0 inset-x-0 bg-black/40 text-white
-                                  text-[10px] px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                    {file.name}
-                  </div>
                 </motion.div>
               ))}
             </motion.div>

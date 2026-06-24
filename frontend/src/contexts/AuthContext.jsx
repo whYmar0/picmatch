@@ -3,47 +3,47 @@
  * All users can create albums AND vote — no role distinction in UI.
  */
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { authApi } from "../api";
+import { authApi, authStorage } from "../api";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("pickmatch_user")); }
+    try { return JSON.parse(authStorage.getUser()); }
     catch { return null; }
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("pickmatch_token");
+    const token = authStorage.getToken();
     if (!token) { setLoading(false); return; }
     authApi.me()
       .then(setUser)
       .catch(() => {
-        localStorage.removeItem("pickmatch_token");
-        localStorage.removeItem("pickmatch_user");
+        authStorage.clear();
         setUser(null);
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, remember = true) => {
     const data = await authApi.login({ email, password });
-    localStorage.setItem("pickmatch_token", data.access_token);
-    localStorage.setItem("pickmatch_user", JSON.stringify(data.user));
+    authStorage.setSession(data.access_token, data.user, remember);
     setUser(data.user);
     return data.user;
   }, []);
 
-  const register = useCallback(async (formData) => {
+  const register = useCallback(async (formData, remember = true) => {
     const data = await authApi.register(formData);
-    // Since registration now requires email verification, we don't log in immediately.
+    if (data.access_token && data.user) {
+      authStorage.setSession(data.access_token, data.user, remember);
+      setUser(data.user);
+    }
     return data;
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("pickmatch_token");
-    localStorage.removeItem("pickmatch_user");
+    authStorage.clear();
     setUser(null);
   }, []);
 

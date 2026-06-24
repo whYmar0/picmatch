@@ -4,8 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Mail, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { authApi } from "../api";
+import { useLang } from "../contexts/LangContext";
 
 export default function VerifyEmail() {
+  const { t } = useLang();
   const [searchParams] = useSearchParams();
   const email = searchParams.get("email") || "";
   const navigate = useNavigate();
@@ -35,7 +37,7 @@ export default function VerifyEmail() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (code.length !== 6) {
-      setError("Please enter the 6-digit code.");
+      setError(t("errorVerifyCode"));
       return;
     }
     
@@ -44,12 +46,12 @@ export default function VerifyEmail() {
     try {
       await authApi.verifyEmail({ email, code });
       setSuccess(true);
-      toast.success("Email verified successfully!");
+      toast.success(t("emailVerifiedSuccess"));
       setTimeout(() => {
         navigate("/login", { replace: true });
       }, 2000);
     } catch (err) {
-      setError(err.message || "Failed to verify email.");
+      setError(err.message || t("errorGeneric"));
     } finally {
       setLoading(false);
     }
@@ -62,10 +64,10 @@ export default function VerifyEmail() {
     setError("");
     try {
       await authApi.resendVerification({ email });
-      toast.success("Verification code resent to your email.");
+      toast.success(t("resetLinkSent"));
       setCountdown(60); // 60 seconds cooldown
     } catch (err) {
-      setError(err.message || "Failed to resend code.");
+      setError(err.message || t("errorGeneric"));
     } finally {
       setResendLoading(false);
     }
@@ -83,7 +85,7 @@ export default function VerifyEmail() {
           <div className="flex items-center justify-center mx-auto mb-4 w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full">
             <Mail className="text-primary-500" size={32} />
           </div>
-          <h1 className="font-display font-bold text-3xl">Verify your email</h1>
+          <h1 className="font-display font-bold text-3xl">{t("verifyEmailTitle")}</h1>
           <p className="text-gray-400 text-sm mt-2">
             We've sent a 6-digit verification code to <br/>
             <span className="font-semibold text-gray-700 dark:text-gray-200">{email}</span>
@@ -113,7 +115,7 @@ export default function VerifyEmail() {
               className="flex items-start gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 text-sm rounded-2xl px-4 py-3 mb-4"
             >
               <CheckCircle size={15} className="mt-0.5 flex-shrink-0" />
-              <span>Email verified! Redirecting to login...</span>
+              <span>{t("emailVerifiedSuccess")}</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -122,7 +124,7 @@ export default function VerifyEmail() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-600 dark:text-gray-400 text-center block">
-                Enter Code
+                {t("verifyEmailCode")}
               </label>
               <input 
                 type="text" 
@@ -142,11 +144,11 @@ export default function VerifyEmail() {
               type="submit" 
               disabled={loading || code.length !== 6 || success} 
               whileTap={{ scale: 0.97 }}
-              className="btn-primary w-full py-3 rounded-full shadow-[0px_4px_10px_rgba(153,102,204,0.3)] disabled:opacity-50"
+              className="btn-primary w-full py-3 shadow-[0px_4px_10px_rgba(153,102,204,0.3)] disabled:opacity-50"
             >
               {loading
                 ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }} className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full mx-auto" />
-                : "Verify Account"
+                : t("verifyAccountBtn")
               }
             </motion.button>
           </form>
@@ -162,7 +164,7 @@ export default function VerifyEmail() {
               ) : (
                 <RefreshCw size={14} />
               )}
-              {countdown > 0 ? `Resend code in ${countdown}s` : "Didn't receive a code? Resend"}
+              {countdown > 0 ? `${t("resendCodeTimer")}${countdown}s` : t("resendCode")}
             </button>
           </div>
         </div>

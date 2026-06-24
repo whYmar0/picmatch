@@ -2,9 +2,22 @@
 routers/albums.py — Album management routes
 Updated: analytics endpoint allows shared users (can_view_stats=True) to view.
 """
-import os, uuid, secrets
+import os, uuid, secrets, io
 from typing import List
 from pathlib import Path
+from PIL import Image
+
+def compress_image(image_bytes: bytes, max_size: int = 1200, quality: int = 80) -> bytes:
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+        out_io = io.BytesIO()
+        img.save(out_io, format="JPEG", quality=quality, optimize=True)
+        return out_io.getvalue()
+    except Exception:
+        return image_bytes
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -45,8 +58,14 @@ async def get_optional_user(
     user = result.scalar_one_or_none()
     return user if (user and user.is_active) else None
 
-UPLOAD_DIR   = Path(os.getenv("UPLOAD_DIR", "./uploads"))
+BASE_DIR = Path(__file__).resolve().parent.parent
+raw_upload_dir = os.getenv("UPLOAD_DIR", "./uploads")
+if Path(raw_upload_dir).is_absolute():
+    UPLOAD_DIR = Path(raw_upload_dir)
+else:
+    UPLOAD_DIR = BASE_DIR / raw_upload_dir
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 BASE_URL     = os.getenv("BASE_URL",     "http://localhost:8000")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -103,15 +122,18 @@ async def create_album(
     for idx, f in enumerate(photos):
         if f.content_type not in ALLOWED_TYPES:
             raise HTTPException(400, detail=f"'{f.content_type}' not allowed")
-        ext = Path(f.filename or "photo").suffix.lower() or ".jpg"
-        stored = f"{uuid.uuid4()}{ext}"
         content = await f.read()
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(400, detail=f"'{f.filename}' exceeds 10 MB")
+        
+        # Compress image to optimized JPEG with max 1200px size
+        content = compress_image(content)
+        stored = f"{uuid.uuid4()}.jpg"
+        
         with open(UPLOAD_DIR / stored, "wb") as out:
             out.write(content)
         db.add(Photo(album_id=_s(album.id), filename=f.filename or stored,
-                     stored_filename=stored, order=idx))
+                      stored_filename=stored, order=idx))
 
     await db.flush()
     await db.commit()

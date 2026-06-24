@@ -17,11 +17,17 @@ function parseUTC(dateStr) {
   return new Date(dateStr + "Z");
 }
 
-function timeAgo(dateStr) {
+function timeAgo(dateStr, lang) {
   const s = (Date.now() - parseUTC(dateStr).getTime()) / 1000;
-  if (s < 60)      return "just now";
-  if (s < 3600)    return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400)   return `${Math.floor(s / 3600)}h ago`;
+  if (lang === "ru") {
+    if (s < 60) return "только что";
+    if (s < 3600) return `${Math.floor(s / 60)} мин. назад`;
+    if (s < 86400) return `${Math.floor(s / 3600)} ч. назад`;
+    return `${Math.floor(s / 86400)} дн. назад`;
+  }
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
 }
 
@@ -38,7 +44,7 @@ async function smartCopy(text) {
 }
 
 export default function AlbumCard({ album: initialAlbum, onDelete, index }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [album, setAlbum] = useState(initialAlbum);
   const [copied,     setCopied]     = useState(false);
   const [updating,   setUpdating]   = useState(false);
@@ -57,7 +63,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index }) {
       const nextPublic = !album.is_public;
       const updated = await albumsApi.updatePrivacy(album.id, nextPublic);
       setAlbum(updated);
-      toast.success(nextPublic ? "Album is now Public ✓" : "Album is now Private ✓");
+      toast.success(nextPublic ? "Альбом теперь публичный" : "Альбом теперь приватный");
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -67,7 +73,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index }) {
 
   const handleDelete = (e) => {
     e.preventDefault();
-    if (window.confirm(`Delete "${album.title}"?`)) onDelete(album.id);
+    if (window.confirm(`Удалить альбом «${album.title}»?`)) onDelete(album.id);
   };
 
   const previewPhotos = (album.photos || []).slice(0, 3);
@@ -116,7 +122,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index }) {
           <div className="min-w-0 pr-2 flex-1">
             <h3 className="font-semibold text-sm leading-tight break-words">{album.title}</h3>
             <span className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-              <Clock size={10} /> {timeAgo(album.created_at)}
+              <Clock size={10} /> {timeAgo(album.created_at, lang)}
             </span>
           </div>
           <motion.button

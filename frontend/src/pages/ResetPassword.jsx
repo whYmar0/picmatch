@@ -3,9 +3,11 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Eye, EyeOff, AlertCircle, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
-import { authApi } from "../api";
+import { authApi, authStorage } from "../api";
+import { useLang } from "../contexts/LangContext";
 
 export default function ResetPassword() {
+  const { t } = useLang();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
   const navigate = useNavigate();
@@ -15,6 +17,7 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [remember, setRemember] = useState(true);
   
   // Password validation state
   const [pwdStrength, setPwdStrength] = useState({
@@ -40,21 +43,24 @@ export default function ResetPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!pwdStrength.length || !pwdStrength.uppercase || !pwdStrength.special) {
-      setError("Please ensure your password meets all requirements.");
+      setError("Пароль должен соответствовать всем требованиям.");
       return;
     }
     
     setLoading(true);
     setError("");
     try {
-      await authApi.resetPassword({ token, password });
+      const data = await authApi.resetPassword({ token, password });
+      if (data.access_token && data.user) {
+        authStorage.setSession(data.access_token, data.user, remember);
+      }
       setSuccess(true);
-      toast.success("Password reset successfully!");
+      toast.success(t("passwordResetSuccess"));
       setTimeout(() => {
-        navigate("/login", { replace: true });
-      }, 2000);
+        navigate(data.access_token ? "/dashboard" : "/login", { replace: true });
+      }, 900);
     } catch (err) {
-      setError(err.message || "Failed to reset password.");
+      setError(err.message || t("errorGeneric"));
     } finally {
       setLoading(false);
     }
@@ -69,9 +75,9 @@ export default function ResetPassword() {
         className="w-full max-w-sm"
       >
         <div className="text-center mb-7">
-          <h1 className="font-display font-bold text-3xl">Set New Password</h1>
+          <h1 className="font-display font-bold text-3xl">{t("resetPassword")}</h1>
           <p className="text-gray-400 text-sm mt-2">
-            Please create a new password for your account.
+            {t("setNewPasswordSubtitle")}
           </p>
         </div>
 
@@ -98,7 +104,7 @@ export default function ResetPassword() {
               className="flex items-start gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 text-sm rounded-2xl px-4 py-3 mb-4"
             >
               <CheckCircle size={15} className="mt-0.5 flex-shrink-0" />
-              <span>Password has been reset! Redirecting to login...</span>
+              <span>{t("passwordResetSuccess")}</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -108,7 +114,7 @@ export default function ResetPassword() {
             {/* Password */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                New Password
+                {t("newPassword")}
               </label>
               <div className="relative">
                 <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -118,7 +124,7 @@ export default function ResetPassword() {
                   minLength={8}
                   value={password} 
                   onChange={(e) => { setError(""); setPassword(e.target.value); }}
-                  placeholder="Create new password" 
+                  placeholder="••••••••" 
                   className="input-field pl-10 pr-11" 
                   disabled={success}
                 />
@@ -141,13 +147,13 @@ export default function ResetPassword() {
                   {/* Strength Bar */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center text-[10px] uppercase tracking-wider font-semibold text-gray-400 dark:text-gray-500">
-                      <span>Password Strength</span>
+                      <span>{t("passwordStrength")}</span>
                       <span className={
                         (pwdStrength.length && pwdStrength.uppercase && pwdStrength.special) ? "text-green-500" :
                         (pwdStrength.length && (pwdStrength.uppercase || pwdStrength.special)) ? "text-primary-500" : "text-red-400"
                       }>
-                        {(pwdStrength.length && pwdStrength.uppercase && pwdStrength.special) ? "Strong" :
-                         (pwdStrength.length && (pwdStrength.uppercase || pwdStrength.special)) ? "Medium" : "Weak"}
+                        {(pwdStrength.length && pwdStrength.uppercase && pwdStrength.special) ? t("strengthStrong") :
+                         (pwdStrength.length && (pwdStrength.uppercase || pwdStrength.special)) ? t("strengthMedium") : t("strengthWeak")}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-1 h-1.5">
@@ -164,36 +170,48 @@ export default function ResetPassword() {
                         ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
                         : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">1</div>
                       }
-                      <span className="truncate">At least 8 characters</span>
+                      <span className="truncate">{t("reqMinLength")}</span>
                     </div>
                     <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.uppercase ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
                       {pwdStrength.uppercase 
                         ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
                         : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">2</div>
                       }
-                      <span className="truncate">At least 1 uppercase letter</span>
+                      <span className="truncate">{t("reqUppercase")}</span>
                     </div>
                     <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.special ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
                       {pwdStrength.special 
                         ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
                         : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">3</div>
                       }
-                      <span className="truncate">At least 1 special character</span>
+                      <span className="truncate">{t("reqSpecial")}</span>
                     </div>
                   </div>
                 </motion.div>
               )}
             </div>
 
+            <div className="flex items-center gap-2 text-sm pt-1">
+              <label className="flex items-center gap-2 text-gray-500 dark:text-gray-400 select-none">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-400"
+                />
+                {t("rememberMe")}
+              </label>
+            </div>
+
             <motion.button 
               type="submit" 
               disabled={loading || success || !pwdStrength.length || !pwdStrength.uppercase || !pwdStrength.special} 
               whileTap={{ scale: 0.97 }}
-              className="btn-primary w-full py-3 mt-2 rounded-full shadow-[0px_4px_10px_rgba(153,102,204,0.3)] disabled:opacity-50 whitespace-nowrap text-sm sm:text-base"
+              className="btn-primary w-full py-3 mt-2 shadow-[0px_4px_10px_rgba(153,102,204,0.3)] disabled:opacity-50 whitespace-nowrap text-sm sm:text-base"
             >
               {loading
                 ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }} className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full mx-auto" />
-                : "Reset Password"
+                : t("resetPassword")
               }
             </motion.button>
           </form>

@@ -17,7 +17,8 @@
  *  4. MockCards use `position: absolute` centered via `left/top 50%` + translate
  *     so rotation happens around their true visual center, not a corner.
  */
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Upload, Share2, Trophy, ArrowRight } from "lucide-react";
 import { useLang } from "../contexts/LangContext";
@@ -71,6 +72,13 @@ function Step({ icon: Icon, title, desc, index }) {
 export default function Landing() {
   const { t } = useLang();
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
 
   return (
     <div className="min-h-screen overflow-x-hidden">

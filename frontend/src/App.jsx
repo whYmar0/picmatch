@@ -2,10 +2,10 @@
  * App.jsx — Root with routing
  * All routes open to any authenticated user (unified auth).
  */
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider }  from "./contexts/ThemeContext";
-import { AuthProvider }   from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { LangProvider }   from "./contexts/LangContext";
 import Navbar             from "./components/Navbar";
 import ProtectedRoute     from "./components/ProtectedRoute";
@@ -21,6 +21,13 @@ import VotePage           from "./pages/VotePage";
 import AnalyticsPage      from "./pages/AnalyticsPage";
 import Notifications      from "./pages/Notifications";
 import CommentThreadPage  from "./pages/CommentThreadPage";
+import LoadingSpinner     from "./components/LoadingSpinner";
+
+function HomeRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingSpinner />;
+  return user ? <Navigate to="/dashboard" replace /> : <Landing />;
+}
 
 export default function App() {
   return (
@@ -48,7 +55,7 @@ export default function App() {
               <Navbar />
               <main className="flex-1 overflow-x-hidden">
                 <Routes>
-                  <Route path="/"         element={<Landing />} />
+                  <Route path="/"         element={<HomeRoute />} />
                   <Route path="/login"    element={<Login />} />
                   <Route path="/register" element={<Register />} />
                   <Route path="/verify-email" element={<VerifyEmail />} />
@@ -68,7 +75,7 @@ export default function App() {
                       <div>
                         <p className="text-7xl mb-4">🔍</p>
                         <h2 className="font-display font-bold text-3xl mb-2">404</h2>
-                        <a href="/" className="btn-primary inline-flex mt-4">Go Home</a>
+                        <a href="/" className="btn-primary inline-flex mt-4">На главную</a>
                       </div>
                     </div>
                   } />

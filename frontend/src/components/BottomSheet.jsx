@@ -11,8 +11,11 @@ export default function BottomSheet({ open, onClose, title, topContent, headerCh
   const sheetRef = useRef(null);
   const controls = useAnimation();
   const y = useMotionValue(0);
-  // Calculate vh once on mount to prevent mobile address bar from triggering resize re-renders and stuttering animations
-  const [vh] = useState(typeof window !== "undefined" ? window.innerHeight : 800);
+  const [vh, setVh] = useState(
+    typeof window !== "undefined"
+      ? (window.visualViewport?.height || window.innerHeight)
+      : 800
+  );
 
   // Snap points: 
   // - 0 means fully expanded (95vh height)
@@ -25,6 +28,22 @@ export default function BottomSheet({ open, onClose, title, topContent, headerCh
   const scale = useTransform(y, [0, defaultOffset, dismissOffset], [0.85, 1, 1]);
   // Fade out top content only when dragging DOWN to dismiss
   const topOpacity = useTransform(y, [defaultOffset, dismissOffset], [1, 0]);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const updateViewport = () => {
+      setVh(Math.round(viewport?.height || window.innerHeight));
+    };
+    updateViewport();
+    viewport?.addEventListener("resize", updateViewport);
+    viewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    return () => {
+      viewport?.removeEventListener("resize", updateViewport);
+      viewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+    };
+  }, []);
 
   // Close on Escape key
   useEffect(() => {
@@ -102,7 +121,7 @@ export default function BottomSheet({ open, onClose, title, topContent, headerCh
             initial={{ y: vh }}
             animate={controls}
             exit={{ y: vh }}
-            style={{ y, height: "95dvh", marginTop: "auto" }}
+            style={{ y, height: Math.max(320, vh * 0.95), marginTop: "auto" }}
             drag="y"
             dragConstraints={{ top: 0, bottom: vh }}
             dragElastic={0.1}
@@ -137,7 +156,7 @@ export default function BottomSheet({ open, onClose, title, topContent, headerCh
             </div>
 
             {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               {children}
             </div>
           </motion.div>

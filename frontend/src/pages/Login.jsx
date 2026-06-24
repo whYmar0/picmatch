@@ -16,7 +16,7 @@ export default function Login() {
   const location     = useLocation();
   const from = location.state?.from?.pathname || "/dashboard";
 
-  const [form,    setForm]    = useState({ email: "", password: "" });
+  const [form,    setForm]    = useState({ email: "", password: "", remember: true });
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
@@ -26,9 +26,9 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      const user = await login(form.email, form.password);
+      const user = await login(form.email, form.password, form.remember);
       toast.success(`${t("login")} ✓ @${user.username}`);
-      navigate(from, { replace: true });
+      navigate(from === "/" ? "/dashboard" : from, { replace: true });
     } catch (err) {
       setError(err.message);    // inline — no page refresh
     } finally {
@@ -103,6 +103,21 @@ export default function Login() {
                   {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <label className="flex items-center gap-2 text-gray-500 dark:text-gray-400 select-none">
+                <input
+                  type="checkbox"
+                  checked={form.remember}
+                  onChange={(e) => setForm({ ...form, remember: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-400"
+                />
+                Запомнить меня
+              </label>
+              <Link to="/forgot-password" className="font-semibold text-primary-500 hover:text-primary-600">
+                Забыли пароль?
+              </Link>
             </div>
 
             <motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}

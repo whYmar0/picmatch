@@ -251,6 +251,7 @@ class NotificationOut(BaseModel):
     photo_id: Optional[AnyUUID] = None
     comment_id: Optional[AnyUUID] = None
     text: Optional[str] = None
+    thumbnail_url: Optional[str] = None
 
 # ─── Generic ──────────────────────────────────────────────────────────────────
 

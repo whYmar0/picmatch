@@ -35,10 +35,10 @@ async function smartShare(title, url) {
 function ReactionBadge({ isLike }) {
   return isLike
     ? <span className="inline-flex items-center gap-1 text-green-500 text-xs font-semibold">
-        <ThumbsUp size={10} /> Like
+        <ThumbsUp size={10} /> Нравится
       </span>
     : <span className="inline-flex items-center gap-1 text-red-400 text-xs font-semibold">
-        <ThumbsDown size={10} /> Nope
+        <ThumbsDown size={10} /> Пропуск
       </span>;
 }
 
@@ -72,7 +72,7 @@ function PhotoListRow({ photo, rank, isWinner, onPhotoClick }) {
         <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
       </button>
       <button onClick={() => onPhotoClick(photo)} className="flex-1 min-w-0 text-left">
-        <p className="text-sm font-medium truncate break-words">{photo.filename}</p>
+        <p className="text-sm font-medium">Фото {rank + 1}</p>
         <div className="h-1.5 bg-border-light dark:bg-border-dark rounded-full mt-1.5 overflow-hidden">
           <motion.div
             className="h-full bg-primary-400 rounded-full"
@@ -149,7 +149,7 @@ function PhotoTabBar({ tab, setTab, likeCount, dislikeCount, canViewStats }) {
                       : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}
       >
         <MessageCircle size={14} />
-        Comments
+        Комментарии
       </button>
     </div>
   );
@@ -290,7 +290,9 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
 
   const sheetTitle =
     reactionSheet === "voters" ? t("voters") :
-    reactionSheet?.filename    ? (reactionTab === "comments" ? "Comments" : t("reactions")) : "";
+    reactionSheet && reactionSheet !== "voters"
+      ? (reactionTab === "comments" ? t("Comments") : t("reactions"))
+      : "";
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
@@ -350,7 +352,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
               className="flex-1 min-w-0 text-left group"
             >
               <p className="font-semibold truncate break-words group-hover:text-primary-500 transition-colors text-sm">
-                {activeWinner.filename}
+                Лучшее фото
               </p>
               <p className="text-2xl font-display font-bold text-primary-400 mt-0.5">
                 {activeWinner.like_percentage}%

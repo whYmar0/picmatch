@@ -1,4 +1,4 @@
-﻿/**
+/**
  * contexts/LangContext.jsx — 100% bilingual EN / RU
  * New keys: seeMore, seeLess, sort, filterBy, filterByVoter,
  *           noVoters, selectVoters, sortMostLikes, sortMostDislikes
@@ -125,6 +125,38 @@ const T = {
     recentlyVisited: "Recently Visited",
     noRecentAlbums: "Albums you visit will appear here",
     viewMyComments: "my thread",
+    rememberMe: "Remember me",
+    forgotPassword: "Forgot Password?",
+    backToLogin: "Back to login",
+    resetPassword: "Reset Password",
+    newPassword: "New Password",
+    verifyEmailTitle: "Verify your email",
+    verifyEmailCode: "Enter Code",
+    verifyAccountBtn: "Verify Account",
+    resendCode: "Didn't receive a code? Resend",
+    resendCodeTimer: "Resend code in ",
+    passwordStrength: "Password Strength",
+    strengthWeak: "Weak",
+    strengthMedium: "Medium",
+    strengthStrong: "Strong",
+    reqMinLength: "At least 8 characters",
+    reqUppercase: "At least 1 uppercase letter",
+    reqSpecial: "At least 1 special character",
+    notifCommentPhoto: "commented on a photo from the album",
+    notifLikedComment: "liked your comment",
+    notifVotedAlbum: "voted in your album",
+    notifRepliedComment: "replied to your comment",
+    privateAlbumThreadHint: "This is a private album. You can only see your own comment thread here.",
+    commentNotFound: "Comment not found.",
+    errorEnterEmail: "Please enter your email address.",
+    errorVerifyCode: "Please enter the 6-digit code.",
+    resetLinkSent: "If that email is registered, we have sent a password reset link. Please check your inbox.",
+    forgotPasswordSubtitle: "Enter your email address and we'll send you a link to reset your password.",
+    setNewPasswordSubtitle: "Please create a new password for your account.",
+    passwordResetSuccess: "Password reset successfully!",
+    emailVerifiedSuccess: "Email verified! Redirecting to login...",
+    replyToUser: "Replying to",
+    addCommentPlaceholder: "Add a comment…",
   },
 
   ru: {
@@ -239,6 +271,38 @@ const T = {
     recentlyVisited: "Недавно посещённые",
     noRecentAlbums: "Здесь появятся альбомы, которые вы посещали",
     viewMyComments: "мои комментарии",
+    rememberMe: "Запомнить меня",
+    forgotPassword: "Забыли пароль?",
+    backToLogin: "Назад к входу",
+    resetPassword: "Сбросить пароль",
+    newPassword: "Новый пароль",
+    verifyEmailTitle: "Подтвердите email",
+    verifyEmailCode: "Введите код",
+    verifyAccountBtn: "Подтвердить аккаунт",
+    resendCode: "Не получили код? Отправить ещё раз",
+    resendCodeTimer: "Отправить повторно через ",
+    passwordStrength: "Сложность пароля",
+    strengthWeak: "Слабый",
+    strengthMedium: "Средний",
+    strengthStrong: "Надёжный",
+    reqMinLength: "Минимум 8 символов",
+    reqUppercase: "Минимум 1 заглавная буква",
+    reqSpecial: "Минимум 1 специальный символ",
+    notifCommentPhoto: "прокомментировал фото с альбома",
+    notifLikedComment: "оценил ваш комментарий",
+    notifVotedAlbum: "проголосовал в вашем альбоме",
+    notifRepliedComment: "ответил на ваш комментарий",
+    privateAlbumThreadHint: "Это приватный альбом. Вы можете видеть только свои ветки комментариев.",
+    commentNotFound: "Комментарий не найден.",
+    errorEnterEmail: "Пожалуйста, введите ваш email.",
+    errorVerifyCode: "Пожалуйста, введите 6-значный код.",
+    resetLinkSent: "Если этот email зарегистрирован, мы отправили ссылку для сброса пароля. Проверьте ваш почтовый ящик.",
+    forgotPasswordSubtitle: "Введите ваш email, и мы отправим ссылку для сброса пароля.",
+    setNewPasswordSubtitle: "Пожалуйста, создайте новый пароль для вашего аккаунта.",
+    passwordResetSuccess: "Пароль успешно сброшен!",
+    emailVerifiedSuccess: "Email подтверждён! Перенаправление на вход...",
+    replyToUser: "Ответ для",
+    addCommentPlaceholder: "Написать комментарий…",
   },
 };
 
@@ -246,7 +310,7 @@ const LangContext = createContext(null);
 
 export function LangProvider({ children }) {
   const [lang, setLang] = useState(
-    () => localStorage.getItem("pickmatch_lang") || "en"
+    () => localStorage.getItem("pickmatch_lang") || "ru"
   );
   const setLanguage = (l) => { setLang(l); localStorage.setItem("pickmatch_lang", l); };
   const t = (key) => T[lang]?.[key] ?? T.en[key] ?? key;

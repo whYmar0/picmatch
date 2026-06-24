@@ -12,9 +12,9 @@
  */
 import { useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { ImageOff, ThumbsUp, ThumbsDown } from "lucide-react";
 
-const SWIPE_THRESHOLD = 80;
+const SWIPE_THRESHOLD = 64;
 
 const SwipeCard = forwardRef(function SwipeCard(
   { photo, isTop, stackIndex, onSwipe, onImageClick },
@@ -26,6 +26,7 @@ const SwipeCard = forwardRef(function SwipeCard(
   const pointerDown = useRef(null);
   const hasDragged = useRef(false);
   const [aspectRatio, setAspectRatio] = useState(null);
+  const [imageFailed, setImageFailed] = useState(false);
 
   const rotate = useTransform(x, [-300, 0, 300], [-22, 0, 22]);
   const likeOpacity = useTransform(x, [15, 80], [0, 1]);
@@ -39,7 +40,7 @@ const SwipeCard = forwardRef(function SwipeCard(
       const dir = isLike ? 700 : -700;
       await controls.start({
         x: dir, rotate: isLike ? 22 : -22, opacity: 0,
-        transition: { duration: 0.38, ease: [0.32, 0, 0.67, 0] },
+        transition: { duration: 0.24, ease: [0.32, 0, 0.67, 0] },
       });
       onSwipe(photo.id, isLike);
     },
@@ -75,7 +76,7 @@ const SwipeCard = forwardRef(function SwipeCard(
       const isLike = info.offset.x > 0 || info.velocity.x > 0;
       await controls.start({
         x: isLike ? 700 : -700, y: y.get() - 40, opacity: 0,
-        transition: { duration: 0.32, ease: "easeOut" },
+        transition: { duration: 0.22, ease: "easeOut" },
       });
       onSwipe(photo.id, isLike);
     } else {
@@ -126,14 +127,24 @@ const SwipeCard = forwardRef(function SwipeCard(
       */}
       <div className="relative w-full h-full rounded-3xl overflow-hidden shadow-swipe bg-gray-950">
 
-        <img
-          src={photo.url}
-          alt={photo.filename}
-          onLoad={onImageLoad}
-          className={`w-full h-full ${objectFit} select-none pointer-events-none`}
-          draggable={false}
-          loading="eager"
-        />
+        {imageFailed ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-gray-400">
+            <ImageOff size={34} />
+            <span className="text-sm">Изображение недоступно</span>
+          </div>
+        ) : (
+          <img
+            src={photo.url}
+            alt="Фото альбома"
+            onLoad={onImageLoad}
+            onError={() => setImageFailed(true)}
+            className={`w-full h-full ${objectFit} select-none pointer-events-none`}
+            draggable={false}
+            loading={isTop ? "eager" : "lazy"}
+            decoding="async"
+            fetchPriority={isTop ? "high" : "low"}
+          />
+        )}
 
         {/* LIKE / NOPE stamps — top card only */}
         {isTop && (
@@ -144,7 +155,7 @@ const SwipeCard = forwardRef(function SwipeCard(
                          font-sans font-bold text-xl tracking-widest rounded-xl
                          px-3 py-1 -rotate-[20deg] select-none bg-black/20"
             >
-              LIKE
+              НРАВИТСЯ
             </motion.div>
             <motion.div
               style={{ opacity: nopeOpacity }}
@@ -152,7 +163,7 @@ const SwipeCard = forwardRef(function SwipeCard(
                          font-sans font-bold text-xl tracking-widest rounded-xl
                          px-3 py-1 rotate-[20deg] select-none bg-black/20"
             >
-              NOPE
+              ПРОПУСТИТЬ
             </motion.div>
           </>
         )}

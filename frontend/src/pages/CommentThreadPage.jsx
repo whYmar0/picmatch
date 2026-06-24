@@ -13,19 +13,25 @@ import { ChevronLeft, Lock, MessageCircle } from "lucide-react";
 import { commentsApi } from "../api";
 import { UserAvatar } from "../components/Navbar";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { formatDistanceToNow } from "date-fns";
+import { useLang } from "../contexts/LangContext";
 
-function fmt(dateStr) {
+function fmt(dateStr, lang) {
   const ds = dateStr.endsWith("Z") ? dateStr : dateStr + "Z";
-  return formatDistanceToNow(new Date(ds), { addSuffix: false })
-    .replace("about ", "")
-    .replace("less than a minute", "now")
-    .replace(/ minutes?/, "m")
-    .replace(/ hours?/, "h")
-    .replace(/ days?/, "d");
+  const s = Math.max(0, (Date.now() - new Date(ds).getTime()) / 1000);
+  
+  if (s < 60) {
+    return lang === "ru" ? "только что" : "now";
+  } else if (s < 3600) {
+    return `${Math.floor(s / 60)}${lang === "ru" ? "м" : "m"}`;
+  } else if (s < 86400) {
+    return `${Math.floor(s / 3600)}${lang === "ru" ? "ч" : "h"}`;
+  } else {
+    return `${Math.floor(s / 86400)}${lang === "ru" ? "д" : "d"}`;
+  }
 }
 
 function ThreadComment({ comment, isRoot }) {
+  const { lang } = useLang();
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -42,7 +48,7 @@ function ThreadComment({ comment, isRoot }) {
             <span className="text-gray-800 dark:text-gray-200">{comment.text}</span>
           </p>
           <p className="text-xs text-gray-400 dark:text-gray-500 font-semibold mt-1.5">
-            {fmt(comment.created_at)}
+            {fmt(comment.created_at, lang)}
           </p>
         </div>
       </div>
@@ -58,6 +64,7 @@ function ThreadComment({ comment, isRoot }) {
 export default function CommentThreadPage() {
   const { commentId } = useParams();
   const navigate = useNavigate();
+  const { t } = useLang();
   const [thread, setThread] = useState([]);
   const [isPublic, setIsPublic] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
@@ -87,7 +94,7 @@ export default function CommentThreadPage() {
           <ChevronLeft size={24} />
         </button>
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Comments</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t("Comments")}</h1>
         </div>
       </div>
 
@@ -96,7 +103,7 @@ export default function CommentThreadPage() {
         <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-200 dark:border-amber-800/50 mb-6">
           <Lock size={15} className="text-amber-500 flex-shrink-0" />
           <p className="text-sm text-amber-700 dark:text-amber-300">
-            This is a private album. You can only see your own comment thread here.
+            {t("privateAlbumThreadHint")}
           </p>
         </div>
       )}
@@ -112,7 +119,7 @@ export default function CommentThreadPage() {
       ) : thread.length === 0 ? (
         <div className="text-center py-16">
           <MessageCircle size={36} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500 text-sm">Comment not found.</p>
+          <p className="text-gray-500 text-sm">{t("commentNotFound")}</p>
         </div>
       ) : (
         <div className="space-y-1">

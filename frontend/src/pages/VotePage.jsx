@@ -416,9 +416,9 @@ export default function VotePage() {
         </div>
 
         {/* ─── Card stack ────────────────────────────────────────────────────── */}
-        <div className="flex-shrink-0 w-full flex items-center justify-center px-6 py-2">
+        <div className="flex-shrink-0 w-full flex items-center justify-center px-2 sm:px-6 py-2">
           <div
-            className="relative w-full max-w-[340px] aspect-[3/4]"
+            className="relative w-full max-w-[430px] aspect-[3/4]"
           >
             {/* n/m counter badge — now placed top-right on the cards */}
             <div className="absolute top-3 right-3 z-30 pointer-events-none">
@@ -447,7 +447,7 @@ export default function VotePage() {
                         className="absolute bottom-4 right-4 z-30 p-3 rounded-full
                                    bg-black/60 backdrop-blur-md border border-white/20
                                    text-white hover:bg-black/80 transition-all active:scale-90"
-                        title="Comments"
+                        title={t("Comments")}
                       >
                         <MessageCircle size={20} />
                       </button>
