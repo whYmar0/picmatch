@@ -17,7 +17,7 @@ import toast from "react-hot-toast";
 import { albumsApi, commentsApi } from "../api";
 import AlbumSummary from "../components/AlbumSummary";
 import PhotoComments from "../components/PhotoComments";
-import LoadingSpinner from "../components/LoadingSpinner";
+import { AnalyticsSkeleton } from "../components/Skeleton";
 
 // ─── Locked comment overlay for private-album notification deep-link ──────────
 function LockedCommentSheet({ photoId, photoUrl, initialComments, onBack }) {
@@ -70,7 +70,7 @@ function LockedCommentSheet({ photoId, photoUrl, initialComments, onBack }) {
       />
 
       {photoUrl && (
-        <motion.div 
+        <motion.div
           style={{ opacity: topOpacity }}
           className="absolute top-0 left-0 w-full h-[40dvh] flex items-center justify-center px-6 z-10 pointer-events-none"
         >
@@ -140,17 +140,17 @@ export default function AnalyticsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const [analytics,      setAnalytics]      = useState(null);
-  const [loading,        setLoading]        = useState(true);
-  const [privateMode,    setPrivateMode]    = useState(false);
-  const [photoUrl,       setPhotoUrl]       = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [privateMode, setPrivateMode] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState(null);
   const [threadComments, setThreadComments] = useState(null);
-  const [photoId,        setPhotoId]        = useState(null);
+  const [photoId, setPhotoId] = useState(null);
 
   // URL params set when navigating from a notification
-  const initialPhotoId   = searchParams.get("photo");
+  const initialPhotoId = searchParams.get("photo");
   const initialCommentId = searchParams.get("comment");
-  const initialTab       = searchParams.get("tab") || "comments";
+  const initialTab = searchParams.get("tab") || "comments";
 
   useEffect(() => {
     let cancelled = false;
@@ -270,7 +270,7 @@ export default function AnalyticsPage() {
     return () => { cancelled = true; };
   }, [albumId, initialCommentId, initialPhotoId]);
 
-  if (loading) return <LoadingSpinner fullscreen />;
+  if (loading) return <AnalyticsSkeleton />;
 
   if (privateMode) {
     return (

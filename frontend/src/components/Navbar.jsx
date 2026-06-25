@@ -9,7 +9,8 @@
 import { useRef, useState, useEffect } from "react";
 import { Link, useNavigate }  from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sun, Moon, LogOut, LayoutDashboard, Camera, Bell, MessageSquare, Heart, BarChart2, Languages } from "lucide-react";
+import { LogOut, LayoutDashboard, Camera, Bell, MessageSquare, BarChart2, Sun, Moon, Languages } from "lucide-react";
+import RoundedHeart from "./RoundedHeart";
 import { useTheme }           from "../contexts/ThemeContext";
 import { useAuth }            from "../contexts/AuthContext";
 import { useLang }            from "../contexts/LangContext";
@@ -108,7 +109,11 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
 
-  const handleLogout = () => { logout(); navigate("/"); };
+  const handleLogout = () => {
+    logout();
+    // Navigate to root — HomeRoute will show Landing for unauthenticated users
+    navigate("/", { replace: true });
+  };
 
   const handleDeleteAvatar = async () => {
     if (!window.confirm("Remove profile photo?")) return;
@@ -193,7 +198,7 @@ export default function Navbar() {
                   onClick={() => navigate("/inbox")}
                   className="btn-ghost relative flex items-center justify-center w-11 h-11 rounded-2xl"
                 >
-                  <Heart size={24} className="text-gray-900 dark:text-gray-100" />
+                  <RoundedHeart size={24} className="text-gray-900 dark:text-gray-100" />
                   {unreadNotifs.length > 0 && (
                     <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(255,255,255,1)] dark:shadow-[0_0_0_2px_rgba(30,41,59,1)]" />
                   )}
@@ -228,7 +233,7 @@ export default function Navbar() {
                         )}
                         {likesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <Heart size={18} fill="white" className="text-white" />
+                            <RoundedHeart size={18} fill="white" className="text-white" />
                             <span className="font-bold text-[16px] leading-none mb-[1px]">{likesCount}</span>
                           </div>
                         )}
@@ -245,31 +250,7 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Theme */}
-            <motion.button onClick={toggle} whileTap={{ scale: 0.9 }}
-              className="btn-ghost w-11 h-11 rounded-2xl">
-              <motion.div
-                key={isDark ? "sun" : "moon"}
-                initial={{ rotate: -20, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                transition={{ duration: 0.18 }}
-              >
-                {isDark ? <Sun size={20} /> : <Moon size={20} />}
-              </motion.div>
-            </motion.button>
 
-            {/* Global Language Toggle */}
-            <motion.button
-              onClick={() => setLanguage(lang === "en" ? "ru" : "en")}
-              whileTap={{ scale: 0.9 }}
-              className="btn-ghost w-11 h-11 rounded-2xl flex items-center justify-center relative group"
-              title={t("language", "Language")}
-            >
-              <Languages size={20} />
-              <span className="absolute -bottom-1 -right-1 text-[9px] font-bold bg-primary-100 dark:bg-primary-900/60 text-primary-700 dark:text-primary-300 px-1 py-0.2 rounded-md border border-white dark:border-card-dark shadow-sm">
-                {lang.toUpperCase()}
-              </span>
-            </motion.button>
 
             {user ? (
               <>
@@ -322,6 +303,7 @@ export default function Navbar() {
                                    overflow-hidden z-[100]"
                       >
                         <div className="p-2 space-y-1">
+                          {/* Avatar Photo */}
                           <button
                             onClick={() => fileRef.current?.click()}
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm 
@@ -343,6 +325,34 @@ export default function Navbar() {
                               Remove Photo
                             </button>
                           )}
+
+                          <div className="h-px bg-border-light dark:bg-border-dark my-1" />
+
+                          {/* Theme Toggle */}
+                          <button
+                            onClick={toggle}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm 
+                                       hover:bg-primary-50 dark:hover:bg-primary-900/20 text-gray-700 dark:text-gray-200 transition-colors"
+                          >
+                            {isDark ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-primary-400" />}
+                            <span className="flex-1 text-left">{isDark ? t("lightMode") || "Light Mode" : t("darkMode") || "Dark Mode"}</span>
+                            <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isDark ? 'bg-primary-400' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isDark ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
+                            </div>
+                          </button>
+
+                          {/* Language Toggle */}
+                          <button
+                            onClick={() => setLanguage(lang === "en" ? "ru" : "en")}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm 
+                                       hover:bg-primary-50 dark:hover:bg-primary-900/20 text-gray-700 dark:text-gray-200 transition-colors"
+                          >
+                            <Languages size={16} className="text-primary-400" />
+                            <span className="flex-1 text-left">{t("language") || "Language"}</span>
+                            <span className="text-[10px] font-bold bg-primary-100 dark:bg-primary-900/60 text-primary-700 dark:text-primary-300 px-2 py-0.5 rounded-md">
+                              {lang.toUpperCase()}
+                            </span>
+                          </button>
                           
                           <div className="h-px bg-border-light dark:bg-border-dark my-1" />
                           

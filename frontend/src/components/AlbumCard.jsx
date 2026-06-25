@@ -1,12 +1,14 @@
-﻿/**
- * AlbumCard.jsx — v2
- * Added: Share button → opens ShareModal
- * Fixed: timeAgo UTC parsing (Ref 34 — appends Z for SQLite strings)
+/**
+ * AlbumCard.jsx — v3 (Redesign)
+ *
+ * New layout:
+ *   - 2/3 of card height = first photo (clickable -> gallery)
+ *   - 1/3 bottom = title, time, action buttons row (private/public, copy, delete)
+ *   - Grid of 2 columns on Dashboard
  */
 import { useState } from "react";
 import { motion }   from "framer-motion";
-import { Link }     from "react-router-dom";
-import { Copy, Check, BarChart2, Trash2, Image, Clock, Share2, Globe, Lock } from "lucide-react";
+import { Copy, Check, Trash2, Image, Globe, Lock } from "lucide-react";
 import { useLang }  from "../contexts/LangContext";
 import { albumsApi } from "../api";
 import toast       from "react-hot-toast";
@@ -43,21 +45,21 @@ async function smartCopy(text) {
   }
 }
 
-export default function AlbumCard({ album: initialAlbum, onDelete, index }) {
+export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhotoClick }) {
   const { t, lang } = useLang();
   const [album, setAlbum] = useState(initialAlbum);
   const [copied,     setCopied]     = useState(false);
   const [updating,   setUpdating]   = useState(false);
 
   const handleCopy = async (e) => {
-    e.preventDefault();
+    e.stopPropagation();
     if (await smartCopy(album.invite_url)) {
       setCopied(true); setTimeout(() => setCopied(false), 2000);
     }
   };
 
   const togglePrivacy = async (e) => {
-    e.preventDefault();
+    e.stopPropagation();
     setUpdating(true);
     try {
       const nextPublic = !album.is_public;
@@ -72,108 +74,135 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index }) {
   };
 
   const handleDelete = (e) => {
-    e.preventDefault();
+    e.stopPropagation();
     if (window.confirm(`Удалить альбом «${album.title}»?`)) onDelete(album.id);
   };
 
-  const previewPhotos = (album.photos || []).slice(0, 3);
-  const extra         = Math.max(0, (album.photo_count || 0) - previewPhotos.length);
+  const firstPhoto = (album.photos || [])[0];
+  const photoCount = album.photo_count || 0;
+
+  const handlePhotoClick = (e) => {
+    e.stopPropagation();
+    if (firstPhoto && onPhotoClick) {
+      onPhotoClick(album, firstPhoto);
+    }
+  };
 
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.07, duration: 0.3 }}
-        className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card
-                   hover:shadow-card-hover transition-shadow flex flex-col gap-3 p-4
-                   overflow-hidden w-full min-w-0"
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.07, duration: 0.3 }}
+      className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card
+                 hover:shadow-card-hover transition-shadow flex flex-col
+                 overflow-hidden w-full min-w-0 group"
+    >
+      {/* Photo area (2/3) */}
+      <button
+        onClick={handlePhotoClick}
+        className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
+                   overflow-hidden cursor-pointer focus:outline-none"
       >
-        {/* Thumbnail strip */}
-        <div className="relative h-28 rounded-2xl overflow-hidden bg-border-light dark:bg-border-dark">
-          {previewPhotos.length > 0 ? (
-            <div className="flex h-full gap-0.5">
-              {previewPhotos.map((photo, i) => (
-                <div key={photo.id}
-                  className={`h-full overflow-hidden ${i === 0 ? "flex-[2]" : "flex-1"}`}>
-                  <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                </div>
-              ))}
-              {extra > 0 && (
-                <div className="absolute right-0 top-0 bottom-0 w-9
-                                bg-black/50 flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">+{extra}</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <Image size={24} className="text-gray-300 dark:text-gray-600" />
-            </div>
-          )}
-          <span className="absolute top-2 left-2 bg-black/50 text-white
-                           text-[10px] font-semibold px-2 py-0.5 rounded-lg">
-            {album.photo_count ?? 0} {t("photos")}
+        {firstPhoto ? (
+          <img
+            src={firstPhoto.url}
+            alt=""
+            className="w-full h-full object-cover transition-transform duration-500
+                       group-hover:scale-105"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <Image size={32} className="text-gray-300 dark:text-gray-600" />
+          </div>
+        )}
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        {/* Photo count badge */}
+        <span className="absolute top-2.5 left-2.5 bg-black/60 backdrop-blur-sm text-white
+                         text-[10px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1">
+          <Image size={10} /> {photoCount}
+        </span>
+        {/* Privacy badge */}
+        <span className={`absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg
+                          text-[10px] font-semibold backdrop-blur-sm
+                          ${album.is_public
+                            ? "bg-green-500/70 text-white"
+                            : "bg-amber-500/70 text-white"}`}>
+          {album.is_public ? <Globe size={9} /> : <Lock size={9} />}
+          {album.is_public
+            ? (lang === "ru" ? "Публичный" : "Public")
+            : (lang === "ru" ? "Приватный" : "Private")}
+        </span>
+        {/* Hover play icon */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+      </button>
+
+      {/* Info area (1/3) */}
+      <div className="flex flex-col gap-2 p-3.5">
+        {/* Title + Time */}
+        <div className="min-w-0">
+          <h3 className="font-semibold text-sm leading-tight break-words line-clamp-1">{album.title}</h3>
+          <span className="text-[11px] text-gray-400 mt-0.5 block">
+            {timeAgo(album.created_at, lang)}
           </span>
         </div>
 
-        {/* Meta */}
-        <div className="flex items-center justify-between min-w-0">
-          <div className="min-w-0 pr-2 flex-1">
-            <h3 className="font-semibold text-sm leading-tight break-words">{album.title}</h3>
-            <span className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-              <Clock size={10} /> {timeAgo(album.created_at, lang)}
-            </span>
-          </div>
+        {/* Action buttons row */}
+        <div className="flex items-center gap-2">
+          {/* Private/Public toggle */}
           <motion.button
             onClick={togglePrivacy}
             disabled={updating}
             whileTap={{ scale: 0.9 }}
-            className={`flex items-center justify-center p-2 rounded-xl transition-colors ${
-              album.is_public 
-                ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500" 
+            className={`flex items-center justify-center p-2 rounded-xl transition-colors flex-shrink-0 ${
+              album.is_public
+                ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
                 : "bg-gray-100 dark:bg-gray-800 text-gray-500"
             }`}
-            title={album.is_public ? "Public Album" : "Private Album"}
+            title={album.is_public ? "Public" : "Private"}
           >
             {updating ? (
-              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full" />
+              <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
             ) : album.is_public ? (
-              <Globe size={14} />
+              <Globe size={13} />
             ) : (
-              <Lock size={14} />
+              <Lock size={13} />
             )}
           </motion.button>
-        </div>
 
-        {/* Invite link */}
-        <div className="flex items-center gap-2 bg-border-light dark:bg-border-dark
-                        rounded-xl px-3 py-2 min-w-0 overflow-hidden">
-          <span className="text-[10px] text-gray-400 truncate flex-1 font-mono min-w-0">
-            {album.invite_url.replace(/^https?:\/\//, "")}
-          </span>
-          <motion.button onClick={handleCopy} whileTap={{ scale: 0.82 }}
-            className="flex-shrink-0 text-primary-400 hover:text-primary-500 transition-colors"
-            aria-label={t("copyLink")}>
+          {/* Copy link */}
+          <motion.button
+            onClick={handleCopy}
+            whileTap={{ scale: 0.9 }}
+            className="flex items-center justify-center p-2 rounded-xl bg-gray-100 dark:bg-gray-800
+                       text-gray-500 hover:text-primary-500 transition-colors flex-shrink-0"
+            title={t("copyLink")}
+          >
             {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
           </motion.button>
-        </div>
 
-        {/* Actions */}
-        <div className="flex gap-2">
-          <Link to={`/analytics/${album.id}`}
-            className="flex-1 btn-primary text-xs py-2 justify-center">
-            <BarChart2 size={13} /> {t("viewAnalytics")}
-          </Link>
-          <motion.button onClick={handleDelete} whileTap={{ scale: 0.9 }}
-            className="w-9 h-9 flex items-center justify-center rounded-xl
-                       text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-            aria-label={t("deleteAlbum")}>
-            <Trash2 size={14} />
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Delete */}
+          <motion.button
+            onClick={handleDelete}
+            whileTap={{ scale: 0.9 }}
+            className="flex items-center justify-center p-2 rounded-xl
+                       text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex-shrink-0"
+            title={t("deleteAlbum")}
+          >
+            <Trash2 size={13} />
           </motion.button>
         </div>
-      </motion.div>
-
-    </>
+      </div>
+    </motion.div>
   );
 }

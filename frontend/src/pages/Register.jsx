@@ -3,7 +3,7 @@
  */
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Mail, Lock, User, Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
@@ -74,23 +74,20 @@ export default function Register() {
           <p className="text-gray-400 text-sm mt-1">{t("registerSubtitle") || "Join Pickmatch to share and vote."}</p>
         </div>
 
-        <AnimatePresence>
-          {error && (
-            <motion.div
-              key="err"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20
-                         border border-red-200 dark:border-red-800
-                         text-red-600 dark:text-red-400 text-sm
-                         rounded-2xl px-4 py-3 mb-4"
-            >
-              <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
-              <span>{error}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {error && (
+          <motion.div
+            key={error}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20
+                       border border-red-200 dark:border-red-800
+                       text-red-600 dark:text-red-400 text-sm
+                       rounded-2xl px-4 py-3 mb-4"
+          >
+            <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </motion.div>
+        )}
 
         <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card p-5 sm:p-6">
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>

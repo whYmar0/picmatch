@@ -1,8 +1,10 @@
 /**
- * Dashboard.jsx — v3
- * Added: "Recently Visited" section above own albums
+ * Dashboard.jsx — v4 (Redesign)
+ * - 2-column grid for album cards
+ * - Recent albums icon left of create button
+ * - Gallery mode with photo click
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Plus, Image, Clock } from "lucide-react";
@@ -12,7 +14,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import AlbumCard from "../components/AlbumCard";
 import RecentAlbumCard from "../components/RecentAlbumCard";
-import LoadingSpinner from "../components/LoadingSpinner";
+import AlbumGallery from "../components/AlbumGallery";
+import SkeletonBox, { AlbumGridSkeleton } from "../components/Skeleton";
 import { getRecentAlbums } from "../hooks/useRecentAlbums.js";
 
 export default function Dashboard() {
@@ -20,6 +23,7 @@ export default function Dashboard() {
   const { t } = useLang();
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [galleryAlbum, setGalleryAlbum] = useState(null);
 
   // Recently visited — filtered to exclude albums the user owns
   const recentAll = user ? getRecentAlbums(user.id) : [];
@@ -43,14 +47,30 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) return <LoadingSpinner />;
+  const handlePhotoClick = useCallback((album, photo) => {
+    setGalleryAlbum({ album: album, photoId: photo?.id });
+  }, []);
+
+  const handleGalleryClose = useCallback(() => {
+    setGalleryAlbum(null);
+  }, []);
+
+  if (loading) return (
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="mb-6">
+        <SkeletonBox className="h-8 w-32" />
+      </div>
+      <AlbumGridSkeleton count={4} />
+    </div>
+  );
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
 
-      {/* ── Recently Visited ── */}
+      {/* Recently Visited */}
       {recent.length > 0 && (
         <motion.section
+          id="recent-section"
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-10"
@@ -61,21 +81,34 @@ export default function Dashboard() {
               {t("recentlyVisited")}
             </h2>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {recent.map((album, i) => (
+          <div className="grid grid-cols-2 gap-4">
+            {recent.slice(0, 4).map((album, i) => (
               <RecentAlbumCard key={album.id} album={album} index={i} />
             ))}
           </div>
         </motion.section>
       )}
 
-      {/* ── My Albums ── */}
+      {/* My Albums */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between mb-6"
       >
-        <h1 className="font-display font-bold text-2xl truncate">{t("myAlbums")}</h1>
+        <div className="flex items-center gap-3">
+          {recent.length > 0 && (
+            <button
+              onClick={() => document.getElementById("recent-section")?.scrollIntoView({ behavior: "smooth" })}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-semibold
+                         bg-primary-50 dark:bg-primary-900/20 text-primary-500
+                         hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
+            >
+              <Clock size={12} />
+              <span>{recent.length}</span>
+            </button>
+          )}
+          <h1 className="font-display font-bold text-2xl truncate">{t("myAlbums")}</h1>
+        </div>
         {albums.length > 0 && (
           <Link
             to="/create"
@@ -104,13 +137,17 @@ export default function Dashboard() {
           </Link>
         </motion.div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+        <div className="grid grid-cols-2 gap-4 mb-10">
           {albums.map((album, i) => (
-            <AlbumCard key={album.id} album={album} onDelete={handleDelete} index={i} />
+            <AlbumCard key={album.id} album={album} onDelete={handleDelete} index={i} onPhotoClick={handlePhotoClick} />
           ))}
         </div>
       )}
 
+      {/* Gallery mode */}
+      {galleryAlbum && (
+        <AlbumGallery album={galleryAlbum.album} startPhotoId={galleryAlbum.photoId} onClose={handleGalleryClose} />
+      )}
     </div>
   );
 }

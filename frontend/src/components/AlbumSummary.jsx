@@ -56,23 +56,22 @@ function VoterRow({ username, avatarUrl, right }) {
   );
 }
 
-function PhotoListRow({ photo, rank, isWinner, onPhotoClick }) {
+function PhotoListRow({ photo, rank, onPhotoClick }) {
   return (
     <div className="flex items-center gap-3 py-2 px-2 rounded-2xl
                     hover:bg-border-light dark:hover:bg-border-dark transition-colors">
       <span className="w-6 text-center text-xs font-bold text-gray-400 flex-shrink-0">
-        {isWinner ? "🏆" : `#${rank + 1}`}
+        #{rank + 1}
       </span>
       <button
         onClick={() => onPhotoClick(photo)}
-        className="media-thumbnail w-12 h-12 rounded-2xl overflow-hidden flex-shrink-0
+        className="media-thumbnail w-12 h-12 rounded-xl overflow-hidden flex-shrink-0
                    bg-border-light dark:bg-border-dark
                    hover:ring-2 hover:ring-primary-400 transition-all"
       >
         <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
       </button>
       <button onClick={() => onPhotoClick(photo)} className="flex-1 min-w-0 text-left">
-        <p className="text-sm font-medium">Фото {rank + 1}</p>
         <div className="h-1.5 bg-border-light dark:bg-border-dark rounded-full mt-1.5 overflow-hidden">
           <motion.div
             className="h-full bg-primary-400 rounded-full"
@@ -97,9 +96,9 @@ function PhotoListRow({ photo, rank, isWinner, onPhotoClick }) {
   );
 }
 
-function PhotoGridCard({ photo, rank, isWinner, onPhotoClick }) {
+function PhotoGridCard({ photo, rank, onPhotoClick }) {
   return (
-    <div className="relative aspect-square rounded-2xl overflow-hidden
+    <div className="relative aspect-square rounded-xl overflow-hidden
                     bg-border-light dark:bg-border-dark group">
       <button onClick={() => onPhotoClick(photo)} className="media-thumbnail absolute inset-0 z-10">
         <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -110,7 +109,7 @@ function PhotoGridCard({ photo, rank, isWinner, onPhotoClick }) {
                    from-black/70 to-transparent p-2 pt-5 text-left"
       >
         <div className="flex justify-between">
-          <span className="text-white text-xs font-bold">{isWinner ? "🏆" : `#${rank + 1}`}</span>
+          <span className="text-white text-xs font-bold">#{rank + 1}</span>
           <span className="text-white text-xs">
             {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
           </span>
@@ -173,7 +172,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
 
   if (!analytics) return null;
   const { title, description, total_votes, unique_voters,
-          global_like_rate, voter_summaries, photos, winner,
+          global_like_rate, voter_summaries, photos,
           creator_id, is_public, can_view_stats } = analytics;
 
   const isOwner = user && String(user.id) === String(creator_id);
@@ -219,15 +218,6 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
       })
       .filter(Boolean);
   }, [sorted, selectedVoters]);
-
-  const activeWinner = useMemo(() => {
-    if (selectedVoters.size === 0) return winner;
-    const voted = filtered.filter((p) => p.total_votes > 0);
-    if (!voted.length) return null;
-    return voted.reduce((best, p) =>
-      p.like_percentage > best.like_percentage ? p : best
-    );
-  }, [filtered, selectedVoters, winner]);
 
   // ── Reaction sheet content ───────────────────────────────────────────────────
   const renderVotersList = () =>
@@ -327,44 +317,6 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
         )}
       </div>
 
-      {/* Winner hero */}
-      {(can_view_stats && activeWinner) && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1, type: "spring", stiffness: 220 }}
-          className="bg-card-light dark:bg-card-dark rounded-3xl p-4 animate-winner-glow"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xl crown-animate inline-block">🏆</span>
-            <span className="font-semibold text-primary-500 text-sm">{t("winnerBadge")}</span>
-          </div>
-          <div className="flex gap-4">
-            <button
-              onClick={() => openPhotoSheet(activeWinner)}
-              className="media-thumbnail w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-orange
-                         hover:ring-2 hover:ring-primary-400 transition-all"
-            >
-              <img src={activeWinner.url} alt="" className="w-full h-full object-cover" />
-            </button>
-            <button
-              onClick={() => openPhotoSheet(activeWinner)}
-              className="flex-1 min-w-0 text-left group"
-            >
-              <p className="font-semibold truncate break-words group-hover:text-primary-500 transition-colors text-sm">
-                Лучшее фото
-              </p>
-              <p className="text-2xl font-display font-bold text-primary-400 mt-0.5">
-                {activeWinner.like_percentage}%
-              </p>
-              <p className="text-xs text-gray-400">
-                {activeWinner.like_count} {t("likes")} · {activeWinner.total_votes} {t("totalVotes")}
-              </p>
-            </button>
-          </div>
-        </motion.div>
-      )}
-
       {/* Sort + Filter */}
       <div className="flex items-center gap-3">
         <button onClick={() => setSortOpen(true)}
@@ -403,7 +355,6 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
           <div className="space-y-1">
             {filtered.map((photo, i) => (
               <PhotoListRow key={photo.id} photo={photo} rank={i}
-                isWinner={String(photo.id) === String(activeWinner?.id)}
                 onPhotoClick={openPhotoSheet} />
             ))}
           </div>
@@ -411,7 +362,6 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
           <div className="grid grid-cols-3 gap-2">
             {filtered.map((photo, i) => (
               <PhotoGridCard key={photo.id} photo={photo} rank={i}
-                isWinner={String(photo.id) === String(activeWinner?.id)}
                 onPhotoClick={openPhotoSheet} />
             ))}
           </div>

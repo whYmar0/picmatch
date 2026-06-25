@@ -18,7 +18,7 @@ import { useLang } from "../contexts/LangContext";
 import { useAuth } from "../contexts/AuthContext";
 import SwipeCard, { SwipeButtons } from "../components/SwipeCard";
 import ImageLightbox from "../components/ImageLightbox";
-import LoadingSpinner from "../components/LoadingSpinner";
+import { VotePageSkeleton } from "../components/Skeleton";
 import { ThumbsUp, ThumbsDown, LogIn, MessageCircle, Check } from "lucide-react";
 import BottomSheet from "../components/BottomSheet";
 import PhotoComments from "../components/PhotoComments";
@@ -245,7 +245,7 @@ export default function VotePage() {
   const descLong = desc.length > DESC_LIMIT;
 
   // ── Guards ──────────────────────────────────────────────────────────────────
-  if (authLoading || loading) return <LoadingSpinner fullscreen />;
+  if (authLoading || loading) return <VotePageSkeleton />;
 
   if (needsAuth || !user) return (
     <div className="min-h-[calc(100dvh-4rem)] flex items-center justify-center text-center px-6
