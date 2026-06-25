@@ -205,7 +205,7 @@ export default function Register() {
             </label>
 
             <motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}
-              className="btn-primary w-full py-3 mt-2 rounded-full shadow-[0px_4px_10px_rgba(153,102,204,0.3)] whitespace-nowrap text-sm sm:text-base">
+              className="btn-primary w-full py-3 mt-2 shadow-[0px_4px_10px_rgba(153,102,204,0.3)] whitespace-nowrap text-sm sm:text-base">
               {loading
                 ? <motion.div animate={{ rotate: 360 }}
                     transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}

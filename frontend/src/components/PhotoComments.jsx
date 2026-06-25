@@ -17,7 +17,7 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
 
   const dateString = comment.created_at.endsWith("Z") ? comment.created_at : comment.created_at + "Z";
   const s = Math.max(0, (Date.now() - new Date(dateString).getTime()) / 1000);
-  
+
   let dateFormatted = "";
   if (s < 60) {
     dateFormatted = lang === "ru" ? "только что" : "just now";
@@ -76,8 +76,8 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
               {showReplies
                 ? (lang === "ru" ? "Скрыть ответы" : "Hide replies")
                 : (lang === "ru"
-                    ? `Показать ответы: ${comment.replies.length}`
-                    : `View ${comment.replies.length} more replies`)}
+                  ? `Показать ответы: ${comment.replies.length}`
+                  : `View ${comment.replies.length} more replies`)}
             </button>
           )}
         </div>
@@ -102,7 +102,7 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
   // If initialComments is provided (pre-fetched from outside), use them and skip the first fetch.
   // After submit/delete we still refresh via load().
   const [comments, setComments] = useState(() => initialComments ?? []);
-  const [loading,  setLoading]  = useState(initialComments === null); // skip spinner if pre-loaded
+  const [loading, setLoading] = useState(initialComments === null); // skip spinner if pre-loaded
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -115,7 +115,7 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
       id: rootComment ? rootComment.id : targetComment.id,
       author: targetComment.author
     });
-    
+
     setText((prev) => {
       const mention = `@${targetComment.author?.username} `;
       if (prev.startsWith('@')) {
@@ -143,13 +143,13 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
   useEffect(() => {
     // Only auto-fetch if no pre-loaded data was provided at mount
     if (initialComments !== null) return;
-    
+
     // Delay the initial fetch slightly so it doesn't block the UI thread 
     // during the 300ms BottomSheet slide-up animation
     const timer = setTimeout(() => {
       load();
     }, 350);
-    
+
     return () => clearTimeout(timer);
   }, [load]); // intentionally omitting initialComments — it's only read at mount
 
@@ -168,8 +168,8 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
       if (created) {
         setComments((prev) => replyTo?.id
           ? prev.map((comment) => String(comment.id) === String(replyTo.id)
-              ? { ...comment, replies: [...(comment.replies || []), created] }
-              : comment)
+            ? { ...comment, replies: [...(comment.replies || []), created] }
+            : comment)
           : [...prev, created]);
       } else {
         load();
@@ -189,8 +189,8 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
     <div className="flex flex-col flex-1 min-h-full">
       {comments.length === 0
         ? <p className="text-center text-gray-400 text-sm py-6">
-            {lang === "ru" ? "Комментариев пока нет. Будьте первым!" : "No comments yet. Be the first!"}
-          </p>
+          {lang === "ru" ? "Комментариев пока нет. Будьте первым!" : "No comments yet. Be the first!"}
+        </p>
         : (
           <div className="mb-4 flex-1">
             <AnimatePresence>

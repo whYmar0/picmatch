@@ -10,16 +10,16 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 
 export default function Login() {
-  const { login }    = useAuth();
-  const { t }        = useLang();
-  const navigate     = useNavigate();
-  const location     = useLocation();
+  const { login } = useAuth();
+  const { t } = useLang();
+  const navigate = useNavigate();
+  const location = useLocation();
   const from = location.state?.from?.pathname || "/dashboard";
 
-  const [form,    setForm]    = useState({ email: "", password: "", remember: true });
+  const [form, setForm] = useState({ email: "", password: "", remember: true });
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,7 +49,6 @@ export default function Login() {
             <img src="/pickmatch_logo.png" alt="Pickmatch Logo" className="h-16 w-auto object-contain" />
           </div>
           <h1 className="font-display font-bold text-3xl">{t("loginTitle")}</h1>
-          <p className="text-gray-400 text-sm mt-1">{t("loginSubtitle")}</p>
         </div>
 
         <AnimatePresence>
@@ -57,7 +56,7 @@ export default function Login() {
             <motion.div key="err"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
-              exit={{   opacity: 0, height: 0 }}
+              exit={{ opacity: 0, height: 0 }}
               className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20
                          border border-red-200 dark:border-red-800
                          text-red-600 dark:text-red-400 text-sm
@@ -124,8 +123,8 @@ export default function Login() {
               className="btn-primary w-full py-3 mt-1">
               {loading
                 ? <motion.div animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
-                    className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
+                  transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
+                  className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
                 : <><LogIn size={16} /> {t("login")}</>
               }
             </motion.button>
