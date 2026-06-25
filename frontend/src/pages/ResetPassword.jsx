@@ -146,7 +146,7 @@ export default function ResetPassword() {
                 >
                   {/* Strength Bar */}
                   <div className="space-y-1">
-                    <div className="flex justify-between items-center text-[10px] uppercase tracking-wider font-semibold text-gray-400 dark:text-gray-500">
+                    <div className="flex justify-between items-center text-[11px] font-semibold text-gray-400 dark:text-gray-500">
                       <span>{t("passwordStrength")}</span>
                       <span className={
                         (pwdStrength.length && pwdStrength.uppercase && pwdStrength.special) ? "text-green-500" :
@@ -192,12 +192,12 @@ export default function ResetPassword() {
             </div>
 
             <div className="flex items-center gap-2 text-sm pt-1">
-              <label className="flex items-center gap-2 text-gray-500 dark:text-gray-400 select-none">
+              <label className="remember-label">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-400"
+                  className="remember-checkbox"
                 />
                 {t("rememberMe")}
               </label>

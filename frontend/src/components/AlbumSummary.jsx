@@ -65,7 +65,7 @@ function PhotoListRow({ photo, rank, isWinner, onPhotoClick }) {
       </span>
       <button
         onClick={() => onPhotoClick(photo)}
-        className="w-12 h-12 rounded-2xl overflow-hidden flex-shrink-0
+        className="media-thumbnail w-12 h-12 rounded-2xl overflow-hidden flex-shrink-0
                    bg-border-light dark:bg-border-dark
                    hover:ring-2 hover:ring-primary-400 transition-all"
       >
@@ -101,7 +101,7 @@ function PhotoGridCard({ photo, rank, isWinner, onPhotoClick }) {
   return (
     <div className="relative aspect-square rounded-2xl overflow-hidden
                     bg-border-light dark:bg-border-dark group">
-      <button onClick={() => onPhotoClick(photo)} className="absolute inset-0 z-10">
+      <button onClick={() => onPhotoClick(photo)} className="media-thumbnail absolute inset-0 z-10">
         <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
       </button>
       <button
@@ -342,7 +342,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
           <div className="flex gap-4">
             <button
               onClick={() => openPhotoSheet(activeWinner)}
-              className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-orange
+              className="media-thumbnail w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-orange
                          hover:ring-2 hover:ring-primary-400 transition-all"
             >
               <img src={activeWinner.url} alt="" className="w-full h-full object-cover" />
@@ -393,7 +393,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
 
       {/* Photo list/grid */}
       <div>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3">
           {t("analyticsTitle")}
         </h2>
         {filtered.length === 0 && (

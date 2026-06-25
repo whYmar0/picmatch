@@ -1,6 +1,7 @@
 /**
  * pages/CreateAlbum.jsx — Страница создания альбома
  * Album creation with drag-and-drop photo upload and preview
+ * v5.4: client-side image compression before upload (max 1200px, JPEG q=0.75)
  */
 
 import { useState, useCallback } from "react";
@@ -11,6 +12,47 @@ import { Upload, X, GripVertical, Copy, Check, ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import { albumsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
+
+// ─── Client-side image compression ───────────────────────────────────────────
+async function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    // Skip non-image or already-small files
+    if (!file.type.startsWith("image/")) return resolve(file);
+    if (file.size < 200 * 1024) return resolve(file); // skip < 200KB
+
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const maxSize = 1200;
+      let { width, height } = img;
+      if (width > maxSize || height > maxSize) {
+        const ratio = Math.min(maxSize / width, maxSize / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return resolve(file);
+          const compressed = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+            type: "image/jpeg",
+            lastModified: Date.now(),
+          });
+          resolve(compressed);
+        },
+        "image/jpeg",
+        0.75
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
 
 export default function CreateAlbum() {
   const { t } = useLang();
@@ -24,8 +66,11 @@ export default function CreateAlbum() {
   const [isPublic, setIsPublic] = useState(true);
 
   // Dropzone setup / Настройка dropzone
-  const onDrop = useCallback((accepted) => {
-    const newFiles = accepted.map((file) =>
+  const onDrop = useCallback(async (accepted) => {
+    const compressed = await Promise.all(
+      accepted.map((file) => compressImage(file))
+    );
+    const newFiles = compressed.map((file) =>
       Object.assign(file, { preview: URL.createObjectURL(file) })
     );
     setFiles((prev) => [...prev, ...newFiles].slice(0, 50));

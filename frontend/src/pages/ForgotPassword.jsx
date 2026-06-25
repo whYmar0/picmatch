@@ -102,12 +102,12 @@ export default function ForgotPassword() {
             </div>
 
             <div className="flex items-center justify-between gap-3 text-sm pt-1">
-              <label className="flex items-center gap-2 text-gray-500 dark:text-gray-400 select-none">
+              <label className="remember-label">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-400"
+                  className="remember-checkbox"
                 />
                 {t("rememberMe")}
               </label>

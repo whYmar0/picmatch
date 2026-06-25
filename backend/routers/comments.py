@@ -214,15 +214,21 @@ async def create_comment(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Verify photo exists
-    res = await db.execute(select(Photo).where(Photo.id == _s(body.photo_id)))
-    if not res.scalar_one_or_none():
+    # Load photo with album eagerly ONCE — reuse everywhere
+    photo_result = await db.execute(
+        select(Photo).options(selectinload(Photo.album)).where(Photo.id == _s(body.photo_id))
+    )
+    photo_obj = photo_result.scalar_one_or_none()
+    if not photo_obj:
         raise HTTPException(404, detail="Photo not found")
+
+    album = photo_obj.album
+    album_creator_id = _s(album.creator_id) if album else None
 
     # Verify parent exists if given
     if body.parent_id:
-        res = await db.execute(select(Comment).where(Comment.id == _s(body.parent_id)))
-        if not res.scalar_one_or_none():
+        parent_result = await db.execute(select(Comment).where(Comment.id == _s(body.parent_id)))
+        if not parent_result.scalar_one_or_none():
             raise HTTPException(404, detail="Parent comment not found")
 
     comment = Comment(
@@ -235,63 +241,55 @@ async def create_comment(
     await db.flush()
 
     # Create Notification
+    uid = _s(current_user.id)
     try:
         if body.parent_id:
             # It's a reply: notify parent comment author
-            parent_res = await db.execute(select(Comment).where(Comment.id == _s(body.parent_id)))
-            parent = parent_res.scalar_one_or_none()
-            if parent and _s(parent.user_id) != _s(current_user.id):
-                # Fetch photo/album context to have album_id for navigation
-                photo_ctx = await db.execute(select(Photo).where(Photo.id == _s(body.photo_id)))
-                p_obj = photo_ctx.scalar_one_or_none()
-                notif = Notification(
-                    user_id=_s(parent.user_id),
-                    actor_id=_s(current_user.id),
+            parent_result = await db.execute(select(Comment).where(Comment.id == _s(body.parent_id)))
+            parent = parent_result.scalar_one_or_none()
+            parent_uid = _s(parent.user_id) if parent else None
+
+            if parent and parent_uid != uid:
+                db.add(Notification(
+                    user_id=parent_uid,
+                    actor_id=uid,
                     type=NotificationType.REPLY,
-                    album_id=_s(p_obj.album_id) if p_obj else None,
+                    album_id=album_creator_id,
                     photo_id=_s(body.photo_id),
                     comment_id=_s(body.parent_id),
                     text=comment.text[:100],
-                )
-                db.add(notif)
-            
-            # ALWAYS notify album owner if guest replies (even if they reply to themselves)
-            res_p = await db.execute(select(Photo).options(selectinload(Photo.album)).where(Photo.id == _s(body.photo_id)))
-            photo_obj = res_p.scalar_one_or_none()
-            if photo_obj and photo_obj.album and _s(photo_obj.album.creator_id) != _s(current_user.id):
-                # If we already notified them as the parent author, don't double notify
-                if not parent or _s(parent.user_id) != _s(photo_obj.album.creator_id):
-                    owner_notif = Notification(
-                        user_id=_s(photo_obj.album.creator_id),
-                        actor_id=_s(current_user.id),
+                ))
+
+            # Always notify album owner if guest replies (no double notify)
+            if album_creator_id and album_creator_id != uid:
+                if not parent or _s(parent.user_id) != album_creator_id:
+                    db.add(Notification(
+                        user_id=album_creator_id,
+                        actor_id=uid,
                         type=NotificationType.COMMENT,
-                        album_id=_s(photo_obj.album.id),
+                        album_id=album_creator_id,
                         photo_id=_s(body.photo_id),
                         comment_id=_s(comment.id),
                         text=comment.text[:100],
-                    )
-                    db.add(owner_notif)
+                    ))
         else:
-            # It's a top-level comment: notify album owner
-            photo_res = await db.execute(select(Photo).options(selectinload(Photo.album)).where(Photo.id == _s(body.photo_id)))
-            photo = photo_res.scalar_one_or_none()
-            if photo and photo.album and _s(photo.album.creator_id) != _s(current_user.id):
-                notif = Notification(
-                    user_id=_s(photo.album.creator_id),
-                    actor_id=_s(current_user.id),
-                    type=NotificationType.COMMENT, # NEW: Distinguish from reply
-                    album_id=_s(photo.album.id),
+            # Top-level comment: notify album owner
+            if album_creator_id and album_creator_id != uid:
+                db.add(Notification(
+                    user_id=album_creator_id,
+                    actor_id=uid,
+                    type=NotificationType.COMMENT,
+                    album_id=album_creator_id,
                     photo_id=_s(body.photo_id),
                     comment_id=_s(comment.id),
-                    text=comment.text[:100], # Preview of the comment
-                )
-                db.add(notif)
-    except Exception as e:
-        pass # Silently fail notifications instead of breaking comments
-        
+                    text=comment.text[:100],
+                ))
+    except Exception:
+        pass  # Silently fail notifications
+
     await db.commit()
 
-    # Reload with relationships safely
+    # Reload with relationships
     result = await db.execute(
         select(Comment)
         .options(
@@ -304,7 +302,7 @@ async def create_comment(
         .where(Comment.id == _s(comment.id))
     )
     c = result.scalar_one()
-    return _build_comment_out(c, _s(current_user.id))
+    return _build_comment_out(c, uid)
 
 
 @router.delete("/{comment_id}", response_model=MessageResponse)

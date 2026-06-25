@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from PIL import Image
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, Form, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -159,7 +159,7 @@ async def verify_email(req: VerifyEmailRequest, db: AsyncSession = Depends(get_d
 
 
 @router.post("/resend-verification")
-async def resend_verification(req: ResendVerificationRequest, db: AsyncSession = Depends(get_db)):
+async def resend_verification(req: ResendVerificationRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     user = (await db.execute(select(User).where(User.email == req.email))).scalar_one_or_none()
 
     if not user:
@@ -171,12 +171,12 @@ async def resend_verification(req: ResendVerificationRequest, db: AsyncSession =
     user.verification_code = code
     user.verification_code_expires_at = get_now() + timedelta(minutes=15)
     await _commit_or_conflict(db)
-    send_verification_email(user.email, code)
+    background_tasks.add_task(send_verification_email, user.email, code)
     return {"message": "A new verification code has been sent to your email."}
 
 
 @router.post("/forgot-password")
-async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+async def forgot_password(req: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     user = (await db.execute(select(User).where(User.email == req.email))).scalar_one_or_none()
 
     if user:
@@ -184,7 +184,8 @@ async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends
         user.reset_token = token
         user.reset_token_expires_at = get_now() + timedelta(minutes=30)
         await _commit_or_conflict(db)
-        send_password_reset_email(user.email, token)
+        # Run email in background to avoid blocking the response
+        background_tasks.add_task(send_password_reset_email, user.email, token)
 
     return {"message": "If that email is registered, we have sent a password reset link."}
 

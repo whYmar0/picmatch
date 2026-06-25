@@ -1,7 +1,8 @@
 /**
- * App.jsx — Root with routing
+ * App.jsx — Root with routing + code-splitting (React.lazy)
  * All routes open to any authenticated user (unified auth).
  */
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider }  from "./contexts/ThemeContext";
@@ -9,19 +10,25 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { LangProvider }   from "./contexts/LangContext";
 import Navbar             from "./components/Navbar";
 import ProtectedRoute     from "./components/ProtectedRoute";
-import Landing            from "./pages/Landing";
-import Login              from "./pages/Login";
-import Register           from "./pages/Register";
-import VerifyEmail        from "./pages/VerifyEmail";
-import ForgotPassword     from "./pages/ForgotPassword";
-import ResetPassword      from "./pages/ResetPassword";
-import Dashboard          from "./pages/Dashboard";
-import CreateAlbum        from "./pages/CreateAlbum";
-import VotePage           from "./pages/VotePage";
-import AnalyticsPage      from "./pages/AnalyticsPage";
-import Notifications      from "./pages/Notifications";
-import CommentThreadPage  from "./pages/CommentThreadPage";
 import LoadingSpinner     from "./components/LoadingSpinner";
+
+// Lazy-loaded pages — each becomes its own chunk
+const Landing           = lazy(() => import("./pages/Landing"));
+const Login             = lazy(() => import("./pages/Login"));
+const Register          = lazy(() => import("./pages/Register"));
+const VerifyEmail       = lazy(() => import("./pages/VerifyEmail"));
+const ForgotPassword    = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword     = lazy(() => import("./pages/ResetPassword"));
+const Dashboard         = lazy(() => import("./pages/Dashboard"));
+const CreateAlbum       = lazy(() => import("./pages/CreateAlbum"));
+const VotePage          = lazy(() => import("./pages/VotePage"));
+const AnalyticsPage     = lazy(() => import("./pages/AnalyticsPage"));
+const Notifications     = lazy(() => import("./pages/Notifications"));
+const CommentThreadPage = lazy(() => import("./pages/CommentThreadPage"));
+
+function PageFallback() {
+  return <LoadingSpinner fullscreen />;
+}
 
 function HomeRoute() {
   const { user, loading } = useAuth();
@@ -56,19 +63,19 @@ export default function App() {
               <main className="flex-1 overflow-x-hidden">
                 <Routes>
                   <Route path="/"         element={<HomeRoute />} />
-                  <Route path="/login"    element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/verify-email" element={<VerifyEmail />} />
-                  <Route path="/forgot-password" element={<ForgotPassword />} />
-                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/login"    element={<Suspense fallback={<PageFallback />}><Login /></Suspense>} />
+                  <Route path="/register" element={<Suspense fallback={<PageFallback />}><Register /></Suspense>} />
+                  <Route path="/verify-email" element={<Suspense fallback={<PageFallback />}><VerifyEmail /></Suspense>} />
+                  <Route path="/forgot-password" element={<Suspense fallback={<PageFallback />}><ForgotPassword /></Suspense>} />
+                  <Route path="/reset-password" element={<Suspense fallback={<PageFallback />}><ResetPassword /></Suspense>} />
 
                   {/* All auth-required routes — no role check */}
-                  <Route path="/vote/:inviteCode" element={<VotePage />} />
-                  <Route path="/dashboard"         element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                  <Route path="/inbox"             element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-                  <Route path="/create"            element={<ProtectedRoute><CreateAlbum /></ProtectedRoute>} />
-                  <Route path="/analytics/:albumId" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
-                  <Route path="/comment/:commentId" element={<ProtectedRoute><CommentThreadPage /></ProtectedRoute>} />
+                  <Route path="/vote/:inviteCode" element={<Suspense fallback={<PageFallback />}><VotePage /></Suspense>} />
+                  <Route path="/dashboard"         element={<ProtectedRoute><Suspense fallback={<PageFallback />}><Dashboard /></Suspense></ProtectedRoute>} />
+                  <Route path="/inbox"             element={<ProtectedRoute><Suspense fallback={<PageFallback />}><Notifications /></Suspense></ProtectedRoute>} />
+                  <Route path="/create"            element={<ProtectedRoute><Suspense fallback={<PageFallback />}><CreateAlbum /></Suspense></ProtectedRoute>} />
+                  <Route path="/analytics/:albumId" element={<ProtectedRoute><Suspense fallback={<PageFallback />}><AnalyticsPage /></Suspense></ProtectedRoute>} />
+                  <Route path="/comment/:commentId" element={<ProtectedRoute><Suspense fallback={<PageFallback />}><CommentThreadPage /></Suspense></ProtectedRoute>} />
 
                   <Route path="*" element={
                     <div className="min-h-[60vh] flex items-center justify-center text-center px-4">

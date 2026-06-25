@@ -18,9 +18,15 @@ function parseUTC(dateStr) {
 function timeAgo(dateStr, lang) {
   const s = (Date.now() - parseUTC(dateStr).getTime()) / 1000;
   if (s < 60)    return lang === "ru" ? "только что" : "just now";
-  if (s < 3600)  return `${Math.floor(s / 60)}${lang === "ru" ? "м" : "m"} ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}${lang === "ru" ? "ч" : "h"} ago`;
-  return `${Math.floor(s / 86400)}${lang === "ru" ? "д" : "d"} ago`;
+  if (s < 3600) return lang === "ru"
+    ? `${Math.floor(s / 60)} мин. назад`
+    : `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return lang === "ru"
+    ? `${Math.floor(s / 3600)} ч. назад`
+    : `${Math.floor(s / 3600)} h ago`;
+  return lang === "ru"
+    ? `${Math.floor(s / 86400)} дн. назад`
+    : `${Math.floor(s / 86400)} d ago`;
 }
 
 export default function RecentAlbumCard({ album, index }) {

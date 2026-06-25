@@ -149,14 +149,14 @@ export default function Register() {
                 >
                   {/* Strength Bar */}
                   <div className="space-y-1">
-                    <div className="flex justify-between items-center text-[10px] uppercase tracking-wider font-semibold text-gray-400 dark:text-gray-500">
-                      <span>Password Strength</span>
+                    <div className="flex justify-between items-center text-[11px] font-semibold text-gray-400 dark:text-gray-500">
+                      <span>{t("passwordStrength")}</span>
                       <span className={
                         (pwdStrength.length && pwdStrength.uppercase && pwdStrength.special) ? "text-green-500" :
                         (pwdStrength.length && (pwdStrength.uppercase || pwdStrength.special)) ? "text-primary-500" : "text-red-400"
                       }>
-                        {(pwdStrength.length && pwdStrength.uppercase && pwdStrength.special) ? "Strong" :
-                         (pwdStrength.length && (pwdStrength.uppercase || pwdStrength.special)) ? "Medium" : "Weak"}
+                        {(pwdStrength.length && pwdStrength.uppercase && pwdStrength.special) ? t("strengthStrong") :
+                         (pwdStrength.length && (pwdStrength.uppercase || pwdStrength.special)) ? t("strengthMedium") : t("strengthWeak")}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-1 h-1.5">
@@ -173,35 +173,35 @@ export default function Register() {
                         ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
                         : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">1</div>
                       }
-                      <span className="truncate">At least 8 characters</span>
+                      <span className="truncate">{t("reqMinLength")}</span>
                     </div>
                     <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.uppercase ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
                       {pwdStrength.uppercase 
                         ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
                         : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">2</div>
                       }
-                      <span className="truncate">At least 1 uppercase letter</span>
+                      <span className="truncate">{t("reqUppercase")}</span>
                     </div>
                     <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.special ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
                       {pwdStrength.special 
                         ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
                         : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">3</div>
                       }
-                      <span className="truncate">At least 1 special character</span>
+                      <span className="truncate">{t("reqSpecial")}</span>
                     </div>
                   </div>
                 </motion.div>
               )}
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 select-none">
+            <label className="remember-label">
               <input
                 type="checkbox"
                 checked={form.remember}
                 onChange={(e) => setForm({ ...form, remember: e.target.checked })}
-                className="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-400"
+                className="remember-checkbox"
               />
-              Запомнить меня
+              {t("rememberMe")}
             </label>
 
             <motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}

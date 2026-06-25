@@ -57,7 +57,7 @@ export default function Dashboard() {
         >
           <div className="flex items-center gap-2 mb-4">
             <Clock size={15} className="text-gray-400" />
-            <h2 className="font-semibold text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            <h2 className="font-semibold text-sm text-gray-500 dark:text-gray-400">
               {t("recentlyVisited")}
             </h2>
           </div>
@@ -75,16 +75,15 @@ export default function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between mb-6"
       >
-        <div className="min-w-0">
-          <h1 className="font-display font-bold text-2xl truncate">{t("myAlbums")}</h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            {user?.username}
-            {albums.length > 0 && ` · ${albums.length}`}
-          </p>
-        </div>
+        <h1 className="font-display font-bold text-2xl truncate">{t("myAlbums")}</h1>
         {albums.length > 0 && (
-          <Link to="/create" className="btn-primary flex-shrink-0 ml-4 px-8.5 py-3 sm:px-5 sm:py-2.5 text-s sm:text-sm">
-            <Plus size={16} className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> {t("createAlbum")}
+          <Link
+            to="/create"
+            className="btn-primary flex-shrink-0 ml-4 w-10 h-10 p-0"
+            aria-label={t("createAlbum")}
+            title={t("createAlbum")}
+          >
+            <Plus size={20} strokeWidth={2.5} />
           </Link>
         )}
       </motion.div>

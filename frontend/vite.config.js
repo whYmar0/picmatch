@@ -16,4 +16,18 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    target: "es2020",
+    cssMinify: "lightningcss",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-motion": ["framer-motion"],
+          "vendor-icons": ["lucide-react"],
+          "vendor-router": ["react-router-dom"],
+          "vendor-ui": ["react-dropzone", "react-easy-crop", "react-hot-toast"],
+        },
+      },
+    },
+  },
 });

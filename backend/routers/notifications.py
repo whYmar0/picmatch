@@ -23,10 +23,8 @@ async def get_notifications(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Returns all notifications for the current user, ordered by newest first.
-    Populates thumbnail_url based on:
-    - COMMENT/REPLY/LIKE: URL of photo_id
-    - VOTE: URL of the first photo in album_id
+    Returns all notifications ordered by newest first.
+    OPTIMIZED: single batch query for photo thumbnails + album first photos.
     """
     result = await db.execute(
         select(Notification)
@@ -36,39 +34,58 @@ async def get_notifications(
     )
     notifications = result.scalars().all()
 
-    # Pre-fetch photos to avoid N+1 queries.
-    photo_ids = [n.photo_id for n in notifications if n.photo_id]
-    album_ids = [n.album_id for n in notifications if n.album_id]
+    # Collect all IDs for a single batch query
+    photo_ids = list({_s(n.photo_id) for n in notifications if n.photo_id})
+    album_ids = list({_s(n.album_id) for n in notifications if n.album_id})
+    all_ids = set(photo_ids + album_ids)
 
     photo_map = {}
-    if photo_ids:
-        p_res = await db.execute(select(Photo).where(Photo.id.in_(photo_ids)))
-        for p in p_res.scalars().all():
-            photo_map[_s(p.id)] = p
-
     album_first_photo_map = {}
-    if album_ids:
-        p_res = await db.execute(
-            select(Photo)
-            .where(Photo.album_id.in_(album_ids))
-            .order_by(Photo.album_id, Photo.order.asc())
+
+    if all_ids:
+        # One query: get direct photos + first photo per album
+        p_rows = await db.execute(
+            select(Photo.id, Photo.album_id, Photo.stored_filename, Photo.order)
+            .where(Photo.id.in_(photo_ids))
         )
-        for p in p_res.scalars().all():
-            aid = _s(p.album_id)
-            if aid not in album_first_photo_map:
-                album_first_photo_map[aid] = p
+        for row in p_rows:
+            pid, aid, sfname, order = row
+            photo_map[_s(pid)] = sfname
+            # Track for album first-photo (lowest order wins)
+            aid_str = _s(aid)
+            current = album_first_photo_map.get(aid_str)
+            if current is None or order < current[1]:
+                album_first_photo_map[aid_str] = (sfname, order)
+
+        # Fetch first photos for album_ids that weren't covered by photo_ids
+        missing_albums = [aid for aid in album_ids if aid not in album_first_photo_map]
+        if missing_albums:
+            from sqlalchemy import func
+            # Subquery: min order per album
+            subq = (
+                select(Photo.album_id, func.min(Photo.order).label("min_order"))
+                .where(Photo.album_id.in_(missing_albums))
+                .group_by(Photo.album_id)
+            ).subquery()
+            ap_rows = await db.execute(
+                select(Photo.album_id, Photo.stored_filename)
+                .join(subq, (Photo.album_id == subq.c.album_id) & (Photo.order == subq.c.min_order))
+            )
+            for row in ap_rows:
+                album_first_photo_map[_s(row[0])] = (row[1], 0)
 
     BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
 
     out_list = []
     for n in notifications:
         thumb_url = None
-        if n.photo_id and _s(n.photo_id) in photo_map:
-            p = photo_map[_s(n.photo_id)]
-            thumb_url = f"{BASE_URL}/uploads/{p.stored_filename}"
-        elif n.album_id and _s(n.album_id) in album_first_photo_map:
-            p = album_first_photo_map[_s(n.album_id)]
-            thumb_url = f"{BASE_URL}/uploads/{p.stored_filename}"
+        pid = _s(n.photo_id) if n.photo_id else None
+        aid = _s(n.album_id) if n.album_id else None
+
+        if pid and pid in photo_map:
+            thumb_url = f"{BASE_URL}/uploads/{photo_map[pid]}"
+        elif aid and aid in album_first_photo_map:
+            thumb_url = f"{BASE_URL}/uploads/{album_first_photo_map[aid][0]}"
 
         n.thumbnail_url = thumb_url
         out_list.append(n)

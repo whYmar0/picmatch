@@ -157,6 +157,13 @@ const T = {
     emailVerifiedSuccess: "Email verified! Redirecting to login...",
     replyToUser: "Replying to",
     addCommentPlaceholder: "Add a comment…",
+    someone: "Someone",
+    newNotification: "New notification",
+    today: "Today",
+    yesterday: "Yesterday",
+    thisWeek: "This week",
+    last30Days: "Last 30 days",
+    earlier: "Earlier",
   },
 
   ru: {
@@ -303,6 +310,13 @@ const T = {
     emailVerifiedSuccess: "Email подтверждён! Перенаправление на вход...",
     replyToUser: "Ответ для",
     addCommentPlaceholder: "Написать комментарий…",
+    someone: "Кто-то",
+    newNotification: "Новое уведомление",
+    today: "Сегодня",
+    yesterday: "Вчера",
+    thisWeek: "На этой неделе",
+    last30Days: "За последние 30 дней",
+    earlier: "Ранее",
   },
 };
 

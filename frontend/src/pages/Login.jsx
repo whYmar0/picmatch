@@ -106,17 +106,17 @@ export default function Login() {
             </div>
 
             <div className="flex items-center justify-between gap-3 text-sm">
-              <label className="flex items-center gap-2 text-gray-500 dark:text-gray-400 select-none">
+              <label className="remember-label">
                 <input
                   type="checkbox"
                   checked={form.remember}
                   onChange={(e) => setForm({ ...form, remember: e.target.checked })}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-400"
+                  className="remember-checkbox"
                 />
-                Запомнить меня
+                {t("rememberMe")}
               </label>
               <Link to="/forgot-password" className="font-semibold text-primary-500 hover:text-primary-600">
-                Забыли пароль?
+                {t("forgotPassword")}
               </Link>
             </div>
 

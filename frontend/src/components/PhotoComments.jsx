@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, Send, X } from "lucide-react";
+import { SendHorizontal, X } from "lucide-react";
 import { commentsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
 import LoadingSpinner from "./LoadingSpinner";
@@ -20,13 +20,13 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
   
   let dateFormatted = "";
   if (s < 60) {
-    dateFormatted = lang === "ru" ? "только что" : "now";
+    dateFormatted = lang === "ru" ? "только что" : "just now";
   } else if (s < 3600) {
-    dateFormatted = `${Math.floor(s / 60)}${lang === "ru" ? "м" : "m"}`;
+    dateFormatted = `${Math.floor(s / 60)} ${lang === "ru" ? "мин." : "min"}`;
   } else if (s < 86400) {
-    dateFormatted = `${Math.floor(s / 3600)}${lang === "ru" ? "ч" : "h"}`;
+    dateFormatted = `${Math.floor(s / 3600)} ${lang === "ru" ? "ч." : "h"}`;
   } else {
-    dateFormatted = `${Math.floor(s / 86400)}${lang === "ru" ? "д" : "d"}`;
+    dateFormatted = `${Math.floor(s / 86400)} ${lang === "ru" ? "дн." : "d"}`;
   }
 
   return (
@@ -45,7 +45,7 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
             <span className="text-gray-800 dark:text-gray-200">{comment.text}</span>
           </p>
 
-          <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400 dark:text-gray-500 font-semibold">
+          <div className="flex items-center gap-3 mt-1.5 font-sans text-[11px] font-medium text-gray-400 dark:text-gray-500">
             <span>{dateFormatted}</span>
 
             {depth < 2 && (
@@ -53,7 +53,7 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
                 onClick={() => onReply(comment, rootComment)}
                 className="hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               >
-                Reply
+                {lang === "ru" ? "Ответить" : "Reply"}
               </button>
             )}
 
@@ -62,7 +62,7 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
                 onClick={() => onDelete(comment.id)}
                 className="text-red-400/80 hover:text-red-500 transition-colors"
               >
-                Delete
+                {lang === "ru" ? "Удалить" : "Delete"}
               </button>
             )}
           </div>
@@ -73,7 +73,11 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
               className="flex items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400 font-bold group"
             >
               <div className="w-6 h-[1px] bg-gray-300 dark:bg-gray-600 group-hover:bg-gray-400 transition-colors" />
-              {showReplies ? "Hide replies" : `View ${comment.replies.length} more replies`}
+              {showReplies
+                ? (lang === "ru" ? "Скрыть ответы" : "Hide replies")
+                : (lang === "ru"
+                    ? `Показать ответы: ${comment.replies.length}`
+                    : `View ${comment.replies.length} more replies`)}
             </button>
           )}
         </div>
@@ -93,6 +97,7 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function PhotoComments({ photoId, albumCreatorId, initialComments = null }) {
   const { user } = useAuth();
+  const { lang, t } = useLang();
   const isAlbumOwner = !!(user && albumCreatorId && String(user.id) === String(albumCreatorId));
   // If initialComments is provided (pre-fetched from outside), use them and skip the first fetch.
   // After submit/delete we still refresh via load().
@@ -153,14 +158,22 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
     if (!text.trim()) return;
     setSubmitting(true);
     try {
-      await commentsApi.create({
+      const created = await commentsApi.create({
         photo_id: photoId,
         text: text.trim(),
         parent_id: replyTo?.id ?? null,
       });
       setText("");
       setReplyTo(null);
-      load();
+      if (created) {
+        setComments((prev) => replyTo?.id
+          ? prev.map((comment) => String(comment.id) === String(replyTo.id)
+              ? { ...comment, replies: [...(comment.replies || []), created] }
+              : comment)
+          : [...prev, created]);
+      } else {
+        load();
+      }
     } catch { /**/ } finally {
       setSubmitting(false);
     }
@@ -173,11 +186,13 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col flex-1 min-h-full">
       {comments.length === 0
-        ? <p className="text-center text-gray-400 text-sm py-6">No comments yet — be first!</p>
+        ? <p className="text-center text-gray-400 text-sm py-6">
+            {lang === "ru" ? "Комментариев пока нет. Будьте первым!" : "No comments yet. Be the first!"}
+          </p>
         : (
-          <div className="mb-4">
+          <div className="mb-4 flex-1">
             <AnimatePresence>
               {comments.map((c) => (
                 <CommentItem key={c.id} comment={c}
@@ -191,11 +206,11 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
       }
 
       {/* Input */}
-      <div className="sticky bottom-0 pt-2 pb-1 bg-card-light dark:bg-card-dark">
+      <div className="mt-auto flex-shrink-0 pt-3 pb-1 bg-card-light dark:bg-card-dark">
         {replyTo && (
           <div className="flex items-center gap-2 mb-2 text-xs text-gray-500 dark:text-gray-400
                           bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-xl">
-            <span>Replying to <strong>{replyTo.author?.username}</strong></span>
+            <span>{t("replyToUser")} <strong>{replyTo.author?.username}</strong></span>
             <button onClick={() => setReplyTo(null)} className="ml-auto p-1 hover:text-gray-700 dark:hover:text-gray-200"><X size={12} /></button>
           </div>
         )}
@@ -204,22 +219,16 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onFocus={(e) => {
-              // Ensure it's scrolled into view on mobile keyboard pop-up
-              setTimeout(() => {
-                e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }, 300);
-            }}
-            placeholder="Add a comment…"
-            className="input-field flex-1 py-2.5 text-[15px]" 
+            placeholder={t("addCommentPlaceholder")}
+            className="input-field comment-input flex-1 py-2.5 text-[15px]"
             autoComplete="off"
             autoCorrect="off"
           />
           <motion.button type="submit"
             disabled={submitting || !text.trim()}
             whileTap={{ scale: 0.9 }}
-            className="btn-primary px-3 py-2">
-            <Send size={15} />
+            className="btn-primary w-11 h-11 flex-shrink-0 p-0">
+            <SendHorizontal size={18} strokeWidth={2.4} />
           </motion.button>
         </form>
       </div>

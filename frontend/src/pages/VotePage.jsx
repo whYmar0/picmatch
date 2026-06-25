@@ -112,6 +112,12 @@ export default function VotePage() {
         setAllPhotos(photos);
         setAlbum(albumData);
 
+        // Fire myVotes in parallel with recording visit — no sequential wait
+        let myVotesPromise = Promise.resolve([]);
+        if (sessionData.voted_photo_ids?.length > 0) {
+          myVotesPromise = votesApi.getMyVotes(albumData.id).catch(() => []);
+        }
+
         // Record visit for the "Recently Visited" feature on Dashboard
         if (user?.id) {
           import("../hooks/useRecentAlbums.js").then(({ recordAlbumVisit }) => {
@@ -127,12 +133,8 @@ export default function VotePage() {
         }
 
         let map = {};
-        try {
-          if (sessionData.voted_photo_ids?.length > 0) {
-            const myVotes = await votesApi.getMyVotes(albumData.id);
-            myVotes.forEach((v) => { map[String(v.photo_id)] = v.is_like; });
-          }
-        } catch { /* non-critical */ }
+        const myVotes = await myVotesPromise;
+        myVotes.forEach((v) => { map[String(v.photo_id)] = v.is_like; });
 
         if (cancelled) return;
 
@@ -224,7 +226,6 @@ export default function VotePage() {
   const currentPhoto = allPhotos.find((p) => String(p.id) === currentPhotoId);
   const currentIdx = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
   const total = allPhotos.length;
-  const progress = total > 0 ? (Object.keys(votesMap).length / total) * 100 : 0;
 
   const stackPhotos = useMemo(() => {
     if (!currentPhoto) return [];
@@ -390,7 +391,7 @@ export default function VotePage() {
                     key={pid}
                     onClick={() => jumpToPhoto(photo)}
                     whileTap={{ scale: 0.9 }}
-                    className={`relative flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden
+                    className={`media-thumbnail relative flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden
                                 transition-all duration-150
                                 ${isCur
                         ? "ring-2 ring-primary-400 ring-offset-1 ring-offset-surface-light dark:ring-offset-surface-dark scale-105"

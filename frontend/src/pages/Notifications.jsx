@@ -86,21 +86,12 @@ export default function Notifications() {
       </span>
     ) : null;
     
-    if (lang === "ru") {
-      switch(n.type) {
-        case "reply":   return <>{nameSpan} ответил на комментарий{textPreview}</>;
-        case "comment": return <>{nameSpan} прокомментировал альбом{textPreview}</>;
-        case "like":    return <>{nameSpan} оценил ваш комментарий</>;
-        case "vote":    return <>{nameSpan} проголосовал в вашем альбоме</>;
-        default:        return <>Новое уведомление</>;
-      }
-    }
     switch(n.type) {
-      case "reply":   return <>{nameSpan} replied to your comment{textPreview}</>;
-      case "comment": return <>{nameSpan} commented on your album{textPreview}</>;
-      case "like":    return <>{nameSpan} liked your comment</>;
-      case "vote":    return <>{nameSpan} voted in your album</>;
-      default:        return <>New notification</>;
+      case "reply":   return <>{nameSpan} {t("notifRepliedComment")}{textPreview}</>;
+      case "comment": return <>{nameSpan} {t("notifCommentPhoto")}{textPreview}</>;
+      case "like":    return <>{nameSpan} {t("notifLikedComment")}</>;
+      case "vote":    return <>{nameSpan} {t("notifVotedAlbum")}</>;
+      default:        return <>{t("newNotification")}</>;
     }
   };
 
@@ -146,9 +137,24 @@ export default function Notifications() {
             </span>
           </p>
         </div>
-        {!n.is_read && (
-          <div className="w-2 h-2 bg-primary-500 rounded-full flex-shrink-0" />
-        )}
+        <div className="relative w-12 h-12 flex-shrink-0">
+          {n.thumbnail_url ? (
+            <img
+              src={n.thumbnail_url}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="w-12 h-12 rounded-xl object-cover bg-gray-100 dark:bg-gray-800"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-300">
+              <Bell size={18} />
+            </div>
+          )}
+          {!n.is_read && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-primary-500 rounded-full ring-2 ring-white dark:ring-gray-900" />
+          )}
+        </div>
       </div>
     );
   };
@@ -189,11 +195,11 @@ export default function Notifications() {
         </div>
       ) : (
         <>
-          <Section title={lang === "ru" ? "Сегодня" : "Today"} items={grouped.today} />
-          <Section title={lang === "ru" ? "Вчера" : "Yesterday"} items={grouped.yesterday} />
-          <Section title={lang === "ru" ? "На этой неделе" : "This week"} items={grouped.thisWeek} />
-          <Section title={lang === "ru" ? "В этом месяце" : "Last 30 days"} items={grouped.lastMonth} />
-          <Section title={lang === "ru" ? "Ранее" : "Earlier"} items={grouped.earlier} />
+          <Section title={t("today")} items={grouped.today} />
+          <Section title={t("yesterday")} items={grouped.yesterday} />
+          <Section title={t("thisWeek")} items={grouped.thisWeek} />
+          <Section title={t("last30Days")} items={grouped.lastMonth} />
+          <Section title={t("earlier")} items={grouped.earlier} />
         </>
       )}
     </div>

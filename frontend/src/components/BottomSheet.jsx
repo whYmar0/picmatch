@@ -156,7 +156,7 @@ export default function BottomSheet({ open, onClose, title, topContent, headerCh
             </div>
 
             {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <div className="flex flex-col flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               {children}
             </div>
           </motion.div>

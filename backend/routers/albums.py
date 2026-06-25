@@ -187,16 +187,16 @@ async def get_album_analytics(
     Returns analytics. Accessible by:
       1. The album owner (full access)
       2. Any user with a SharedAccess record where can_view_stats=True (read-only)
+
+    OPTIMIZED v2: 2 queries instead of eager-loading all Vote/User ORM objects.
+    Fetches raw vote columns and aggregates in O(n) Python pass.
     """
     uid = _s(current_user.id)
 
-    # Check owner OR shared access
+    # 1. Fetch album + photos + creator (no votes eager-loaded)
     result = await db.execute(
         select(Album)
-        .options(
-            selectinload(Album.photos).selectinload(Photo.votes).selectinload(Vote.voter),
-            selectinload(Album.creator),
-        )
+        .options(selectinload(Album.photos), selectinload(Album.creator))
         .where(Album.id == album_id)
     )
     album = result.scalar_one_or_none()
@@ -205,55 +205,92 @@ async def get_album_analytics(
 
     is_owner = _s(album.creator_id) == uid
 
-    if is_owner:
-        pass
-    elif album.is_public:
-        # In a public album, we still might want users to vote first? 
-        # The user said "если альбом открытый, то у него доступ есть".
-        # Let's check if they voted just to be sure we follow the flow, 
-        # but the prompt says they have access if it's open.
-        pass
-    else:
-        # Private album - only owner
+    if not is_owner and not album.is_public:
         raise HTTPException(403, detail="Access denied. This album is private.")
 
     is_shared = False
     can_view_stats = True
+    photos = album.photos
+    photo_ids = [p.id for p in photos]
 
+    # 2. Fetch raw vote rows (columns only, no ORM objects) in one query
     total_likes = 0
     total_votes = 0
     voter_map: dict = {}
-    photo_stats: List[PhotoStats] = []
+    photo_data: dict = {}
 
-    for photo in album.photos:
-        reactions: List[VoterReaction] = []
-        for vote in photo.votes:
-            vid = _s(vote.voter_id)
-            uname = vote.voter.username if vote.voter else vid[:8]
-            reactions.append(VoterReaction(voter_id=vid, username=uname, is_like=vote.is_like))
+    if photo_ids:
+        vote_query = (
+            select(Vote.photo_id, Vote.voter_id, Vote.is_like, User.username)
+            .join(User, Vote.voter_id == User.id)
+            .where(Vote.photo_id.in_(photo_ids))
+        )
+        vote_rows = await db.execute(vote_query)
+
+        # Build lookup dict for photos
+        for p in photos:
+            photo_data[_s(p.id)] = {"photo": p, "likes": 0, "total": 0, "reactions": []}
+
+        # Single O(n) pass through all votes
+        for row in vote_rows:
+            row_photo_id, row_voter_id, row_is_like, row_username = row
+            pid = _s(row_photo_id)
+            vid = _s(row_voter_id)
+            uname = row_username or vid[:8]
+
+            if pid not in photo_data:
+                continue
+
+            pd = photo_data[pid]
+            pd["total"] += 1
             total_votes += 1
-            if vote.is_like:
+            if row_is_like:
+                pd["likes"] += 1
                 total_likes += 1
+
+            pd["reactions"].append(
+                VoterReaction(voter_id=vid, username=uname, is_like=row_is_like)
+            )
+
             if vid not in voter_map:
                 voter_map[vid] = {"username": uname, "vote_count": 0, "voter_id": vid}
             voter_map[vid]["vote_count"] += 1
 
-        photo_stats.append(PhotoStats(
-            id=photo.id, filename=photo.filename,
-            url=photo_url(photo.stored_filename),
-            order=photo.order,
-            like_count=photo.like_count,
-            dislike_count=photo.dislike_count,
-            total_votes=photo.total_votes,
-            like_percentage=photo.like_percentage,
-            is_winner=False,
-            reactions=reactions,
-        ))
+    # Build photo_stats from aggregated data
+    photo_stats: List[PhotoStats] = []
+    for p in photos:
+        pid = _s(p.id)
+        if pid in photo_data:
+            pd = photo_data[pid]
+            likes = pd["likes"]
+            total = pd["total"]
+            dislikes = total - likes
+            pct = round((likes / total * 100), 1) if total else 0.0
+            photo_stats.append(PhotoStats(
+                id=p.id, filename=p.filename,
+                url=photo_url(p.stored_filename),
+                order=p.order,
+                like_count=likes, dislike_count=dislikes,
+                total_votes=total, like_percentage=pct,
+                is_winner=False,
+                reactions=pd["reactions"],
+            ))
+        else:
+            photo_stats.append(PhotoStats(
+                id=p.id, filename=p.filename,
+                url=photo_url(p.stored_filename),
+                order=p.order,
+                like_count=0, dislike_count=0,
+                total_votes=0, like_percentage=0.0,
+                is_winner=False,
+                reactions=[],
+            ))
 
+    # Winner
     winner = None
-    voted = [p for p in photo_stats if p.total_votes > 0]
+    voted = [ps for ps in photo_stats if ps.total_votes > 0]
     if voted:
-        best = max(voted, key=lambda p: (p.like_percentage, p.total_votes))
+        best = max(voted, key=lambda ps: (ps.like_percentage, ps.total_votes))
         best.is_winner = True
         winner = best
 
@@ -268,7 +305,7 @@ async def get_album_analytics(
         creator_id=album.creator_id,
         creator=album.creator,
         is_public=album.is_public,
-        total_photos=len(album.photos),
+        total_photos=len(photos),
         total_votes=total_votes, unique_voters=len(voter_map),
         global_like_rate=global_like_rate,
         voter_summaries=voter_summaries,

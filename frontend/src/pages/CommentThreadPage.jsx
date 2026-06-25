@@ -20,13 +20,13 @@ function fmt(dateStr, lang) {
   const s = Math.max(0, (Date.now() - new Date(ds).getTime()) / 1000);
   
   if (s < 60) {
-    return lang === "ru" ? "только что" : "now";
+    return lang === "ru" ? "только что" : "just now";
   } else if (s < 3600) {
-    return `${Math.floor(s / 60)}${lang === "ru" ? "м" : "m"}`;
+    return `${Math.floor(s / 60)} ${lang === "ru" ? "мин." : "min"}`;
   } else if (s < 86400) {
-    return `${Math.floor(s / 3600)}${lang === "ru" ? "ч" : "h"}`;
+    return `${Math.floor(s / 3600)} ${lang === "ru" ? "ч." : "h"}`;
   } else {
-    return `${Math.floor(s / 86400)}${lang === "ru" ? "д" : "d"}`;
+    return `${Math.floor(s / 86400)} ${lang === "ru" ? "дн." : "d"}`;
   }
 }
 
