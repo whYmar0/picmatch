@@ -19,7 +19,9 @@ import { useAuth } from "../contexts/AuthContext";
 import SwipeCard, { SwipeButtons } from "../components/SwipeCard";
 import ImageLightbox from "../components/ImageLightbox";
 import { VotePageSkeleton } from "../components/Skeleton";
-import { ThumbsUp, ThumbsDown, LogIn, MessageCircle, Check } from "lucide-react";
+import { LogIn, MessageCircle, Check } from "lucide-react";
+import FilledHeart from "../components/FilledHeart";
+import BrokenHeart from "../components/BrokenHeart";
 import BottomSheet from "../components/BottomSheet";
 import PhotoComments from "../components/PhotoComments";
 
@@ -404,8 +406,8 @@ export default function VotePage() {
                                        flex items-center justify-center border-2 border-surface-light dark:border-surface-dark
                                        ${reaction ? "bg-green-500" : "bg-red-400"}`}>
                         {reaction
-                          ? <ThumbsUp size={10} className="text-white" />
-                          : <ThumbsDown size={10} className="text-white" />
+                          ? <FilledHeart size={10} className="text-white" />
+                          : <BrokenHeart size={10} className="text-white" />
                         }
                       </div>
                     )}

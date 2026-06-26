@@ -1,10 +1,10 @@
 /**
- * AlbumCard.jsx — v3 (Redesign)
+ * AlbumCard.jsx — v4
  *
- * New layout:
- *   - 2/3 of card height = first photo (clickable -> gallery)
- *   - 1/3 bottom = title, time, action buttons row (private/public, copy, delete)
- *   - Grid of 2 columns on Dashboard
+ * CHANGES:
+ *   - 2/3 of card height = first photo (rectangular, no oval mask)
+ *   - Removed: privacy badge, photo count badge, gradient overlay, hover play icon
+ *   - Action buttons: larger, centered, side by side
  */
 import { useState } from "react";
 import { motion }   from "framer-motion";
@@ -79,7 +79,6 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
   };
 
   const firstPhoto = (album.photos || [])[0];
-  const photoCount = album.photo_count || 0;
 
   const handlePhotoClick = (e) => {
     e.stopPropagation();
@@ -97,7 +96,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
                  hover:shadow-card-hover transition-shadow flex flex-col
                  overflow-hidden w-full min-w-0 group"
     >
-      {/* Photo area (2/3) */}
+      {/* Photo area (2/3) — rectangular, no mask */}
       <button
         onClick={handlePhotoClick}
         className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
@@ -116,32 +115,6 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
             <Image size={32} className="text-gray-300 dark:text-gray-600" />
           </div>
         )}
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-        {/* Photo count badge */}
-        <span className="absolute top-2.5 left-2.5 bg-black/60 backdrop-blur-sm text-white
-                         text-[10px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1">
-          <Image size={10} /> {photoCount}
-        </span>
-        {/* Privacy badge */}
-        <span className={`absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-1 rounded-lg
-                          text-[10px] font-semibold backdrop-blur-sm
-                          ${album.is_public
-                            ? "bg-green-500/70 text-white"
-                            : "bg-amber-500/70 text-white"}`}>
-          {album.is_public ? <Globe size={9} /> : <Lock size={9} />}
-          {album.is_public
-            ? (lang === "ru" ? "Публичный" : "Public")
-            : (lang === "ru" ? "Приватный" : "Private")}
-        </span>
-        {/* Hover play icon */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </div>
-        </div>
       </button>
 
       {/* Info area (1/3) */}
@@ -154,14 +127,14 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           </span>
         </div>
 
-        {/* Action buttons row */}
-        <div className="flex items-center gap-2">
+        {/* Action buttons row — larger, centered, no spacer */}
+        <div className="flex items-center justify-center gap-3">
           {/* Private/Public toggle */}
           <motion.button
             onClick={togglePrivacy}
             disabled={updating}
             whileTap={{ scale: 0.9 }}
-            className={`flex items-center justify-center p-2 rounded-xl transition-colors flex-shrink-0 ${
+            className={`flex items-center justify-center p-2.5 rounded-xl transition-colors flex-shrink-0 ${
               album.is_public
                 ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
                 : "bg-gray-100 dark:bg-gray-800 text-gray-500"
@@ -169,11 +142,11 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
             title={album.is_public ? "Public" : "Private"}
           >
             {updating ? (
-              <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
             ) : album.is_public ? (
-              <Globe size={13} />
+              <Globe size={15} />
             ) : (
-              <Lock size={13} />
+              <Lock size={15} />
             )}
           </motion.button>
 
@@ -181,25 +154,22 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           <motion.button
             onClick={handleCopy}
             whileTap={{ scale: 0.9 }}
-            className="flex items-center justify-center p-2 rounded-xl bg-gray-100 dark:bg-gray-800
+            className="flex items-center justify-center p-2.5 rounded-xl bg-gray-100 dark:bg-gray-800
                        text-gray-500 hover:text-primary-500 transition-colors flex-shrink-0"
             title={t("copyLink")}
           >
-            {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+            {copied ? <Check size={15} className="text-green-500" /> : <Copy size={15} />}
           </motion.button>
-
-          {/* Spacer */}
-          <div className="flex-1" />
 
           {/* Delete */}
           <motion.button
             onClick={handleDelete}
             whileTap={{ scale: 0.9 }}
-            className="flex items-center justify-center p-2 rounded-xl
+            className="flex items-center justify-center p-2.5 rounded-xl
                        text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex-shrink-0"
             title={t("deleteAlbum")}
           >
-            <Trash2 size={13} />
+            <Trash2 size={15} />
           </motion.button>
         </div>
       </div>

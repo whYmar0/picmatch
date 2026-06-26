@@ -1,12 +1,13 @@
 /**
- * components/RecentAlbumCard.jsx
+ * RecentAlbumCard.jsx — v2
  *
- * Same grid layout as AlbumCard, but read-only (no delete/privacy/invite controls).
- * Shows privacy badge and access-level action button.
+ * Same grid layout as AlbumCard v4 (2/3 photo, 1/3 info).
+ * Privacy badge kept. Single-line truncation for titles.
+ * "Results" button stays as is.
  */
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Image, Clock, Lock, Globe, BarChart2, MessageCircle } from "lucide-react";
+import { Image, Lock, Globe, BarChart2, MessageCircle } from "lucide-react";
 import { useLang } from "../contexts/LangContext";
 
 function parseUTC(dateStr) {
@@ -32,8 +33,6 @@ function timeAgo(dateStr, lang) {
 export default function RecentAlbumCard({ album, index }) {
   const { t, lang } = useLang();
 
-  // hasAccess=true  → user can see analytics (public album or explicitly granted)
-  // hasAccess=false → user can only see their own comment thread
   const hasAccess = album.hasAccess !== false;
   const isPrivate = album.is_public === false;
 
@@ -43,11 +42,11 @@ export default function RecentAlbumCard({ album, index }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.07, duration: 0.3 }}
       className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card
-                 hover:shadow-card-hover transition-shadow flex flex-col gap-3 p-4
+                 hover:shadow-card-hover transition-shadow flex flex-col
                  overflow-hidden w-full min-w-0"
     >
-      {/* Thumbnail */}
-      <div className="relative h-28 rounded-2xl overflow-hidden bg-border-light dark:bg-border-dark">
+      {/* Photo area (2/3) — same as AlbumCard */}
+      <div className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark overflow-hidden">
         {album.coverUrl ? (
           <img
             src={album.coverUrl}
@@ -57,11 +56,11 @@ export default function RecentAlbumCard({ album, index }) {
           />
         ) : (
           <div className="flex h-full items-center justify-center">
-            <Image size={24} className="text-gray-300 dark:text-gray-600" />
+            <Image size={32} className="text-gray-300 dark:text-gray-600" />
           </div>
         )}
 
-        {/* Privacy badge (top-left) */}
+        {/* Privacy badge (top-left) — KEPT */}
         <span className={`absolute top-2 left-2 flex items-center gap-1
                           text-[10px] font-semibold px-2 py-0.5 rounded-lg
                           ${isPrivate
@@ -74,44 +73,34 @@ export default function RecentAlbumCard({ album, index }) {
         </span>
       </div>
 
-      {/* Meta */}
-      <div className="flex items-center justify-between min-w-0">
-        <div className="min-w-0 pr-2 flex-1">
-          <h3 className="font-semibold text-sm leading-tight break-words">{album.title}</h3>
-          <span className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+      {/* Info area (1/3) */}
+      <div className="flex flex-col gap-2 p-3.5">
+        {/* Title + Creator */}
+        <div className="min-w-0">
+          <h3 className="font-semibold text-sm leading-tight break-words line-clamp-1">{album.title}</h3>
+          <span className="text-[11px] text-gray-400 mt-0.5 block line-clamp-1">
             {album.creatorUsername && (
-              <span className="truncate">@{album.creatorUsername} ·&nbsp;</span>
+              <span>@{album.creatorUsername} · </span>
             )}
-            <Clock size={10} className="flex-shrink-0" />
-            <span className="flex-shrink-0">{timeAgo(album.visitedAt, lang)}</span>
+            {timeAgo(album.visitedAt, lang)}
           </span>
         </div>
 
-        {/* No-access indicator icon */}
-        {!hasAccess && (
-          <div className="flex items-center justify-center p-2 rounded-xl
-                          bg-gray-100 dark:bg-gray-800 text-gray-500 flex-shrink-0"
-            title={lang === "ru" ? "Нет доступа к аналитике" : "No analytics access"}
-          >
-            <Lock size={14} />
-          </div>
-        )}
+        {/* Results button or no-access indicator */}
+        <Link
+          to={`/analytics/${album.id}`}
+          className={`w-full text-xs py-2 flex items-center justify-center gap-1.5 rounded-2xl font-semibold transition-colors
+            ${hasAccess
+              ? "btn-primary"
+              : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+            }`}
+        >
+          {hasAccess
+            ? <><BarChart2 size={13} /> {t("viewAnalytics")}</>
+            : <><MessageCircle size={13} /> {t("viewMyComments")}</>
+          }
+        </Link>
       </div>
-
-      {/* Action button */}
-      <Link
-        to={`/analytics/${album.id}`}
-        className={`w-full text-xs py-2 flex items-center justify-center gap-1.5 rounded-2xl font-semibold transition-colors
-          ${hasAccess
-            ? "btn-primary"
-            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-          }`}
-      >
-        {hasAccess
-          ? <><BarChart2 size={13} /> {t("viewAnalytics")}</>
-          : <><MessageCircle size={13} /> {t("viewMyComments")}</>
-        }
-      </Link>
     </motion.div>
   );
 }

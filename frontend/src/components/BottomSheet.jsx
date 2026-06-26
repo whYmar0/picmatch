@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from "framer-motion";
 import { X } from "lucide-react";
 
-export default function BottomSheet({ open, onClose, title, topContent, headerChildren, children }) {
+export default function BottomSheet({ open, onClose, title, topContent, headerChildren, children, sharedY }) {
   const sheetRef = useRef(null);
   const controls = useAnimation();
   const y = useMotionValue(0);
@@ -59,6 +59,15 @@ export default function BottomSheet({ open, onClose, title, topContent, headerCh
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [open]);
+
+  // Report y position to parent for photo shrink
+  useEffect(() => {
+    if (!sharedY) return;
+    const unsub = y.on("change", (latest) => {
+      sharedY.set(latest);
+    });
+    return unsub;
+  }, [y, sharedY]);
 
   const handleClose = async () => {
     await controls.start({ y: vh, transition: { duration: 0.25 } });

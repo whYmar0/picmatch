@@ -6,7 +6,7 @@
  */
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Image, Clock } from "lucide-react";
 import toast from "react-hot-toast";
 import { albumsApi } from "../api";
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
   const [galleryAlbum, setGalleryAlbum] = useState(null);
+  const [showRecent, setShowRecent] = useState(false);
 
   // Recently visited — filtered to exclude albums the user owns
   const recentAll = user ? getRecentAlbums(user.id) : [];
@@ -67,26 +68,32 @@ export default function Dashboard() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
 
-      {/* Recently Visited */}
+      {/* Recently Visited — toggleable */}
       {recent.length > 0 && (
-        <motion.section
-          id="recent-section"
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-10"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Clock size={15} className="text-gray-400" />
-            <h2 className="font-semibold text-sm text-gray-500 dark:text-gray-400">
-              {t("recentlyVisited")}
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {recent.slice(0, 4).map((album, i) => (
-              <RecentAlbumCard key={album.id} album={album} index={i} />
-            ))}
-          </div>
-        </motion.section>
+        <AnimatePresence>
+          {showRecent && (
+            <motion.section
+              id="recent-section"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mb-10 overflow-hidden"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <Clock size={15} className="text-gray-400" />
+                <h2 className="font-semibold text-sm text-gray-500 dark:text-gray-400">
+                  {t("recentlyVisited")}
+                </h2>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {recent.slice(0, 4).map((album, i) => (
+                  <RecentAlbumCard key={album.id} album={album} index={i} />
+                ))}
+              </div>
+            </motion.section>
+          )}
+        </AnimatePresence>
       )}
 
       {/* My Albums */}
@@ -98,13 +105,14 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           {recent.length > 0 && (
             <button
-              onClick={() => document.getElementById("recent-section")?.scrollIntoView({ behavior: "smooth" })}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-semibold
-                         bg-primary-50 dark:bg-primary-900/20 text-primary-500
-                         hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
+              onClick={() => setShowRecent(!showRecent)}
+              className={`flex items-center justify-center w-10 h-10 rounded-2xl transition-colors flex-shrink-0
+                         ${showRecent
+                           ? "bg-primary-400 text-white"
+                           : "bg-gray-100 dark:bg-gray-800 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"}`}
+              title={t("recentlyVisited")}
             >
-              <Clock size={12} />
-              <span>{recent.length}</span>
+              <Clock size={18} />
             </button>
           )}
           <h1 className="font-display font-bold text-2xl truncate">{t("myAlbums")}</h1>
@@ -145,9 +153,11 @@ export default function Dashboard() {
       )}
 
       {/* Gallery mode */}
-      {galleryAlbum && (
-        <AlbumGallery album={galleryAlbum.album} startPhotoId={galleryAlbum.photoId} onClose={handleGalleryClose} />
-      )}
+      <AnimatePresence>
+        {galleryAlbum && (
+          <AlbumGallery album={galleryAlbum.album} startPhotoId={galleryAlbum.photoId} onClose={handleGalleryClose} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

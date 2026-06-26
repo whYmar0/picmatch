@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SendHorizontal, X } from "lucide-react";
 import { commentsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
-import LoadingSpinner from "./LoadingSpinner";
+import { CommentSkeleton } from "./Skeleton";
 import { UserAvatar } from "./Navbar";
 import { useLang } from "../contexts/LangContext";
 
@@ -165,15 +165,16 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
       });
       setText("");
       setReplyTo(null);
+      // Optimistic update + fallback reload
       if (created) {
         setComments((prev) => replyTo?.id
           ? prev.map((comment) => String(comment.id) === String(replyTo.id)
             ? { ...comment, replies: [...(comment.replies || []), created] }
             : comment)
           : [...prev, created]);
-      } else {
-        load();
       }
+      // Always reload to ensure consistency with server
+      load();
     } catch { /**/ } finally {
       setSubmitting(false);
     }
@@ -183,7 +184,7 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
     try { await commentsApi.delete(id); load(); } catch { /**/ }
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return <CommentSkeleton count={4} />;
 
   return (
     <div className="flex flex-col flex-1 min-h-full">
@@ -205,8 +206,8 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
         )
       }
 
-      {/* Input */}
-      <div className="mt-auto flex-shrink-0 pt-3 pb-1 bg-card-light dark:bg-card-dark">
+      {/* Input — pill-shape, fixed at bottom */}
+      <div className="sticky bottom-0 flex-shrink-0 pt-3 pb-1 bg-card-light dark:bg-card-dark z-10">
         {replyTo && (
           <div className="flex items-center gap-2 mb-2 text-xs text-gray-500 dark:text-gray-400
                           bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-xl">
@@ -220,7 +221,12 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={t("addCommentPlaceholder")}
-            className="input-field comment-input flex-1 py-2.5 text-[15px]"
+            className="flex-1 py-2.5 px-4 text-[15px] rounded-full
+                       bg-border-light dark:bg-border-dark
+                       text-gray-900 dark:text-gray-100
+                       placeholder:text-gray-400 dark:placeholder:text-gray-500
+                       focus:outline-none focus:ring-2 focus:ring-primary-400
+                       border-0"
             autoComplete="off"
             autoCorrect="off"
           />

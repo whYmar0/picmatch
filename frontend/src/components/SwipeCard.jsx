@@ -12,7 +12,9 @@
  */
 import { useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
-import { ImageOff, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ImageOff } from "lucide-react";
+import FilledHeart from "./FilledHeart";
+import BrokenHeart from "./BrokenHeart";
 
 const SWIPE_THRESHOLD = 64;
 
@@ -193,7 +195,7 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
                    transition-colors duration-150 touch-manipulation"
         aria-label="Dislike"
       >
-        <ThumbsDown size={22} />
+        <BrokenHeart size={22} />
       </motion.button>
 
       {/* Like */}
@@ -208,7 +210,7 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
                    transition-colors duration-150 touch-manipulation"
         aria-label="Like"
       >
-        <ThumbsUp size={22} />
+        <FilledHeart size={22} />
       </motion.button>
 
     </div>

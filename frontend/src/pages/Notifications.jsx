@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import { UserAvatar } from "../components/Navbar";
 import { Bell, MessageSquare, BarChart2, CheckCircle, ChevronLeft } from "lucide-react";
-import RoundedHeart from "../components/RoundedHeart";
+import FilledHeart from "../components/FilledHeart";
 import { formatDistanceToNow, isToday, isYesterday, differenceInDays } from "date-fns";
 import { ru, enUS } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
@@ -62,7 +62,7 @@ export default function Notifications() {
     switch(type) {
       case "reply":   return <MessageSquare size={12} fill="white" className="text-white" />;
       case "comment": return <MessageSquare size={12} fill="white" className="text-white" />;
-      case "like":    return <RoundedHeart size={12} fill="white" className="text-white" />;
+      case "like":    return <FilledHeart size={12} className="text-white" />;
       case "vote":    return <BarChart2 size={12} fill="white" className="text-white" />;
       default:        return <Bell size={12} className="text-white" />;
     }

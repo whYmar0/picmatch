@@ -11,8 +11,10 @@ import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Users, LayoutGrid, List,
-  ThumbsUp, ThumbsDown, SlidersHorizontal, Filter, Share2, Check, MessageCircle,
+  SlidersHorizontal, Filter, Share2, Check, MessageCircle,
 } from "lucide-react";
+import FilledHeart   from "./FilledHeart";
+import BrokenHeart   from "./BrokenHeart";
 import { useLang }        from "../contexts/LangContext";
 import { useAuth }        from "../contexts/AuthContext";
 import BottomSheet        from "./BottomSheet";
@@ -35,10 +37,10 @@ async function smartShare(title, url) {
 function ReactionBadge({ isLike }) {
   return isLike
     ? <span className="inline-flex items-center gap-1 text-green-500 text-xs font-semibold">
-        <ThumbsUp size={10} /> Нравится
+        <FilledHeart size={10} /> Нравится
       </span>
     : <span className="inline-flex items-center gap-1 text-red-400 text-xs font-semibold">
-        <ThumbsDown size={10} /> Пропуск
+        <BrokenHeart size={10} /> Пропуск
       </span>;
 }
 
@@ -82,10 +84,10 @@ function PhotoListRow({ photo, rank, onPhotoClick }) {
         </div>
         <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
           <span className="text-green-500 flex items-center gap-0.5">
-            <ThumbsUp size={9} /> {photo.like_count}
+            <FilledHeart size={9} /> {photo.like_count}
           </span>
           <span className="text-red-400 flex items-center gap-0.5">
-            <ThumbsDown size={9} /> {photo.dislike_count}
+            <BrokenHeart size={9} /> {photo.dislike_count}
           </span>
           <span className="ml-auto">
             {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
@@ -132,10 +134,10 @@ function PhotoTabBar({ tab, setTab, likeCount, dislikeCount, canViewStats }) {
                         ? "bg-primary-400 text-white"
                         : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}
         >
-          <ThumbsUp size={14} />
+          <FilledHeart size={14} />
           <span>{likeCount}</span>
           <span className="text-xs opacity-70">·</span>
-          <ThumbsDown size={14} />
+          <BrokenHeart size={14} />
           <span>{dislikeCount}</span>
         </button>
       )}
@@ -306,8 +308,10 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
               </button>
             )}
             <button onClick={handleShare}
-              className="btn-ghost text-sm px-3 py-2 text-primary-500">
-              <Share2 size={13} /> {shareDone ? t("copied") : t("share")}
+              className="w-10 h-10 rounded-2xl flex items-center justify-center
+                         bg-gray-100 dark:bg-gray-800 text-primary-500
+                         hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
+              {shareDone ? <Check size={18} /> : <Share2 size={18} />}
             </button>
           </div>
         </div>
@@ -338,7 +342,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
             </span>
           )}
         </button>
-        <span className="ml-auto text-xs text-gray-400">
+        <span className="ml-auto text-xs text-gray-400 hidden">
           {filtered.length}/{photos.length}
         </span>
       </div>
