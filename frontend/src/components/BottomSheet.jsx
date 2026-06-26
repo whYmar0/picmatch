@@ -1,13 +1,42 @@
 /**
  * components/BottomSheet.jsx — iOS-style bottom sheet
  * Slides up from the bottom with a backdrop, draggable to dismiss.
- * Used for: voter list, per-photo reaction drill-down.
+ * Used for: voter list, per-photo reaction drill-down, sort/filter sheets in viewer.
+ *
+ * Stackable via `zIndex` — render multiple BottomSheets as siblings.
+ * State isolation is guaranteed because each instance owns its own
+ * `useAnimation` controls and motion values.
  */
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from "framer-motion";
 import { X } from "lucide-react";
 
-export default function BottomSheet({ open, onClose, title, topContent, headerChildren, children, sharedY }) {
+// ─── Ref-counted body scroll lock ─────────────────────────────────────────────
+// Multiple BottomSheets can stack (e.g. primary + secondary). Per-instance
+// locking causes races: the secondary closing unlocks the body even though
+// the primary is still open. Track lock holders module-wide instead.
+let bodyLockHolders = 0;
+function lockBody() {
+  bodyLockHolders += 1;
+  if (bodyLockHolders === 1) document.body.style.overflow = "hidden";
+}
+function unlockBody() {
+  bodyLockHolders = Math.max(0, bodyLockHolders - 1);
+  if (bodyLockHolders === 0) document.body.style.overflow = "";
+}
+
+export default function BottomSheet({
+  open,
+  onClose,
+  title,
+  topContent,
+  headerChildren,
+  children,
+  sharedY,
+  zIndex = 50,
+  hideHeader = false,
+  closeOnEscape = true,
+}) {
   const sheetRef = useRef(null);
   const controls = useAnimation();
   const y = useMotionValue(0);
@@ -49,15 +78,15 @@ export default function BottomSheet({ open, onClose, title, topContent, headerCh
   useEffect(() => {
     if (!open) return;
     controls.start({ y: defaultOffset, transition: { type: "spring", stiffness: 350, damping: 35 } });
-    const handler = (e) => { if (e.key === "Escape") handleClose(); };
+    const handler = (e) => { if (e.key === "Escape" && closeOnEscape) handleClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, controls, defaultOffset]);
+  }, [open, controls, defaultOffset, closeOnEscape]);
 
-  // Prevent body scroll
+  // Prevent body scroll (ref-counted across all BottomSheet instances)
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    if (open) lockBody();
+    return () => { if (open) unlockBody(); };
   }, [open]);
 
   // Report y position to parent for photo shrink
@@ -96,7 +125,10 @@ export default function BottomSheet({ open, onClose, title, topContent, headerCh
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-end overflow-hidden">
+        <div
+          className="fixed inset-0 flex flex-col items-center justify-end overflow-hidden"
+          style={{ zIndex }}
+        >
           {/* Backdrop (Blur + Dimming) */}
           <motion.div
             key="backdrop"
@@ -147,18 +179,20 @@ export default function BottomSheet({ open, onClose, title, topContent, headerCh
 
             {/* Header */}
             <div className="flex-shrink-0 border-b border-border-light dark:border-border-dark">
-              <div className="flex items-center justify-between px-6 py-4">
-                <h3 className="font-bold text-lg">{title}</h3>
-                <button
-                  onClick={handleClose}
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center
-                             text-gray-400 hover:bg-border-light dark:hover:bg-border-dark
-                             transition-colors"
-                  aria-label="Close"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+              {!hideHeader && (
+                <div className="flex items-center justify-between px-6 py-4">
+                  <h3 className="font-bold text-lg">{title}</h3>
+                  <button
+                    onClick={handleClose}
+                    className="w-10 h-10 rounded-2xl flex items-center justify-center
+                               text-gray-400 hover:bg-border-light dark:hover:bg-border-dark
+                               transition-colors"
+                    aria-label="Close"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              )}
               {headerChildren && (
                 <div className="px-6 pb-3">{headerChildren}</div>
               )}
