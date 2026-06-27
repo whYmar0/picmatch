@@ -19,6 +19,7 @@ frontend/.env
 frontend/.env.local
 frontend/.env.production
 .vercel/
+frontend/nul
 
 # IDE
 .vscode/

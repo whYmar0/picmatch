@@ -95,7 +95,7 @@ export default function RecentAlbumCard({ album, index }) {
         >
           {hasAccess
             ? <><BarChart2 size={13} /> {t("viewAnalytics")}</>
-            : <><MessageCircle size={13} /> {t("viewMyComments")}</>
+            : <span className="inline-flex items-center gap-1.5"><MessageCircle size={14} className="flex-shrink-0" />{t("Comments")}</span>
           }
         </Link>
       </div>

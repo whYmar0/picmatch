@@ -143,7 +143,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
             whileTap={{ scale: 0.9 }}
             className={`flex items-center justify-center p-2.5 rounded-xl btn-rounded-square transition-colors flex-shrink-0 ${album.is_public
               ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-              : "bg-gray-100 dark:bg-gray-700 text-gray-500"
+              : "bg-gray-100 dark:bg-gray-800 text-gray-500"
               }`}
             title={album.is_public ? "Public" : "Private"}
           >
@@ -160,7 +160,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           <motion.button
             onClick={handleCopy}
             whileTap={{ scale: 0.9 }}
-            className="flex items-center justify-center p-2.5 rounded-xl btn-rounded-square bg-gray-100 dark:bg-gray-700
+            className="flex items-center justify-center p-2.5 rounded-xl btn-rounded-square bg-gray-100 dark:bg-gray-800
                        text-gray-500 hover:text-primary-500 transition-colors flex-shrink-0"
             title={t("copyLink")}
           >

@@ -12,8 +12,7 @@
  */
 import { useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
-import { ImageOff } from "lucide-react";
-import FilledHeart from "./FilledHeart";
+import { Heart, ImageOff } from "lucide-react";
 import BrokenHeart from "./BrokenHeart";
 
 const SWIPE_THRESHOLD = 64;
@@ -189,13 +188,12 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
         whileTap={{ scale: 0.88 }}
         className="w-16 h-16 rounded-full flex items-center justify-center
                    bg-white dark:bg-card-dark shadow-card
-                   border-2 border-red-200 dark:border-red-800 text-red-400
-                   hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-950/20
+                   hover:bg-red-50 dark:hover:bg-red-950/20
                    disabled:opacity-40 disabled:cursor-not-allowed
                    transition-colors duration-150 touch-manipulation"
         aria-label="Dislike"
       >
-        <BrokenHeart size={22} />
+        <BrokenHeart size={28} className="text-gray-500 dark:text-gray-300" />
       </motion.button>
 
       {/* Like */}
@@ -205,12 +203,12 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
         whileHover={{ scale: disabled ? 1 : 1.1 }}
         whileTap={{ scale: 0.88 }}
         className="w-16 h-16 rounded-full flex items-center justify-center
-                   bg-primary-400 hover:bg-primary-500 text-white shadow-orange
+                   bg-primary-400 hover:bg-primary-500 shadow-orange
                    disabled:opacity-40 disabled:cursor-not-allowed
                    transition-colors duration-150 touch-manipulation"
         aria-label="Like"
       >
-        <FilledHeart size={22} />
+        <Heart size={21} className="text-white" />
       </motion.button>
 
     </div>
