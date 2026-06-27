@@ -77,7 +77,7 @@ export default function Dashboard() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
               className="mb-10 overflow-hidden"
             >
               <div className="flex items-center gap-2 mb-4">
@@ -103,30 +103,32 @@ export default function Dashboard() {
         className="flex items-center justify-between mb-6"
       >
         <div className="flex items-center gap-3">
+          <h1 className="font-display font-bold text-2xl truncate">{t("myAlbums")}</h1>
+        </div>
+        <div className="flex items-center gap-2">
           {recent.length > 0 && (
             <button
               onClick={() => setShowRecent(!showRecent)}
-              className={`flex items-center justify-center w-10 h-10 rounded-2xl transition-colors flex-shrink-0
+              className={`flex items-center justify-center w-10 h-10 flex-shrink-0 focus:outline-none
                          ${showRecent
-                           ? "bg-primary-400 text-white"
-                           : "bg-gray-100 dark:bg-gray-800 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"}`}
+                           ? "text-primary-500"
+                           : "text-gray-400"}`}
               title={t("recentlyVisited")}
             >
-              <Clock size={18} />
+              <Clock size={22} />
             </button>
           )}
-          <h1 className="font-display font-bold text-2xl truncate">{t("myAlbums")}</h1>
+          {albums.length > 0 && (
+            <Link
+              to="/create"
+              className="btn-primary flex-shrink-0 w-10 h-10 p-0"
+              aria-label={t("createAlbum")}
+              title={t("createAlbum")}
+            >
+              <Plus size={20} strokeWidth={2.5} />
+            </Link>
+          )}
         </div>
-        {albums.length > 0 && (
-          <Link
-            to="/create"
-            className="btn-primary flex-shrink-0 ml-4 w-10 h-10 p-0"
-            aria-label={t("createAlbum")}
-            title={t("createAlbum")}
-          >
-            <Plus size={20} strokeWidth={2.5} />
-          </Link>
-        )}
       </motion.div>
 
       {albums.length === 0 ? (

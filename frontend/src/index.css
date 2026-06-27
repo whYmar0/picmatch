@@ -50,6 +50,11 @@ button,
   border-radius: 9999px !important;
 }
 
+/* Override: rounded-square buttons inside cards — beats the global button pill rule */
+.btn-rounded-square {
+  border-radius: 1rem !important;
+}
+
 .media-thumbnail {
   border-radius: 1rem !important;
 }

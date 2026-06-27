@@ -1,17 +1,20 @@
 /**
- * AlbumCard.jsx — v4
+ * AlbumCard.jsx — v6
  *
- * CHANGES:
- *   - 2/3 of card height = first photo (rectangular, no oval mask)
- *   - Removed: privacy badge, photo count badge, gradient overlay, hover play icon
- *   - Action buttons: larger, centered, side by side
+ * - Card keeps `rounded-3xl overflow-hidden` (rounded card appearance).
+ * - Photo area is wrapped in `<div className="mx-2 mt-2">` (8px inset) so its
+ *   corners are NEVER clipped by the parent's rounded-3xl — the IMAGE is a
+ *   clean rectangle inside the rounded card.
+ * - Photo button uses `aspect-[4/3]` + `object-cover` to fill ~2/3 of card.
+ * - No hover scale on image (no `group-hover:scale-105`).
+ * - Photo count badge and rounded-square (rounded-2xl) action buttons.
  */
 import { useState } from "react";
-import { motion }   from "framer-motion";
+import { motion } from "framer-motion";
 import { Copy, Check, Trash2, Image, Globe, Lock } from "lucide-react";
-import { useLang }  from "../contexts/LangContext";
+import { useLang } from "../contexts/LangContext";
 import { albumsApi } from "../api";
-import toast       from "react-hot-toast";
+import toast from "react-hot-toast";
 
 function parseUTC(dateStr) {
   if (!dateStr) return new Date();
@@ -48,8 +51,10 @@ async function smartCopy(text) {
 export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhotoClick }) {
   const { t, lang } = useLang();
   const [album, setAlbum] = useState(initialAlbum);
-  const [copied,     setCopied]     = useState(false);
-  const [updating,   setUpdating]   = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
+  const photoCount = (album.photos || []).length;
 
   const handleCopy = async (e) => {
     e.stopPropagation();
@@ -94,28 +99,35 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
       transition={{ delay: index * 0.07, duration: 0.3 }}
       className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card
                  hover:shadow-card-hover transition-shadow flex flex-col
-                 overflow-hidden w-full min-w-0 group"
+                 overflow-hidden w-full min-w-0"
     >
-      {/* Photo area (2/3) — rectangular, no mask */}
-      <button
-        onClick={handlePhotoClick}
-        className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
-                   overflow-hidden cursor-pointer focus:outline-none"
-      >
-        {firstPhoto ? (
-          <img
-            src={firstPhoto.url}
-            alt=""
-            className="w-full h-full object-cover transition-transform duration-500
-                       group-hover:scale-105"
-            loading="lazy"
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <Image size={32} className="text-gray-300 dark:text-gray-600" />
-          </div>
-        )}
-      </button>
+      {/* Photo area — wrapped with mx/mt so parent's rounded-3xl NEVER clips its corners */}
+      <div className="mx-2 mt-2">
+        <button
+          onClick={handlePhotoClick}
+          className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
+                     overflow-hidden cursor-pointer focus:outline-none"
+        >
+          {firstPhoto ? (
+            <img
+              src={firstPhoto.url}
+              alt=""
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <Image size={32} className="text-gray-300 dark:text-gray-600" />
+            </div>
+          )}
+          {/* Photo count badge (top-right) */}
+          {photoCount > 0 && (
+            <span className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-lg">
+              {photoCount} {photoCount === 1 ? (lang === "ru" ? "фото" : "photo") : (lang === "ru" ? "фото" : "photos")}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* Info area (1/3) */}
       <div className="flex flex-col gap-2 p-3.5">
@@ -127,18 +139,17 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           </span>
         </div>
 
-        {/* Action buttons row — larger, centered, no spacer */}
+        {/* Action buttons row — rounded-square */}
         <div className="flex items-center justify-center gap-3">
           {/* Private/Public toggle */}
           <motion.button
             onClick={togglePrivacy}
             disabled={updating}
             whileTap={{ scale: 0.9 }}
-            className={`flex items-center justify-center p-2.5 rounded-xl transition-colors flex-shrink-0 ${
-              album.is_public
-                ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-                : "bg-gray-100 dark:bg-gray-800 text-gray-500"
-            }`}
+            className={`flex items-center justify-center p-2.5 rounded-2xl transition-colors flex-shrink-0 ${album.is_public
+              ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
+              : "bg-gray-100 dark:bg-gray-800 text-gray-500"
+              }`}
             title={album.is_public ? "Public" : "Private"}
           >
             {updating ? (
@@ -154,7 +165,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           <motion.button
             onClick={handleCopy}
             whileTap={{ scale: 0.9 }}
-            className="flex items-center justify-center p-2.5 rounded-xl bg-gray-100 dark:bg-gray-800
+            className="flex items-center justify-center p-2.5 rounded-2xl bg-gray-100 dark:bg-gray-800
                        text-gray-500 hover:text-primary-500 transition-colors flex-shrink-0"
             title={t("copyLink")}
           >
@@ -165,7 +176,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           <motion.button
             onClick={handleDelete}
             whileTap={{ scale: 0.9 }}
-            className="flex items-center justify-center p-2.5 rounded-xl
+            className="flex items-center justify-center p-2.5 rounded-2xl
                        text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex-shrink-0"
             title={t("deleteAlbum")}
           >

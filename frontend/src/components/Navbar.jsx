@@ -258,8 +258,7 @@ export default function Navbar() {
                   <LayoutDashboard size={15} /> {t("dashboard")}
                 </Link>
 
-                <div className="flex items-center gap-2 pl-2
-                                border-l border-border-light dark:border-border-dark relative"
+                <div className="flex items-center gap-2 pl-2 relative"
                      ref={menuRef}>
                   
                   {/* Avatar Section */}
