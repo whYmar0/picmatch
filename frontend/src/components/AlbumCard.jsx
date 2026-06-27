@@ -97,11 +97,9 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.07, duration: 0.3 }}
-      className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card
-                 hover:shadow-card-hover transition-shadow flex flex-col
-                 overflow-hidden w-full min-w-0"
+      className="bg-card-light dark:bg-card-dark rounded-3xl card-shadow overflow-hidden flex flex-col w-full min-w-0"
     >
-      {/* Photo area — direct child of card, same as RecentAlbumCard */}
+      {/* Photo area */}
       <div
         onClick={handlePhotoClick}
         className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
@@ -145,7 +143,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
             whileTap={{ scale: 0.9 }}
             className={`flex items-center justify-center p-2.5 rounded-xl btn-rounded-square transition-colors flex-shrink-0 ${album.is_public
               ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-              : "bg-gray-300 dark:bg-gray-800 text-gray-500"
+              : "bg-gray-100 dark:bg-gray-700 text-gray-500"
               }`}
             title={album.is_public ? "Public" : "Private"}
           >
@@ -162,7 +160,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           <motion.button
             onClick={handleCopy}
             whileTap={{ scale: 0.9 }}
-            className="flex items-center justify-center p-2.5 rounded-xl btn-rounded-square bg-gray-300 dark:bg-gray-800
+            className="flex items-center justify-center p-2.5 rounded-xl btn-rounded-square bg-gray-100 dark:bg-gray-700
                        text-gray-500 hover:text-primary-500 transition-colors flex-shrink-0"
             title={t("copyLink")}
           >

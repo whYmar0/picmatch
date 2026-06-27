@@ -78,7 +78,7 @@ export default function Dashboard() {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="mb-10 overflow-hidden"
+              className="mb-10"
             >
               <div className="flex items-center gap-2 mb-4">
                 <Clock size={15} className="text-gray-400" />

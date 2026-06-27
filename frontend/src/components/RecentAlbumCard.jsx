@@ -41,9 +41,7 @@ export default function RecentAlbumCard({ album, index }) {
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.07, duration: 0.3 }}
-      className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card
-                 hover:shadow-card-hover transition-shadow flex flex-col
-                 overflow-hidden w-full min-w-0"
+      className="bg-card-light dark:bg-card-dark rounded-3xl card-shadow overflow-hidden flex flex-col w-full min-w-0"
     >
       {/* Photo area (2/3) — same as AlbumCard */}
       <div className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark overflow-hidden">

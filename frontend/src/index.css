@@ -62,6 +62,15 @@ button,
   }
 }
 
+/* Drop-shadow for cards — filter applies AFTER element render, not clipped by overflow-hidden */
+.card-shadow {
+  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.08));
+  transition: filter 0.2s ease;
+}
+.card-shadow:hover {
+  filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.12));
+}
+
 .media-thumbnail {
   border-radius: 1rem !important;
 }
