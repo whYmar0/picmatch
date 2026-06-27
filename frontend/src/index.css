@@ -52,7 +52,14 @@ button,
 
 /* Override: rounded-square buttons inside cards — beats the global button pill rule */
 .btn-rounded-square {
-  border-radius: 1rem !important;
+  border-radius: 0.75rem !important;
+}
+
+/* Suppress :hover on touch devices — prevents sticky hover after tap (e.g. delete button) */
+@media (hover: none) {
+  .btn-no-touch-hover:hover {
+    background-color: transparent !important;
+  }
 }
 
 .media-thumbnail {

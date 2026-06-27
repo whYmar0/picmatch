@@ -101,32 +101,29 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
                  hover:shadow-card-hover transition-shadow flex flex-col
                  overflow-hidden w-full min-w-0"
     >
-      {/* Photo area — wrapped with mx/mt so parent's rounded-3xl NEVER clips its corners */}
-      <div className="mx-2 mt-2">
-        <button
-          onClick={handlePhotoClick}
-          className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
-                     overflow-hidden cursor-pointer focus:outline-none"
-        >
-          {firstPhoto ? (
-            <img
-              src={firstPhoto.url}
-              alt=""
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <Image size={32} className="text-gray-300 dark:text-gray-600" />
-            </div>
-          )}
-          {/* Photo count badge (top-right) */}
-          {photoCount > 0 && (
-            <span className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-lg">
-              {photoCount} {photoCount === 1 ? (lang === "ru" ? "фото" : "photo") : (lang === "ru" ? "фото" : "photos")}
-            </span>
-          )}
-        </button>
+      {/* Photo area — direct child of card, same as RecentAlbumCard */}
+      <div
+        onClick={handlePhotoClick}
+        className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
+                   overflow-hidden cursor-pointer">
+        {firstPhoto ? (
+          <img
+            src={firstPhoto.url}
+            alt=""
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <Image size={32} className="text-gray-300 dark:text-gray-600" />
+          </div>
+        )}
+        {/* Photo count badge (top-right) */}
+        {photoCount > 0 && (
+          <span className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-lg">
+            {photoCount} {photoCount === 1 ? (lang === "ru" ? "фото" : "photo") : (lang === "ru" ? "фото" : "photos")}
+          </span>
+        )}
       </div>
 
       {/* Info area (1/3) */}
@@ -146,9 +143,9 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
             onClick={togglePrivacy}
             disabled={updating}
             whileTap={{ scale: 0.9 }}
-            className={`flex items-center justify-center p-2.5 rounded-2xl transition-colors flex-shrink-0 ${album.is_public
+            className={`flex items-center justify-center p-2.5 rounded-xl btn-rounded-square transition-colors flex-shrink-0 ${album.is_public
               ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-              : "bg-gray-100 dark:bg-gray-800 text-gray-500"
+              : "bg-gray-300 dark:bg-gray-800 text-gray-500"
               }`}
             title={album.is_public ? "Public" : "Private"}
           >
@@ -165,7 +162,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           <motion.button
             onClick={handleCopy}
             whileTap={{ scale: 0.9 }}
-            className="flex items-center justify-center p-2.5 rounded-2xl bg-gray-100 dark:bg-gray-800
+            className="flex items-center justify-center p-2.5 rounded-xl btn-rounded-square bg-gray-300 dark:bg-gray-800
                        text-gray-500 hover:text-primary-500 transition-colors flex-shrink-0"
             title={t("copyLink")}
           >
@@ -176,8 +173,8 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           <motion.button
             onClick={handleDelete}
             whileTap={{ scale: 0.9 }}
-            className="flex items-center justify-center p-2.5 rounded-2xl
-                       text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex-shrink-0"
+            className="flex items-center justify-center p-2.5 rounded-xl btn-rounded-square btn-no-touch-hover
+                       text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 active:bg-red-50 dark:active:bg-red-950/30 transition-colors flex-shrink-0"
             title={t("deleteAlbum")}
           >
             <Trash2 size={15} />

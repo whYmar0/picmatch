@@ -30,6 +30,33 @@ function PageFallback() {
   return <LoadingSpinner fullscreen />;
 }
 
+function DashboardFallback() {
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Title skeleton */}
+      <div className="mb-6">
+        <div className="bg-border-light dark:bg-border-dark rounded-2xl h-8 w-32 animate-pulse" />
+      </div>
+      {/* Grid skeleton */}
+      <div className="grid grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card overflow-hidden">
+            <div className="bg-border-light dark:bg-border-dark w-full h-48 animate-pulse" />
+            <div className="p-4 space-y-3">
+              <div className="bg-border-light dark:bg-border-dark rounded-2xl h-5 w-2/3 animate-pulse" />
+              <div className="bg-border-light dark:bg-border-dark rounded-2xl h-3 w-1/3 animate-pulse" />
+              <div className="flex gap-2 pt-2">
+                <div className="bg-border-light dark:bg-border-dark rounded-2xl h-9 flex-1 animate-pulse" />
+                <div className="bg-border-light dark:bg-border-dark rounded-2xl h-9 w-9 animate-pulse" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HomeRoute() {
   const { user, loading } = useAuth();
   if (loading) return <LoadingSpinner />;
@@ -71,7 +98,7 @@ export default function App() {
 
                   {/* All auth-required routes — no role check */}
                   <Route path="/vote/:inviteCode" element={<Suspense fallback={<PageFallback />}><VotePage /></Suspense>} />
-                  <Route path="/dashboard"         element={<ProtectedRoute><Suspense fallback={<PageFallback />}><Dashboard /></Suspense></ProtectedRoute>} />
+                  <Route path="/dashboard"         element={<ProtectedRoute><Suspense fallback={<DashboardFallback />}><Dashboard /></Suspense></ProtectedRoute>} />
                   <Route path="/inbox"             element={<ProtectedRoute><Suspense fallback={<PageFallback />}><Notifications /></Suspense></ProtectedRoute>} />
                   <Route path="/create"            element={<ProtectedRoute><Suspense fallback={<PageFallback />}><CreateAlbum /></Suspense></ProtectedRoute>} />
                   <Route path="/analytics/:albumId" element={<ProtectedRoute><Suspense fallback={<PageFallback />}><AnalyticsPage /></Suspense></ProtectedRoute>} />
