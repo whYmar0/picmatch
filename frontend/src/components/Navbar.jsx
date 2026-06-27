@@ -7,16 +7,16 @@
  *  - "New Album" button removed from navbar (only in Dashboard header on desktop)
  */
 import { useRef, useState, useEffect } from "react";
-import { Link, useNavigate }  from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LogOut, LayoutDashboard, Camera, Bell, MessageSquare, BarChart2, Sun, Moon, Languages } from "lucide-react";
+import { LogOut, LayoutDashboard, Camera, Bell, MessageSquare, BarChart2, Sun, Moon, Languages, AtSign } from "lucide-react";
 import FilledHeart from "./FilledHeart";
-import { useTheme }           from "../contexts/ThemeContext";
-import { useAuth }            from "../contexts/AuthContext";
-import { useLang }            from "../contexts/LangContext";
+import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
+import { useLang } from "../contexts/LangContext";
 import { authApi, notificationsApi } from "../api";
-import toast                  from "react-hot-toast";
-import AvatarCropModal        from "./AvatarCropModal";
+import toast from "react-hot-toast";
+import AvatarCropModal from "./AvatarCropModal";
 
 // ─── User Avatar (reusable) ────────────────────────────────────────────────────
 export function UserAvatar({ user, size = 28, className = "", onClick }) {
@@ -34,7 +34,7 @@ export function UserAvatar({ user, size = 28, className = "", onClick }) {
     >
       {user.avatar_url
         ? <img src={user.avatar_url} alt={user.username}
-               className="w-full h-full object-cover" />
+          className="w-full h-full object-cover" />
         : initial
       }
     </div>
@@ -43,16 +43,16 @@ export function UserAvatar({ user, size = 28, className = "", onClick }) {
 
 export default function Navbar() {
   const { isDark, toggle } = useTheme();
-  const { user, logout }   = useAuth();
+  const { user, logout } = useAuth();
   const { t, lang, setLanguage } = useLang();
-  const navigate  = useNavigate();
-  const fileRef   = useRef(null);
-  const menuRef   = useRef(null);
+  const navigate = useNavigate();
+  const fileRef = useRef(null);
+  const menuRef = useRef(null);
 
   // Profile menu state
   const [menuOpen, setMenuOpen] = useState(false);
   // Crop modal state
-  const [cropSrc,  setCropSrc]  = useState(null);   // data-url of chosen image
+  const [cropSrc, setCropSrc] = useState(null);   // data-url of chosen image
   const [cropping, setCropping] = useState(false);
 
   // Notifications
@@ -72,18 +72,18 @@ export default function Navbar() {
           setNotifications(data);
           const unread = data.filter(n => !n.is_read);
           const latestId = unread.length > 0 ? unread[0].id : null;
-          
+
           // Only show toast if we have new unread notifications that haven't been shown
           const lastSeenId = sessionStorage.getItem("notif_toast_last_id");
-          
+
           if (latestId && lastSeenId !== latestId) {
             setShowNotifToast(true);
             sessionStorage.setItem("notif_toast_last_id", latestId);
-            setTimeout(() => setShowNotifToast(false), 5000); 
+            setTimeout(() => setShowNotifToast(false), 5000);
           }
         }).catch(console.error);
       };
-      
+
       fetchNotifs();
       // Poll notifications every 10 seconds
       intervalId = setInterval(fetchNotifs, 10000);
@@ -95,8 +95,8 @@ export default function Navbar() {
 
   const unreadNotifs = notifications.filter(n => !n.is_read);
   const repliesCount = unreadNotifs.filter(n => n.type === "reply" || n.type === "comment").length;
-  const likesCount   = unreadNotifs.filter(n => n.type === "like").length;
-  const votesCount   = unreadNotifs.filter(n => n.type === "vote").length;
+  const likesCount = unreadNotifs.filter(n => n.type === "like").length;
+  const votesCount = unreadNotifs.filter(n => n.type === "vote").length;
 
   // Close menu on outside click
   useEffect(() => {
@@ -212,7 +212,7 @@ export default function Navbar() {
                       initial={{ opacity: 0, scale: 0 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0 }}
-                      transition={{ 
+                      transition={{
                         type: "spring",
                         stiffness: 500,
                         damping: 15,
@@ -222,7 +222,7 @@ export default function Navbar() {
                     >
                       {/* Triangle Pointer */}
                       <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-[#ef4444] mr-3" />
-                      
+
                       {/* Bubble Content */}
                       <div className="bg-[#ef4444] rounded-2xl py-2 px-4 flex items-center shadow-2xl gap-4 text-white">
                         {repliesCount > 0 && (
@@ -259,11 +259,11 @@ export default function Navbar() {
                 </Link>
 
                 <div className="flex items-center gap-2 pl-2 relative"
-                     ref={menuRef}>
-                  
+                  ref={menuRef}>
+
                   {/* Avatar Section */}
                   <div className="cursor-pointer relative group"
-                       onClick={() => setMenuOpen(!menuOpen)}>
+                    onClick={() => setMenuOpen(!menuOpen)}>
                     {/* Mobile: smaller avatar */}
                     <UserAvatar
                       user={user}
@@ -277,14 +277,14 @@ export default function Navbar() {
                       className="hidden sm:flex border border-border-light dark:border-border-dark"
                     />
                     {/* Small arrow indicator */}
-                    <motion.div 
+                    <motion.div
                       initial={{ rotate: 0 }}
                       animate={{ rotate: menuOpen ? 180 : 0 }}
                       transition={{ duration: 0.2 }}
                       className="absolute -right-1 -bottom-1 bg-white dark:bg-card-dark rounded-full shadow-sm border border-border-light dark:border-border-dark p-0.5 flex items-center justify-center w-4 h-4"
                     >
                       <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-primary-500">
-                        <path d="m6 9 6 6 6-6"/>
+                        <path d="m6 9 6 6 6-6" />
                       </svg>
                     </motion.div>
                   </div>
@@ -302,6 +302,14 @@ export default function Navbar() {
                                    overflow-hidden z-[100]"
                       >
                         <div className="p-2 space-y-1">
+                          {/* Username header */}
+                          <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            <AtSign size={16} className="text-primary-400" />
+                            {user.username}
+                          </div>
+
+                          <div className="border-t border-border-light dark:border-border-dark -mx-2 my-1" />
+
                           {/* Avatar Photo */}
                           <button
                             onClick={() => fileRef.current?.click()}
@@ -311,7 +319,7 @@ export default function Navbar() {
                             <Camera size={16} className="text-primary-400" />
                             {user.avatar_url ? "Update Photo" : "Add Photo"}
                           </button>
-                          
+
                           {user.avatar_url && (
                             <button
                               onClick={handleDeleteAvatar}
@@ -350,7 +358,7 @@ export default function Navbar() {
                               {lang.toUpperCase()}
                             </span>
                           </button>
-                          
+
                           <button
                             onClick={handleLogout}
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm 
@@ -383,7 +391,7 @@ export default function Navbar() {
               </>
             ) : (
               <div className="flex items-center gap-1">
-                <Link to="/login"    className="btn-ghost text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 flex-shrink-0">{t("login")}</Link>
+                <Link to="/login" className="btn-ghost text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 flex-shrink-0">{t("login")}</Link>
                 <Link to="/register" className="btn-primary text-xs sm:text-sm px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex-shrink-0">{t("register")}</Link>
               </div>
             )}
