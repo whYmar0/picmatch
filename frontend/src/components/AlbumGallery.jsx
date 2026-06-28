@@ -79,40 +79,108 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
   );
 }
 
-// ─── Thumbnail Strip ────────────────────────────────────────────────────────
+// ─── Thumbnail Strip — center-marker scroll selector ──────────────────────
+const THUMB_SIZE = 40;
+const THUMB_GAP = 8;
+
 function ThumbStrip({ photos, currentIdx, onSelect }) {
   const stripRef = useRef(null);
+  const thumbRefs = useRef([]);
+  const selectingRef = useRef(false); // guard: prevent feedback during programmatic scroll
+  const selectTimer = useRef(null);
 
-  useEffect(() => {
-    if (!stripRef.current) return;
+  // Scroll to center a given index
+  const centerThumb = useCallback((idx, smooth = true) => {
     const strip = stripRef.current;
-    const thumbWidth = 44;
-    const gap = 8;
-    const containerWidth = strip.clientWidth;
-    const activeCenter = currentIdx * (thumbWidth + gap) + thumbWidth / 2;
-    const scrollTo = activeCenter - containerWidth / 2;
-    strip.scrollTo({ left: Math.max(0, scrollTo), behavior: "smooth" });
-  }, [currentIdx]);
+    const el = thumbRefs.current[idx];
+    if (!strip || !el) return;
+    selectingRef.current = true;
+    clearTimeout(selectTimer.current);
+    const target = el.offsetLeft - strip.clientWidth / 2 + el.offsetWidth / 2;
+    const max = strip.scrollWidth - strip.clientWidth;
+    strip.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: smooth ? "smooth" : "instant" });
+    selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 350);
+  }, []);
+
+  // When currentIdx changes externally, center that thumb
+  useEffect(() => {
+    centerThumb(currentIdx);
+  }, [currentIdx, centerThumb]);
+
+  // Scroll listener — find thumb closest to center marker
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const onScroll = () => {
+      if (selectingRef.current) return;
+      clearTimeout(selectTimer.current);
+      selectTimer.current = setTimeout(() => {
+        const mid = strip.scrollLeft + strip.clientWidth / 2;
+        let best = 0, bestDist = Infinity;
+        for (let i = 0; i < photos.length; i++) {
+          const el = thumbRefs.current[i];
+          if (!el) continue;
+          const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid);
+          if (d < bestDist) { bestDist = d; best = i; }
+        }
+        onSelect(best);
+      }, 50);
+    };
+    strip.addEventListener("scroll", onScroll, { passive: true });
+    return () => strip.removeEventListener("scroll", onScroll);
+  }, [photos.length, onSelect]);
+
+  // Cleanup
+  useEffect(() => () => { clearTimeout(selectTimer.current); }, []);
+
+  // Edge padding so first/last can reach center
+  const pad = `calc(50vw - ${THUMB_SIZE / 2}px)`;
 
   return (
-    <div
-      ref={stripRef}
-      className="flex items-center gap-2 overflow-x-auto px-4 py-2"
-      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-    >
-      <div className="flex gap-2 items-center min-w-max mx-auto">
-        {photos.map((photo, i) => (
-          <button
-            key={photo.id}
-            onClick={() => onSelect(i)}
-            className={`flex-shrink-0 w-11 h-11 rounded-2xl overflow-hidden transition-all duration-150
-                       ${i === currentIdx
-                         ? "ring-2 ring-white ring-offset-1 ring-offset-black scale-115"
-                         : "opacity-50 hover:opacity-80"}`}
-          >
-            <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
-          </button>
-        ))}
+    <div className="relative w-full">
+      {/* Center marker — accent border visible in the middle */}
+      <div
+        className="absolute z-10 pointer-events-none"
+        style={{
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          width: THUMB_SIZE + 4,
+          height: THUMB_SIZE + 4,
+          border: "2px solid rgba(153,102,204,0.6)",
+          borderRadius: 12,
+          boxShadow: "0 0 8px rgba(153,102,204,0.3)",
+        }}
+      />
+      {/* Scrollable strip */}
+      <div
+        ref={stripRef}
+        className="w-full overflow-x-auto relative"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
+        <div
+          className="flex items-center w-max"
+          style={{ gap: THUMB_GAP, paddingLeft: pad, paddingRight: pad }}
+        >
+          {photos.map((photo, i) => {
+            thumbRefs.current[i] = undefined;
+            const active = i === currentIdx;
+            return (
+              <button
+                key={photo.id}
+                ref={(el) => { thumbRefs.current[i] = el; }}
+                onClick={() => { selectingRef.current = true; clearTimeout(selectTimer.current); onSelect(i); selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 350); }}
+                style={{ width: THUMB_SIZE, height: THUMB_SIZE, flexShrink: 0 }}
+                className={`btn-thumb overflow-hidden transition-all duration-150 outline-none
+                           ${active
+                             ? "ring-[2px] ring-primary-400 ring-offset-1 ring-offset-black scale-110 z-10"
+                             : "opacity-40 hover:opacity-70"}`}
+              >
+                <img src={photo.url} alt="" className="w-full h-full object-cover select-none pointer-events-none" loading="lazy" draggable={false} />
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
