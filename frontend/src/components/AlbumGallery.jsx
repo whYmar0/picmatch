@@ -99,7 +99,7 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
     const target = el.offsetLeft - strip.clientWidth / 2 + el.offsetWidth / 2;
     const max = strip.scrollWidth - strip.clientWidth;
     strip.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: smooth ? "smooth" : "instant" });
-    selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 350);
+    selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 100);
   }, []);
 
   // When currentIdx changes externally, center that thumb
@@ -107,24 +107,25 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
     centerThumb(currentIdx);
   }, [currentIdx, centerThumb]);
 
-  // Scroll listener — find thumb closest to center marker
+  // Scroll listener — find thumb closest to center, switch photo instantly
   useEffect(() => {
     const strip = stripRef.current;
     if (!strip) return;
+    const lastIdx = { current: -1 };
     const onScroll = () => {
       if (selectingRef.current) return;
-      clearTimeout(selectTimer.current);
-      selectTimer.current = setTimeout(() => {
-        const mid = strip.scrollLeft + strip.clientWidth / 2;
-        let best = 0, bestDist = Infinity;
-        for (let i = 0; i < photos.length; i++) {
-          const el = thumbRefs.current[i];
-          if (!el) continue;
-          const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid);
-          if (d < bestDist) { bestDist = d; best = i; }
-        }
+      const mid = strip.scrollLeft + strip.clientWidth / 2;
+      let best = 0, bestDist = Infinity;
+      for (let i = 0; i < photos.length; i++) {
+        const el = thumbRefs.current[i];
+        if (!el) continue;
+        const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid);
+        if (d < bestDist) { bestDist = d; best = i; }
+      }
+      if (best !== lastIdx.current) {
+        lastIdx.current = best;
         onSelect(best);
-      }, 50);
+      }
     };
     strip.addEventListener("scroll", onScroll, { passive: true });
     return () => strip.removeEventListener("scroll", onScroll);
@@ -137,22 +138,7 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
   const pad = `calc(50vw - ${THUMB_SIZE / 2}px)`;
 
   return (
-    <div className="relative w-full">
-      {/* Center marker — accent border visible in the middle */}
-      <div
-        className="absolute z-10 pointer-events-none"
-        style={{
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          width: THUMB_SIZE + 4,
-          height: THUMB_SIZE + 4,
-          border: "2px solid rgba(153,102,204,0.6)",
-          borderRadius: 12,
-          boxShadow: "0 0 8px rgba(153,102,204,0.3)",
-        }}
-      />
-      {/* Scrollable strip */}
+    <div className="relative w-full">        {/* Scrollable strip */}
       <div
         ref={stripRef}
         className="w-full overflow-x-auto relative"
@@ -169,11 +155,11 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
               <button
                 key={photo.id}
                 ref={(el) => { thumbRefs.current[i] = el; }}
-                onClick={() => { selectingRef.current = true; clearTimeout(selectTimer.current); onSelect(i); selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 350); }}
+                onClick={() => { selectingRef.current = true; clearTimeout(selectTimer.current); onSelect(i); selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 100); }}
                 style={{ width: THUMB_SIZE, height: THUMB_SIZE, flexShrink: 0 }}
                 className={`btn-thumb overflow-hidden transition-all duration-150 outline-none
                            ${active
-                             ? "ring-[2px] ring-primary-400 ring-offset-1 ring-offset-black scale-110 z-10"
+                             ? "ring-[2px] ring-primary-400 ring-offset-1 ring-offset-black scale-[1.15] z-10"
                              : "opacity-40 hover:opacity-70"}`}
               >
                 <img src={photo.url} alt="" className="w-full h-full object-cover select-none pointer-events-none" loading="lazy" draggable={false} />
@@ -440,13 +426,16 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
   // ── Carousel refs ────────────────────────────────────────────────────────
   const carouselRef = useRef(null);
-  const programmaticScroll = useRef(false);
-  const programmaticTimer = useRef(null);
-  const scrollTimer = useRef(null);
+  const currentIdxRef = useRef(currentIdx);
+  const carouselStartIdx = useRef(0);
+  const carouselStartScrollLeft = useRef(0);
 
   // ── Axis-locking touch refs ──────────────────────────────────────────────
   const touchStart = useRef({ x: 0, y: 0 });
   const gestureAxis = useRef(null); // "x" | "y" | null
+
+  // Keep currentIdx in a ref for touch handlers (stable deps)
+  useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
 
   // ── Motion values ────────────────────────────────────────────────────────
   const defaultOffset = vh * 0.35;
@@ -544,39 +533,12 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       .catch(() => setCommentsCount(0));
   }, [currentPhoto?.id]);
 
-  // ── Carousel scroll tracking ─────────────────────────────────────────────
-  const handleCarouselScroll = useCallback(() => {
-    if (programmaticScroll.current) return;
-    clearTimeout(scrollTimer.current);
-    scrollTimer.current = setTimeout(() => {
-      const el = carouselRef.current;
-      if (!el) return;
-      const idx = Math.round(el.scrollLeft / el.clientWidth);
-      if (idx !== currentIdx && idx >= 0 && idx < photos.length) {
-        setCurrentIdx(idx);
-      }
-    }, 30);
-  }, [currentIdx, photos.length]);
-
-  // Attach scroll listener
-  useEffect(() => {
-    const el = carouselRef.current;
-    if (!el) return;
-    el.addEventListener("scroll", handleCarouselScroll, { passive: true });
-    return () => el.removeEventListener("scroll", handleCarouselScroll);
-  }, [handleCarouselScroll]);
-
   // ── Programmatic navigation (thumbnail strip, stats jump, keyboard) ──────
-  const goTo = useCallback((idx) => {
+  const goTo = useCallback((idx, instant = false) => {
     setCurrentIdx(idx);
     const el = carouselRef.current;
     if (el) {
-      programmaticScroll.current = true;
-      clearTimeout(programmaticTimer.current);
-      el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
-      programmaticTimer.current = setTimeout(() => {
-        programmaticScroll.current = false;
-      }, 300);
+      el.scrollTo({ left: idx * el.clientWidth, behavior: instant ? "instant" : "smooth" });
     }
     // Reset dismiss gesture
     dragAnimRef.current?.stop();
@@ -613,6 +575,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     const touch = e.touches[0];
     touchStart.current = { x: touch.clientX, y: touch.clientY };
     gestureAxis.current = null;
+    carouselStartIdx.current = currentIdxRef.current;
+    carouselStartScrollLeft.current = carouselRef.current?.scrollLeft || 0;
   }, []);
 
   const onTouchMove = useCallback((e) => {
@@ -629,32 +593,65 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
     // Vertical gesture: prevent default (block native scroll), update dragY
     if (gestureAxis.current === "y") {
-      e.preventDefault(); // defensive — touch-action: pan-x should suffice
-      // 1.5x sensitivity for Y movement
-      dragY.set(dy * 1.5);
-    }
-    // Horizontal: let native scroll-snap handle it (do nothing here)
-  }, [dragY]);
-
-  const onTouchEnd = useCallback(() => {
-    if (gestureAxis.current !== "y") return;
-
-    const currentDrag = dragY.get();
-    // Threshold: ~100px effective (dragY has 1.5x multiplier, so raw ~67px)
-    if (currentDrag > 150) {
-      onClose();
+      e.preventDefault();
+      // 1:1 sensitivity — photo follows finger exactly
+      dragY.set(dy);
       return;
     }
 
-    // Spring back to 0
-    dragAnimRef.current = animate(dragY, 0, {
-      type: "spring",
-      stiffness: 400,
-      damping: 30,
-    });
+    // Horizontal gesture: manually drive scrollLeft for 1:1 tracking (no momentum)
+    if (gestureAxis.current === "x") {
+      e.preventDefault();
+      const el = carouselRef.current;
+      if (el) {
+        el.scrollLeft = carouselStartScrollLeft.current - dx;
+      }
+    }
+  }, [dragY]);
 
+  const onTouchEnd = useCallback((e) => {
+    const touch = e.changedTouches?.[0];
+    if (!touch) { gestureAxis.current = null; return; }
+    const finalDx = touch.clientX - touchStart.current.x;
+
+    if (gestureAxis.current === "y") {
+      const currentDrag = dragY.get();
+      // 1:1 sensitivity → threshold 100px
+      if (currentDrag > 100) {
+        onClose();
+        gestureAxis.current = null;
+        return;
+      }
+      dragAnimRef.current = animate(dragY, 0, {
+        type: "spring",
+        stiffness: 400,
+        damping: 30,
+      });
+      gestureAxis.current = null;
+      return;
+    }
+
+    if (gestureAxis.current === "x") {
+      const threshold = (typeof window !== "undefined" ? window.innerWidth : 400) * 0.2;
+      if (finalDx < -threshold && carouselStartIdx.current < photos.length - 1) {
+        goTo(carouselStartIdx.current + 1, true);
+      } else if (finalDx > threshold && carouselStartIdx.current > 0) {
+        goTo(carouselStartIdx.current - 1, true);
+      } else {
+        goTo(carouselStartIdx.current, true);
+      }
+      gestureAxis.current = null;
+    }
+  }, [dragY, onClose, goTo, photos.length]);
+
+  const handleThumbSelect = useCallback((idx) => goTo(idx, true), [goTo]);
+
+  const onTouchCancel = useCallback(() => {
+    if (gestureAxis.current === "x") {
+      goTo(carouselStartIdx.current, true); // snap back on cancel
+    }
     gestureAxis.current = null;
-  }, [dragY, onClose]);
+  }, [goTo]);
 
   // ── Share handler ────────────────────────────────────────────────────────
   const handleShare = async () => {
@@ -726,8 +723,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
   // ── Cleanup on unmount ───────────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      clearTimeout(programmaticTimer.current);
-      clearTimeout(scrollTimer.current);
       dragAnimRef.current?.stop();
     };
   }, []);
@@ -756,23 +751,21 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         {/* ── Carousel — plain div for CSS scroll-snap (NO framer transforms) ── */}
         <div
           ref={carouselRef}
-          className="absolute inset-0 flex overflow-x-auto"
+          className="absolute inset-0 flex overflow-hidden"
           style={{
-            scrollSnapType: "x mandatory",
-            WebkitOverflowScrolling: "touch",
-            touchAction: "pan-x",
+            touchAction: "none",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
           }}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
+          onTouchCancel={onTouchCancel}
         >
           {photos.map((photo, i) => (
             <div
               key={photo.id}
               className="flex-shrink-0 w-full h-full flex items-center justify-center"
-              style={{ scrollSnapAlign: "start" }}
             >
               {/* Only render nearby images for performance */}
               {Math.abs(i - currentIdx) <= 1 && photo?.url ? (
@@ -797,7 +790,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         style={{ opacity: controlsOpacity, pointerEvents: controlsPointerEvents }}
       >
         {photos.length > 1 && (
-          <ThumbStrip photos={photos} currentIdx={currentIdx} onSelect={goTo} />
+          <ThumbStrip photos={photos} currentIdx={currentIdx} onSelect={handleThumbSelect} />
         )}
 
         {!sheetExpanded && (

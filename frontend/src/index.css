@@ -75,6 +75,12 @@ button,
   border-radius: 1rem !important;
 }
 
+.btn-thumb {
+  border-radius: 12px !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
 .comment-input {
   border-radius: 1rem !important;
 }
