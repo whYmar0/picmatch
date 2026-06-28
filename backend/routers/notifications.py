@@ -9,6 +9,7 @@ from database import get_db
 from models import User, Notification, Photo
 from schemas import NotificationOut, MessageResponse
 from auth import get_current_user
+from cloudinary_utils import is_cloudinary_configured as _cloudinary_enabled, get_image_url as _cloudinary_url
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -83,9 +84,11 @@ async def get_notifications(
         aid = _s(n.album_id) if n.album_id else None
 
         if pid and pid in photo_map:
-            thumb_url = f"{BASE_URL}/uploads/{photo_map[pid]}"
+            stored = photo_map[pid]
+            thumb_url = _cloudinary_url(stored) if _cloudinary_enabled() else f"{BASE_URL}/uploads/{stored}"
         elif aid and aid in album_first_photo_map:
-            thumb_url = f"{BASE_URL}/uploads/{album_first_photo_map[aid][0]}"
+            stored = album_first_photo_map[aid][0]
+            thumb_url = _cloudinary_url(stored) if _cloudinary_enabled() else f"{BASE_URL}/uploads/{stored}"
 
         n.thumbnail_url = thumb_url
         out_list.append(n)

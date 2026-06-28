@@ -28,6 +28,11 @@ from schemas import (
     UserRegister,
     VerifyEmailRequest,
 )
+from cloudinary_utils import (
+    is_cloudinary_configured as _cloudinary_enabled,
+    upload_image as _cloudinary_upload,
+    delete_image as _cloudinary_delete,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -242,18 +247,26 @@ async def upload_avatar(
     except Exception:
         pass
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    stored = f"avatar_{uuid.uuid4()}.jpg"
-    with open(UPLOAD_DIR / stored, "wb") as f:
-        f.write(content)
+    stored = f"picmatch/avatar_{uuid.uuid4()}"
 
-    if current_user.avatar_url and "/uploads/" in current_user.avatar_url:
-        old_name = current_user.avatar_url.split("/uploads/")[-1]
-        old_path = UPLOAD_DIR / old_name
-        if old_path.exists():
-            old_path.unlink()
-
-    current_user.avatar_url = f"{BASE_URL}/uploads/{stored}"
+    if _cloudinary_enabled():
+        url = _cloudinary_upload(content, public_id=stored)
+        # Delete old avatar from Cloudinary
+        if current_user.avatar_url:
+            _cloudinary_delete(current_user.avatar_url)
+        current_user.avatar_url = url
+    else:
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        local_name = f"{stored.replace('picmatch/', '')}.jpg"
+        with open(UPLOAD_DIR / local_name, "wb") as f:
+            f.write(content)
+        # Delete old avatar from local
+        if current_user.avatar_url and "/uploads/" in current_user.avatar_url:
+            old_name = current_user.avatar_url.split("/uploads/")[-1]
+            old_path = UPLOAD_DIR / old_name
+            if old_path.exists():
+                old_path.unlink()
+        current_user.avatar_url = f"{BASE_URL}/uploads/{local_name}"
     await _commit_or_conflict(db)
     await db.refresh(current_user)
     return UserOut.model_validate(current_user)
@@ -264,11 +277,14 @@ async def delete_avatar(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user.avatar_url and "/uploads/" in current_user.avatar_url:
-        old_name = current_user.avatar_url.split("/uploads/")[-1]
-        old_path = UPLOAD_DIR / old_name
-        if old_path.is_file():
-            old_path.unlink()
+    if current_user.avatar_url:
+        if _cloudinary_enabled():
+            _cloudinary_delete(current_user.avatar_url)
+        elif "/uploads/" in current_user.avatar_url:
+            old_name = current_user.avatar_url.split("/uploads/")[-1]
+            old_path = UPLOAD_DIR / old_name
+            if old_path.is_file():
+                old_path.unlink()
 
     current_user.avatar_url = None
     await _commit_or_conflict(db)

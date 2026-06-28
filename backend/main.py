@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from database import init_db
 from routers import albums, auth_router, comments, notifications, shared_access, votes
+from cloudinary_utils import setup_cloudinary, is_cloudinary_configured as cloudinary_enabled
 
 BASE_DIR = Path(__file__).resolve().parent
 raw_upload_dir = os.getenv("UPLOAD_DIR", "./uploads")
@@ -32,12 +33,13 @@ def _parse_origins(raw: str | None) -> list[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    if os.getenv("ENVIRONMENT", "").lower() == "production" and not Path(
-        os.getenv("UPLOAD_DIR", "")
-    ).is_absolute():
+    setup_cloudinary()
+    if cloudinary_enabled():
+        logger.info("Cloudinary configured — images will be uploaded to cloud storage.")
+    elif os.getenv("ENVIRONMENT", "").lower() == "production":
         logger.warning(
-            "UPLOAD_DIR is not persistent. On Render, mount a disk at /var/data "
-            "and set UPLOAD_DIR=/var/data/uploads."
+            "Cloudinary not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, "
+            "and CLOUDINARY_API_SECRET for persistent image storage on Render."
         )
     logger.info("Database ready; uploads directory: %s", UPLOAD_DIR)
     yield

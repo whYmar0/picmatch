@@ -33,6 +33,12 @@ from schemas import (
     VoterReaction, VoterSummary,
 )
 from auth import get_current_user
+from cloudinary_utils import (
+    is_cloudinary_configured as _cloudinary_enabled,
+    upload_image as _cloudinary_upload,
+    delete_image as _cloudinary_delete,
+    get_image_url as _cloudinary_url,
+)
 
 router = APIRouter(prefix="/albums", tags=["Albums"])
 
@@ -76,6 +82,8 @@ def _s(v) -> str:
     return str(v)
 
 def photo_url(stored: str) -> str:
+    if _cloudinary_enabled():
+        return _cloudinary_url(stored)
     return f"{BASE_URL}/uploads/{stored}"
 
 def photo_to_out(p: Photo) -> PhotoOut:
@@ -128,10 +136,15 @@ async def create_album(
         
         # Compress image to optimized JPEG with max 1200px size
         content = compress_image(content)
-        stored = f"{uuid.uuid4()}.jpg"
-        
-        with open(UPLOAD_DIR / stored, "wb") as out:
-            out.write(content)
+
+        if _cloudinary_enabled():
+            stored = f"picmatch/{uuid.uuid4()}"
+            _cloudinary_upload(content, public_id=stored)
+        else:
+            stored = f"{uuid.uuid4()}.jpg"
+            with open(UPLOAD_DIR / stored, "wb") as out:
+                out.write(content)
+
         db.add(Photo(album_id=_s(album.id), filename=f.filename or stored,
                       stored_filename=stored, order=idx))
 
@@ -390,9 +403,12 @@ async def delete_album(
         raise HTTPException(404, detail="Album not found or access denied")
 
     for photo in album.photos:
-        p = UPLOAD_DIR / photo.stored_filename
-        if p.exists():
-            p.unlink()
+        if _cloudinary_enabled():
+            _cloudinary_delete(photo.stored_filename)
+        else:
+            p = UPLOAD_DIR / photo.stored_filename
+            if p.exists():
+                p.unlink()
     await db.delete(album)
     await db.commit()
     return MessageResponse(message="Album deleted successfully")
