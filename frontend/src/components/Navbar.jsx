@@ -183,7 +183,7 @@ export default function Navbar() {
               <img src="/pickmatch_logo.png" alt="Pickmatch Logo" className="h-8 w-auto object-contain" />
             </motion.div>
             <span className="font-display font-bold text-xl text-gray-900 dark:text-white
-                             hover:text-primary-500 transition-colors hidden min-[400px]:inline">
+                             hover:text-primary-500 transition-colors inline">
               {t("appName")}
             </span>
           </Link>

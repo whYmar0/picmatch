@@ -1,6 +1,9 @@
 """
 cloudinary_utils.py — Shared Cloudinary helpers
 
+All cloudinary SDK imports are lazy (inside each function) so the module
+loads safely even when the package is not installed locally.
+
 Usage:
     CLOUDINARY_ENABLED = is_cloudinary_configured()
     setup_cloudinary()
@@ -9,9 +12,6 @@ Usage:
     delete_image("picmatch/uuid")
 """
 import os
-import cloudinary
-import cloudinary.uploader
-import cloudinary.utils
 
 CLOUDINARY_ENABLED = bool(os.getenv("CLOUDINARY_CLOUD_NAME"))
 
@@ -24,6 +24,7 @@ def setup_cloudinary() -> None:
     """Configure Cloudinary SDK from environment variables."""
     if not CLOUDINARY_ENABLED:
         return
+    import cloudinary
     cloudinary.config(
         cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
         api_key=os.getenv("CLOUDINARY_API_KEY"),
@@ -43,6 +44,7 @@ def upload_image(image_bytes: bytes, public_id: str) -> str:
     Returns:
         The secure URL of the uploaded image.
     """
+    import cloudinary.uploader
     response = cloudinary.uploader.upload(
         image_bytes,
         public_id=public_id,
@@ -62,6 +64,7 @@ def get_image_url(public_id: str) -> str:
     Returns:
         Full HTTPS URL to the image.
     """
+    import cloudinary.utils
     url, _ = cloudinary.utils.cloudinary_url(public_id, secure=True)
     return url
 
@@ -75,6 +78,7 @@ def delete_image(public_id_or_url: str) -> None:
     """
     pid = _resolve_public_id(public_id_or_url)
     try:
+        import cloudinary.uploader
         cloudinary.uploader.destroy(pid, resource_type="image")
     except Exception:
         pass

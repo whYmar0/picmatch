@@ -17,14 +17,15 @@ function SkeletonBox({ className = "" }) {
 
 export function AlbumCardSkeleton() {
   return (
-    <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card overflow-hidden">
-      <SkeletonBox className="w-full h-48 rounded-none" />
-      <div className="p-4 space-y-3">
-        <SkeletonBox className="h-5 w-2/3" />
-        <SkeletonBox className="h-3 w-1/3" />
-        <div className="flex gap-2 pt-2">
-          <SkeletonBox className="h-9 flex-1" />
-          <SkeletonBox className="h-9 w-9" />
+    <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card overflow-hidden flex flex-col w-full min-w-0">
+      <SkeletonBox className="w-full aspect-[4/3] rounded-none" />
+      <div className="flex flex-col gap-2 p-3.5">
+        <SkeletonBox className="h-4 w-2/3" />
+        <SkeletonBox className="h-2.5 w-1/3" />
+        <div className="flex items-center justify-center gap-3 pt-1">
+          <SkeletonBox className="h-9 w-9 rounded-xl" />
+          <SkeletonBox className="h-9 w-9 rounded-xl" />
+          <SkeletonBox className="h-9 w-9 rounded-xl" />
         </div>
       </div>
     </div>
