@@ -1,26 +1,30 @@
 /**
- * AlbumGallery.jsx — v7 Full-screen photo viewer
+ * AlbumGallery.jsx — v8 Full-screen photo viewer
  *
- * CHANGES v6 → v7:
- *  - Stacked BottomSheet architecture:
- *      Primary sheet (statistics/comments) has hideHeader=true so no X/title.
- *      Tapping Sort or Filter inside the primary sheet opens an INDEPENDENT
- *      secondary sheet at z-60, which slides up over the primary without
- *      capturing its drag state.
- *      Closing the secondary never touches the primary's drag position or
- *      its visual state.
- *  - Sort and Filter buttons now mirror the AnalyticsPage toolbar styling.
- *  - Sort/filter logic (sortKey, selectedVoters) lifted to AlbumGallery so
- *    the secondary sheets can mutate them directly while the primary sheet
- *    observes the same data.
- *  - Primary sheet's Escape handler skips when a secondary is open, so
- *    pressing Escape dismisses only the topmost layer.
+ * CHANGES v7 → v8:
+ *  - PillBar redesigned: no border, larger monochrome white/gray icons (size 22),
+ *    bigger padding (px-8 py-4), ChevronUp swipe-up affordance.
+ *  - Replaced Framer Motion single-photo drag with CSS scroll-snap carousel
+ *    for true filmstrip-style horizontal scrolling (photos follow finger 1:1).
+ *  - Axis-locked native touch gestures: horizontal → carousel scroll,
+ *    vertical → dismiss with 1.5x Y sensitivity and smooth spring-back.
+ *  - More aggressive photo shrink when BottomSheet opens: scale 1→0.5,
+ *    translateY -30vh. Combined sheet-driven + dismiss-driven transforms
+ *    via useTransform array merge.
+ *  - Photo pointer events disabled when BottomSheet covers the photo.
+ *  - Critical: transforms (scale, translateY) on wrapper motion.div,
+ *    NOT on scroll-snap container. All useTransform at top level.
+ *
+ * CHANGES v6 → v7 (preserved):
+ *  - Stacked BottomSheet architecture with independent secondary sheets.
+ *  - Sort/Filter buttons mirror AnalyticsPage toolbar styling.
+ *  - Primary sheet's Escape handler skips when secondary is open.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
+import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import {
   MessageCircle, BarChart2, SlidersHorizontal, Filter, Share2, Check,
-  List, LayoutGrid,
+  List, LayoutGrid, ChevronUp,
 } from "lucide-react";
 import { albumsApi, commentsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
@@ -29,7 +33,7 @@ import PhotoComments from "./PhotoComments";
 import FilledHeart from "./FilledHeart";
 import BrokenHeart from "./BrokenHeart";
 
-// ─── PillBar (unchanged) ────────────────────────────────────────────────────
+// ─── PillBar v8 — no border, larger monochrome icons, ChevronUp affordance ──
 function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp }) {
   const dragStartY = useRef(0);
 
@@ -45,40 +49,45 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
   };
 
   return (
-    <motion.button
-      onClick={onExpand}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      whileTap={{ scale: 0.96 }}
-      className="flex items-center gap-5 px-6 py-3 rounded-full
-                 bg-white/10 backdrop-blur-xl
-                 text-white shadow-lg cursor-pointer"
-    >
-      <span className="flex items-center gap-2 text-sm font-semibold">
-        <FilledHeart size={16} className="text-green-400" />
-        {likeCount}
-      </span>
-      <span className="flex items-center gap-2 text-sm font-semibold">
-        <BrokenHeart size={16} className="text-red-400" />
-        {dislikeCount}
-      </span>
-      <span className="flex items-center gap-2 text-sm font-semibold">
-        <MessageCircle size={16} className="text-blue-400" />
-        {commentCount}
-      </span>
-    </motion.button>
+    <div className="flex flex-col items-center gap-1.5">
+      {/* Swipe-up affordance chevron */}
+      <ChevronUp size={18} className="text-white/40" />
+
+      <motion.button
+        onClick={onExpand}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        whileTap={{ scale: 0.96 }}
+        className="flex items-center gap-8 px-8 py-4 rounded-full
+                   bg-white/10 backdrop-blur-xl
+                   text-white shadow-lg cursor-pointer"
+      >
+        <span className="flex items-center gap-2.5 text-base font-semibold">
+          <FilledHeart size={22} className={likeCount > 0 ? "text-white" : "text-gray-400"} />
+          {likeCount}
+        </span>
+        <span className="flex items-center gap-2.5 text-base font-semibold">
+          <BrokenHeart size={22} className={dislikeCount > 0 ? "text-white" : "text-gray-400"} />
+          {dislikeCount}
+        </span>
+        <span className="flex items-center gap-2.5 text-base font-semibold">
+          <MessageCircle size={22} className={commentCount > 0 ? "text-white" : "text-gray-400"} />
+          {commentCount}
+        </span>
+      </motion.button>
+    </div>
   );
 }
 
-// ─── Thumbnail Strip (unchanged) ───────────────────────────────────────────
+// ─── Thumbnail Strip ────────────────────────────────────────────────────────
 function ThumbStrip({ photos, currentIdx, onSelect }) {
   const stripRef = useRef(null);
 
   useEffect(() => {
     if (!stripRef.current) return;
     const strip = stripRef.current;
-    const thumbWidth = 44; // w-11 = 44px
-    const gap = 8; // gap-2 = 8px
+    const thumbWidth = 44;
+    const gap = 8;
     const containerWidth = strip.clientWidth;
     const activeCenter = currentIdx * (thumbWidth + gap) + thumbWidth / 2;
     const scrollTo = activeCenter - containerWidth / 2;
@@ -110,17 +119,6 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
 }
 
 // ─── Statistics Tab content (header + photo list) ───────────────────────────
-//
-// Renders the "Full Album Statistics" view inside the primary BottomSheet.
-// Buttons here IDENTICALLY mirror the AnalyticsPage toolbar styling
-// (AlbumSummary.jsx):
-//   - Sort button: SlidersHorizontal + t("sort")
-//   - Filter button: Filter + t("filterBy") with active-count badge
-//   - Share button: w-10 h-10 rounded-2xl square icon
-//
-// Tapping Sort / Filter triggers the secondary BottomSheets — state and
-// handlers are owned by the parent (AlbumGallery) so the secondary sheet
-// can mutate the same data this tab observes.
 function StatisticsTab({
   analytics,
   photos,
@@ -222,14 +220,6 @@ function StatisticsTab({
 }
 
 // ─── Secondary SortSheet (independent layered sheet) ─────────────────────────
-//
-// Rendered as a sibling of the primary sheet at z-60. When the user taps
-// the Sort button inside the primary sheet, this slides up over the
-// primary. Closing it ONLY closes this sheet — the primary remains at its
-// current drag position and is fully interactive.
-//
-// Mirrors AlbumSummary's sort sheet exactly (list/grid toggle + sort options)
-// so the appearance and behavior match the AnalyticsPage.
 function GallerySortSheet({ open, onClose, sortKey, setSortKey }) {
   const { t } = useLang();
   const [viewMode, setViewMode] = useState("list");
@@ -360,6 +350,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
   const { t } = useLang();
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
 
+  // ── State ────────────────────────────────────────────────────────────────
   const [analytics, setAnalytics] = useState(null);
   const [currentIdx, setCurrentIdx] = useState(() => {
     if (startPhotoId && album.photos?.length) {
@@ -379,20 +370,46 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
   const [pendingVoters, setPendingVoters] = useState(new Set());
   const [shareDone, setShareDone] = useState(false);
 
-  // Drag motion values
-  const dragX = useMotionValue(0);
-  const dragY = useMotionValue(0);
-  const photoControls = useAnimation();
+  // ── Carousel refs ────────────────────────────────────────────────────────
+  const carouselRef = useRef(null);
+  const programmaticScroll = useRef(false);
+  const programmaticTimer = useRef(null);
+  const scrollTimer = useRef(null);
 
-  // BottomSheet shared drag position for photo shrink (PRIMARY sheet only)
-  const sheetY = useMotionValue(0);
+  // ── Axis-locking touch refs ──────────────────────────────────────────────
+  const touchStart = useRef({ x: 0, y: 0 });
+  const gestureAxis = useRef(null); // "x" | "y" | null
 
-  // Derived values for photo transform during sheet drag
-  const photoScale = useTransform(sheetY, [0, vh * 0.4], [1, 0.7]);
-  const photoTranslateY = useTransform(sheetY, [0, vh * 0.4], [0, -vh * 0.12]);
+  // ── Motion values ────────────────────────────────────────────────────────
+  const defaultOffset = vh * 0.35;
+  const dragY = useMotionValue(0);       // vertical dismiss gesture offset
+  const dragAnimRef = useRef(null);      // in-flight spring-back animation
 
+  // BottomSheet shared drag position for photo shrink
+  // Initialize to defaultOffset so controls are visible before sheet opens
+  const sheetY = useMotionValue(defaultOffset);
+  const photoScale = useTransform(sheetY, [0, defaultOffset], [0.5, 1]);
+
+  // Photo translateY from sheet: sheetY=0 → -30vh, sheetY=peek → 0
+  const photoTranslateY = useTransform(sheetY, [0, defaultOffset], [-vh * 0.3, 0]);
+
+  // Combined translateY = sheet-driven + dismiss-driven
+  const combinedTranslateY = useTransform(
+    [photoTranslateY, dragY],
+    ([sheetVal, dragVal]) => sheetVal + dragVal
+  );
+
+  // Background opacity: fades during vertical dismiss gesture
   const bgOpacity = useTransform(dragY, [0, vh * 0.5], [1, 0]);
 
+  // Bottom controls (ThumbStrip + PillBar) fade as sheet opens
+  const controlsOpacity = useTransform(sheetY, [0, defaultOffset], [0, 1]);
+  const controlsPointerEvents = useTransform(
+    sheetY,
+    (v) => (v < defaultOffset * 0.3 ? "none" : "auto")
+  );
+
+  // ── Data fetching ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!album?.id) return;
     albumsApi.getAnalytics(album.id)
@@ -459,73 +476,119 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       .catch(() => setCommentsCount(0));
   }, [currentPhoto?.id]);
 
-  // Navigate with NO transition
+  // ── Carousel scroll tracking ─────────────────────────────────────────────
+  const handleCarouselScroll = useCallback(() => {
+    if (programmaticScroll.current) return;
+    clearTimeout(scrollTimer.current);
+    scrollTimer.current = setTimeout(() => {
+      const el = carouselRef.current;
+      if (!el) return;
+      const idx = Math.round(el.scrollLeft / el.clientWidth);
+      if (idx !== currentIdx && idx >= 0 && idx < photos.length) {
+        setCurrentIdx(idx);
+      }
+    }, 30);
+  }, [currentIdx, photos.length]);
+
+  // Attach scroll listener
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", handleCarouselScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleCarouselScroll);
+  }, [handleCarouselScroll]);
+
+  // ── Programmatic navigation (thumbnail strip, stats jump, keyboard) ──────
   const goTo = useCallback((idx) => {
     setCurrentIdx(idx);
-    dragX.set(0);
+    const el = carouselRef.current;
+    if (el) {
+      programmaticScroll.current = true;
+      clearTimeout(programmaticTimer.current);
+      el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
+      programmaticTimer.current = setTimeout(() => {
+        programmaticScroll.current = false;
+      }, 300);
+    }
+    // Reset dismiss gesture
+    dragAnimRef.current?.stop();
     dragY.set(0);
-  }, [dragX, dragY]);
+  }, [dragY]);
 
-  const handleNext = useCallback(() => {
-    goTo(currentIdx < photos.length - 1 ? currentIdx + 1 : 0);
-  }, [currentIdx, photos.length, goTo]);
+  // Jump to specific photo (from stats list)
+  const jumpToPhoto = useCallback((photoId) => {
+    const idx = photos.findIndex((p) => String(p.id) === String(photoId));
+    if (idx >= 0) goTo(idx);
+  }, [photos, goTo]);
 
-  const handlePrev = useCallback(() => {
-    goTo(currentIdx > 0 ? currentIdx - 1 : photos.length - 1);
-  }, [currentIdx, photos.length, goTo]);
-
-  // Keyboard navigation
+  // ── Keyboard navigation ──────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
-    if (e.key === "ArrowLeft") handlePrev();
-    if (e.key === "ArrowRight") handleNext();
-    // Escape is delegated to each BottomSheet via their own closeOnEscape flag.
-  }, [handlePrev, handleNext]);
+    if (e.key === "ArrowLeft" && currentIdx > 0) goTo(currentIdx - 1);
+    if (e.key === "ArrowRight" && currentIdx < photos.length - 1) goTo(currentIdx + 1);
+  }, [currentIdx, photos.length, goTo]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // Lock body scroll
+  // ── Lock body scroll ─────────────────────────────────────────────────────
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  const handleDragEnd = useCallback((_, info) => {
-    const absX = Math.abs(info.offset.x);
-    const absY = Math.abs(info.offset.y);
+  // ── Axis-locked touch handlers (vertical dismiss) ────────────────────────
+  const onTouchStart = useCallback((e) => {
+    // Cancel any in-flight spring-back animation
+    dragAnimRef.current?.stop();
+    const touch = e.touches[0];
+    touchStart.current = { x: touch.clientX, y: touch.clientY };
+    gestureAxis.current = null;
+  }, []);
 
-    // Swipe down → close
-    if (info.offset.y > 100 || info.velocity.y > 600) {
+  const onTouchMove = useCallback((e) => {
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStart.current.x;
+    const dy = touch.clientY - touchStart.current.y;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    // Determine axis after ~12px of movement
+    if (!gestureAxis.current && (absDx > 12 || absDy > 12)) {
+      gestureAxis.current = absDx > absDy ? "x" : "y";
+    }
+
+    // Vertical gesture: prevent default (block native scroll), update dragY
+    if (gestureAxis.current === "y") {
+      e.preventDefault(); // defensive — touch-action: pan-x should suffice
+      // 1.5x sensitivity for Y movement
+      dragY.set(dy * 1.5);
+    }
+    // Horizontal: let native scroll-snap handle it (do nothing here)
+  }, [dragY]);
+
+  const onTouchEnd = useCallback(() => {
+    if (gestureAxis.current !== "y") return;
+
+    const currentDrag = dragY.get();
+    // Threshold: ~100px effective (dragY has 1.5x multiplier, so raw ~67px)
+    if (currentDrag > 150) {
       onClose();
       return;
     }
 
-    // Swipe left → next
-    if ((info.offset.x < -80 || info.velocity.x < -500) && absX > absY) {
-      handleNext();
-      return;
-    }
+    // Spring back to 0
+    dragAnimRef.current = animate(dragY, 0, {
+      type: "spring",
+      stiffness: 400,
+      damping: 30,
+    });
 
-    // Swipe right → prev
-    if ((info.offset.x > 80 || info.velocity.x > 500) && absX > absY) {
-      handlePrev();
-      return;
-    }
+    gestureAxis.current = null;
+  }, [dragY, onClose]);
 
-    // Snap back
-    dragX.set(0);
-    dragY.set(0);
-    photoControls.set({ x: 0, y: 0 });
-  }, [onClose, handleNext, handlePrev, photoControls]);
-
-  // Jump to specific photo (from stats)
-  const jumpToPhoto = useCallback((photoId) => {
-    const idx = photos.findIndex((p) => String(p.id) === String(photoId));
-    if (idx >= 0) goTo(idx);
-  }, [photos, goTo]);
-
+  // ── Share handler ────────────────────────────────────────────────────────
   const handleShare = async () => {
     const url = window.location.href;
     if (/Mobi|Android/i.test(navigator.userAgent) && navigator.share) {
@@ -579,9 +642,27 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     );
   };
 
-  // Primary sheet's Escape handler must skip while any secondary is open so
-  // Escape closes only the topmost layer.
   const secondaryOpen = sortOpen || filterOpen;
+
+  // Sync sheetY to 0 immediately when sheet opens to avoid flash
+  // (BottomSheet's internal y starts at 0 and animates to defaultOffset,
+  // so we need sheetY to already be at 0 when the animation begins)
+  useEffect(() => {
+    if (sheetExpanded) {
+      dragAnimRef.current?.stop();
+      dragY.set(0);
+      sheetY.set(0);
+    }
+  }, [sheetExpanded, sheetY, dragY]);
+
+  // ── Cleanup on unmount ───────────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      clearTimeout(programmaticTimer.current);
+      clearTimeout(scrollTimer.current);
+      dragAnimRef.current?.stop();
+    };
+  }, []);
 
   return (
     <motion.div
@@ -590,47 +671,63 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       exit={{ opacity: 0, transition: { duration: 0.2 } }}
       className="fixed inset-0 z-[90] bg-black flex flex-col overflow-hidden"
     >
+      {/* Background overlay — fades during vertical dismiss */}
       <motion.div
         className="absolute inset-0 bg-black"
         style={{ opacity: bgOpacity }}
       />
 
+      {/* ── Photo wrapper — handles visual transforms (scale, translateY) ── */}
       <motion.div
-        className="flex-1 flex items-center justify-center relative"
-        drag
-        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-        dragElastic={0.3}
-        onDragEnd={handleDragEnd}
-        animate={photoControls}
+        className="flex-1 relative"
         style={{
-          x: dragX,
-          y: dragY,
           scale: photoScale,
-          translateY: photoTranslateY,
-          touchAction: "none",
+          translateY: combinedTranslateY,
         }}
       >
-        <motion.div
-          key={currentPhoto?.id || "empty"}
-          initial={{ scale: 0.88, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 320, damping: 28 }}
-          className="w-full h-full flex items-center justify-center"
+        {/* ── Carousel — plain div for CSS scroll-snap (NO framer transforms) ── */}
+        <div
+          ref={carouselRef}
+          className="absolute inset-0 flex overflow-x-auto"
+          style={{
+            scrollSnapType: "x mandatory",
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-x",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         >
-          {currentPhoto?.url ? (
-            <img
-              src={currentPhoto.url}
-              alt=""
-              className="max-w-full max-h-full object-contain select-none pointer-events-none"
-              draggable={false}
-            />
-          ) : (
-            <div className="text-white/40 text-sm">No photo</div>
-          )}
-        </motion.div>
+          {photos.map((photo, i) => (
+            <div
+              key={photo.id}
+              className="flex-shrink-0 w-full h-full flex items-center justify-center"
+              style={{ scrollSnapAlign: "start" }}
+            >
+              {/* Only render nearby images for performance */}
+              {Math.abs(i - currentIdx) <= 1 && photo?.url ? (
+                <img
+                  src={photo.url}
+                  alt=""
+                  className="max-w-full max-h-full object-contain select-none pointer-events-none"
+                  draggable={false}
+                  loading={i === currentIdx ? "eager" : "lazy"}
+                />
+              ) : !photo?.url ? (
+                <div className="text-white/40 text-sm">No photo</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
       </motion.div>
 
-      <div className="flex flex-col items-center gap-3 pb-6 flex-shrink-0">
+      {/* ── Bottom controls (ThumbStrip + PillBar) — fade as sheet opens ─── */}
+      <motion.div
+        className="flex flex-col items-center gap-3 pb-6 flex-shrink-0 z-10"
+        style={{ opacity: controlsOpacity, pointerEvents: controlsPointerEvents }}
+      >
         {photos.length > 1 && (
           <ThumbStrip photos={photos} currentIdx={currentIdx} onSelect={goTo} />
         )}
@@ -644,13 +741,9 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
             onSwipeUp={() => setSheetExpanded(true)}
           />
         )}
-      </div>
+      </motion.div>
 
-      {/* ─── PRIMARY BottomSheet (statistics/comments) ───────────────────────
-          hideHeader=true → no X button, no "Statistics"/"Comments" title row.
-          Only the in-sheet Stats↔Comments tab bar (headerChildren) is shown.
-          Escape is suppressed while a secondary sheet is open so dismissal
-          stays isolated. */}
+      {/* ─── PRIMARY BottomSheet (statistics/comments) ─────────────────────── */}
       <BottomSheet
         open={sheetExpanded}
         onClose={() => setSheetExpanded(false)}
@@ -699,8 +792,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         ) : renderComments()}
       </BottomSheet>
 
-      {/* ─── SECONDARY SortSheet (independent, z-60) ──────────────────────────
-          Slides up over primary; closing it does NOT disturb the primary. */}
+      {/* ─── SECONDARY SortSheet (independent, z-60) ────────────────────────── */}
       <GallerySortSheet
         open={sortOpen}
         onClose={() => setSortOpen(false)}
