@@ -1,21 +1,19 @@
 /**
- * AlbumGallery.jsx — v9 Full-screen photo viewer
+ * AlbumGallery.jsx — v11 Touch-driven photo viewer
  *
- * CHANGES v8 → v9 — Scroll Performance Optimization:
- *  - Replaced manual scrollLeft manipulation with native CSS scroll-snap carousel.
- *    Browser compositor handles horizontal scrolling at 60fps (zero JS per frame).
- *  - touch-action: pan-x on carousel lets browser handle horizontal natively.
- *    Vertical dismiss gesture lives on parent wrapper, separated by axis-locking.
- *  - IntersectionObserver tracks active slide (replaces scroll listeners).
- *  - ThumbStrip: O(1) index calculation from scrollLeft, CSS scroll-snap.
- *  - All slide wrapper divs always mounted (no layout shifts during scroll).
- *    Images conditionally rendered inside fixed-size wrappers.
- *  - Component memoization (ThumbStrip, PillBar) to reduce re-renders.
- *  - Feedback loop prevention between carousel ↔ thumbnail strip sync.
+ * CHANGES v9 → v11 — Complete carousel rewrite:
+ *  - Replaced native overflow-x scroll with touch-driven transform carousel.
+ *    Each swipe = exactly one photo. No momentum overshoot.
+ *  - Framer Motion useMotionValue + animate for 60fps compositor-only drag.
+ *  - Centralized touch handling: parent wrapper does axis-locking,
+ *    horizontal → dragX (carousel), vertical → dragY (dismiss).
+ *  - Velocity-aware snap: quick flicks count even with small distance.
+ *  - Rubber-band at first/last photo edges.
+ *  - ThumbStrip: native overflow-x: auto for responsive finger-follow scrolling.
  *  - BottomSheet interaction lock: pointer-events:none on carousel when sheet open.
  *
  * CHANGES v7 → v8 (preserved):
- *  - PillBar: no border, larger monochrome icons, ChevronUp swipe-up affordance.
+ *  - PillBar: no border, larger monochrome icons, ChevronUp affordance.
  *  - Stacked BottomSheet architecture with independent secondary sheets.
  *  - Sort/Filter buttons mirror AnalyticsPage toolbar styling.
  */
@@ -75,17 +73,16 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
   );
 }
 
-// ─── Thumbnail Strip — CSS scroll-snap + O(1) index calculation ────────────
+// ─── Thumbnail Strip — native overflow-x: auto + O(1) index calculation ────
 const THUMB_SIZE = 40;
 const THUMB_GAP = 8;
 
 function ThumbStrip({ photos, currentIdx, onSelect }) {
   const stripRef = useRef(null);
   const thumbRefs = useRef([]);
-  const selectingRef = useRef(false);   // guard: prevent feedback during programmatic scroll
+  const selectingRef = useRef(false);
   const selectTimer = useRef(null);
 
-  // Scroll to center a given index (used when carousel changes the active photo)
   const centerThumb = useCallback((idx) => {
     const strip = stripRef.current;
     const el = thumbRefs.current[idx];
@@ -94,38 +91,40 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
     clearTimeout(selectTimer.current);
     const target = el.offsetLeft - strip.clientWidth / 2 + el.offsetWidth / 2;
     const max = strip.scrollWidth - strip.clientWidth;
-    strip.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: "instant" });
-    selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 150);
+    strip.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: "smooth" });
+    selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 300);
   }, []);
 
-  // When currentIdx changes externally (from carousel IntersectionObserver), center that thumb
   useEffect(() => {
     centerThumb(currentIdx);
   }, [currentIdx, centerThumb]);
 
-  // O(1) scroll listener — calculate index from scrollLeft directly
   useEffect(() => {
     const strip = stripRef.current;
     if (!strip) return;
     const lastIdx = { current: -1 };
+    let rafId = null;
     const onScroll = () => {
       if (selectingRef.current) return;
-      // O(1) calculation: fixed thumb dimensions → index from scroll position
-      const idx = Math.round(strip.scrollLeft / (THUMB_SIZE + THUMB_GAP));
-      const clamped = Math.max(0, Math.min(idx, photos.length - 1));
-      if (clamped !== lastIdx.current) {
-        lastIdx.current = clamped;
-        onSelect(clamped);
-      }
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const idx = Math.round(strip.scrollLeft / (THUMB_SIZE + THUMB_GAP));
+        const clamped = Math.max(0, Math.min(idx, photos.length - 1));
+        if (clamped !== lastIdx.current) {
+          lastIdx.current = clamped;
+          onSelect(clamped);
+        }
+      });
     };
     strip.addEventListener("scroll", onScroll, { passive: true });
-    return () => strip.removeEventListener("scroll", onScroll);
+    return () => {
+      strip.removeEventListener("scroll", onScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [photos.length, onSelect]);
 
-  // Cleanup
   useEffect(() => () => { clearTimeout(selectTimer.current); }, []);
 
-  // Edge padding so first/last can reach center
   const pad = `calc(50vw - ${THUMB_SIZE / 2}px)`;
 
   return (
@@ -133,11 +132,7 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
       <div
         ref={stripRef}
         className="w-full overflow-x-auto relative py-2"
-        style={{
-          scrollSnapType: "x proximity",
-          scrollbarWidth: "none",
-          msOverflowStyle: "none",
-        }}
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         <div
           className="flex items-center w-max"
@@ -153,14 +148,9 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
                   selectingRef.current = true;
                   clearTimeout(selectTimer.current);
                   onSelect(i);
-                  selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 150);
+                  selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 300);
                 }}
-                style={{
-                  width: THUMB_SIZE,
-                  height: THUMB_SIZE,
-                  flexShrink: 0,
-                  scrollSnapAlign: "center",
-                }}
+                style={{ width: THUMB_SIZE, height: THUMB_SIZE, flexShrink: 0 }}
                 className={`btn-thumb transition-all duration-150 outline-none
                            ${active
                              ? "ring-[2px] ring-primary-400 ring-offset-1 ring-offset-black scale-[1.15] z-10"
@@ -193,7 +183,6 @@ function StatisticsTab({
 
   return (
     <div className="space-y-4">
-      {/* Toolbar — IDENTICAL buttons to AnalyticsPage / AlbumSummary */}
       <div className="flex items-center gap-3">
         <button onClick={onOpenSort}
           className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm
@@ -222,13 +211,11 @@ function StatisticsTab({
         </button>
       </div>
 
-      {/* Sub-header */}
       <div className="flex items-center justify-between text-xs text-gray-400">
         <span className="font-semibold">{t("statistics")}</span>
         <span>{analytics.total_votes} {t("totalVotes")}</span>
       </div>
 
-      {/* Photo list */}
       {photos.length === 0 && (
         <p className="text-center text-gray-400 py-8 text-sm">{t("noVotes")}</p>
       )}
@@ -240,7 +227,7 @@ function StatisticsTab({
             className={`w-full flex items-center gap-3 py-2 px-2 rounded-xl transition-colors
                        ${String(photo.id) === String(currentPhotoId)
                          ? "bg-primary-50 dark:bg-primary-900/20"
-                         : "hover:bg-border-light dark:hover:bg-border-dark"}`}
+                         : "hover:bg-border-light dark:bg-border-dark"}`}
           >
             <span className="w-5 text-center text-xs font-bold text-gray-400 flex-shrink-0">
               #{i + 1}
@@ -277,19 +264,13 @@ function StatisticsTab({
   );
 }
 
-// ─── Secondary SortSheet (independent layered sheet) ─────────────────────────
+// ─── Secondary SortSheet ────────────────────────────────────────────────────
 function GallerySortSheet({ open, onClose, sortKey, setSortKey }) {
   const { t } = useLang();
   const [viewMode, setViewMode] = useState("list");
 
   return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title={t("sort")}
-      zIndex={60}
-    >
-      {/* List/Grid view toggle — identical to AlbumSummary */}
+    <BottomSheet open={open} onClose={onClose} title={t("sort")} zIndex={60}>
       <div className="flex gap-2 mb-5">
         {[
           { key: "list", icon: <List size={15} />, label: t("listView") },
@@ -309,7 +290,6 @@ function GallerySortSheet({ open, onClose, sortKey, setSortKey }) {
         ))}
       </div>
       <div className="w-full h-px bg-border-light dark:bg-border-dark mb-4" />
-      {/* Sort options — identical to AlbumSummary */}
       {[
         { key: "likes_desc", label: t("sortMostLikes") },
         { key: "dislikes_desc", label: t("sortMostDislikes") },
@@ -331,25 +311,14 @@ function GallerySortSheet({ open, onClose, sortKey, setSortKey }) {
   );
 }
 
-// ─── Secondary FilterSheet (independent layered sheet) ──────────────────────
+// ─── Secondary FilterSheet ──────────────────────────────────────────────────
 function GalleryFilterSheet({
-  open,
-  onClose,
-  voter_summaries,
-  pendingVoters,
-  togglePending,
-  applyFilter,
-  clearFilter,
+  open, onClose, voter_summaries, pendingVoters, togglePending, applyFilter, clearFilter,
 }) {
   const { t } = useLang();
 
   return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title={t("filterByVoter")}
-      zIndex={60}
-    >
+    <BottomSheet open={open} onClose={onClose} title={t("filterByVoter")} zIndex={60}>
       {voter_summaries.length === 0 ? (
         <p className="text-center text-gray-400 py-8 text-sm">{t("noVoters")}</p>
       ) : (
@@ -372,13 +341,9 @@ function GalleryFilterSheet({
                   <div className="flex items-center gap-3 min-w-0">
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-                                  ${selected
-                                    ? "bg-primary-400"
-                                    : "bg-border-light dark:bg-border-dark"}`}
+                                  ${selected ? "bg-primary-400" : "bg-border-light dark:bg-border-dark"}`}
                     >
-                      <span
-                        className={`text-xs font-bold ${selected ? "text-white" : "text-primary-500"}`}
-                      >
+                      <span className={`text-xs font-bold ${selected ? "text-white" : "text-primary-500"}`}>
                         {v.username?.[0]?.toUpperCase() ?? "?"}
                       </span>
                     </div>
@@ -390,12 +355,8 @@ function GalleryFilterSheet({
             })}
           </div>
           <div className="flex gap-3">
-            <button onClick={clearFilter} className="flex-1 btn-secondary py-3">
-              {t("clearFilter")}
-            </button>
-            <button onClick={applyFilter} className="flex-1 btn-primary py-3">
-              {t("applyFilter")}
-            </button>
+            <button onClick={clearFilter} className="flex-1 btn-secondary py-3">{t("clearFilter")}</button>
+            <button onClick={applyFilter} className="flex-1 btn-primary py-3">{t("applyFilter")}</button>
           </div>
         </>
       )}
@@ -420,7 +381,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [sheetTab, setSheetTab] = useState("stats");
 
-  // Stacked-sheet state lifted to root so secondary sheets can mutate data.
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortKey, setSortKey] = useState("likes_desc");
@@ -430,45 +390,43 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
   // ── Carousel refs ────────────────────────────────────────────────────────
   const carouselRef = useRef(null);
-  const isProgrammaticRef = useRef(false);     // true during goTo() scroll
-  const programmaticTimer = useRef(null);      // timeout to clear programmatic flag
-  const observerRef = useRef(null);            // IntersectionObserver instance
-  const initialScrollDone = useRef(false);     // guard for initial scroll effect
+  const currentIdxRef = useRef(0);
+  const snapAnimRef = useRef(null);        // in-flight carousel snap animation
 
-  // ── Axis-locking touch refs (vertical dismiss only) ─────────────────────
-  const touchStart = useRef({ x: 0, y: 0 });
-  const gestureAxis = useRef(null); // "x" | "y" | null
+  // ── Axis-locking touch refs ──────────────────────────────────────────────
+  const touchStart = useRef({ x: 0, y: 0, time: 0 });
+  const gestureAxis = useRef(null);
 
   // ── Motion values ────────────────────────────────────────────────────────
   const defaultOffset = vh * 0.35;
-  const dragY = useMotionValue(0);       // vertical dismiss gesture offset
-  const dragAnimRef = useRef(null);      // in-flight spring-back animation
+  const dragY = useMotionValue(0);
+  const dragYAnimRef = useRef(null);
 
-  // BottomSheet shared drag position for photo shrink
-  // Initialize to defaultOffset so controls are visible before sheet opens
+  const dragX = useMotionValue(0);       // horizontal drag offset during swipe
+
+  // Track position = -currentIdx * width + dragX
+  const carouselX = useTransform(dragX, (x) => {
+    const w = carouselRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 400);
+    return -(currentIdxRef.current * w) + x;
+  });
+
+  // BottomSheet shared drag position
   const sheetY = useMotionValue(defaultOffset);
   const photoScale = useTransform(sheetY, [0, defaultOffset], [0.5, 1]);
-
-  // Photo translateY from sheet: sheetY=0 → -30vh, sheetY=peek → 0
   const photoTranslateY = useTransform(sheetY, [0, defaultOffset], [-vh * 0.3, 0]);
 
-  // Combined translateY = sheet-driven + dismiss-driven
   const combinedTranslateY = useTransform(
     [photoTranslateY, dragY],
     ([sheetVal, dragVal]) => sheetVal + dragVal
   );
 
-  // Background opacity: fades during vertical dismiss gesture
   const bgOpacity = useTransform(dragY, [0, vh * 0.5], [1, 0]);
-
-  // Bottom controls (ThumbStrip + PillBar) fade as sheet opens
   const controlsOpacity = useTransform(sheetY, [0, defaultOffset], [0, 1]);
   const controlsPointerEvents = useTransform(
     sheetY,
     (v) => (v < defaultOffset * 0.3 ? "none" : "auto")
   );
 
-  // ── Sheet lock: pointer-events on carousel ───────────────────────────────
   const carouselPointerEvents = sheetExpanded ? "none" : "auto";
 
   // ── Data fetching ────────────────────────────────────────────────────────
@@ -479,13 +437,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       .catch(() => setAnalytics(null));
   }, [album?.id]);
 
-  // Photo list (prefer analytics, fallback to album)
   const photos = useMemo(() => {
     if (analytics?.photos?.length) return analytics.photos;
     return album.photos || [];
   }, [analytics, album.photos]);
 
-  // Sort
   const sorted = useMemo(
     () => [...photos].sort((a, b) =>
       sortKey === "dislikes_desc"
@@ -495,7 +451,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     [photos, sortKey]
   );
 
-  // Filter (robust — recomputes counts per photo)
   const filtered = useMemo(() => {
     if (selectedVoters.size === 0) return sorted;
     return sorted
@@ -508,14 +463,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         const dislikes = filteredRx.length - likes;
         const pct = filteredRx.length > 0
           ? Math.round((likes / filteredRx.length) * 1000) / 10 : 0;
-        return {
-          ...photo,
-          reactions: filteredRx,
-          like_count: likes,
-          dislike_count: dislikes,
-          total_votes: filteredRx.length,
-          like_percentage: pct,
-        };
+        return { ...photo, reactions: filteredRx, like_count: likes, dislike_count: dislikes, total_votes: filteredRx.length, like_percentage: pct };
       })
       .filter(Boolean);
   }, [sorted, selectedVoters]);
@@ -538,97 +486,44 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       .catch(() => setCommentsCount(0));
   }, [currentPhoto?.id]);
 
-  // Sync sheetY to 0 immediately when sheet opens to avoid flash
+  // Sync sheetY on open
   useEffect(() => {
     if (sheetExpanded) {
-      dragAnimRef.current?.stop();
+      dragYAnimRef.current?.stop();
       dragY.set(0);
       sheetY.set(0);
     }
   }, [sheetExpanded, sheetY, dragY]);
 
-  // ── Initial scroll position (runs after photos load, once) ──────────────
+  // ── Initial position (set ref, transform handles it) ────────────────────
   useEffect(() => {
-    if (initialScrollDone.current) return;
-    if (!startPhotoId || currentIdx <= 0 || photos.length <= 1) return;
-    initialScrollDone.current = true;
-    const el = carouselRef.current?.querySelector(`[data-index="${currentIdx}"]`);
-    if (el) {
-      el.scrollIntoView({ behavior: "instant", inline: "center", block: "nearest" });
-    } else if (carouselRef.current) {
-      carouselRef.current.scrollLeft = currentIdx * carouselRef.current.clientWidth;
+    if (startPhotoId && currentIdx > 0 && photos.length > 1) {
+      currentIdxRef.current = currentIdx;
+      // Force dragX to 0 so carouselX recalculates
+      dragX.set(0);
     }
-  }, [startPhotoId, currentIdx, photos.length]);
-
-  // ── IntersectionObserver — track active slide ────────────────────────────
-  useEffect(() => {
-    const root = carouselRef.current;
-    if (!root) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // Block observer during programmatic scrolls (goTo / thumbnail tap)
-        if (isProgrammaticRef.current) return;
-        for (const entry of entries) {
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-            const idx = Number(entry.target.dataset.index);
-            if (!Number.isNaN(idx)) {
-              setCurrentIdx(idx);
-            }
-            break;
-          }
-        }
-      },
-      { root, threshold: 0.5 }
-    );
-
-    const observeAll = () => {
-      const slides = root.querySelectorAll("[data-carousel-slide]");
-      slides.forEach((el) => observer.observe(el));
-    };
-    observeAll();
-
-    observerRef.current = observer;
-    return () => observer.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [startPhotoId, photos.length]);
 
-  // Re-observe slides when photos array changes
+  // ── Sync ref when state changes from goTo ───────────────────────────────
   useEffect(() => {
-    const observer = observerRef.current;
-    if (!observer || !carouselRef.current) return;
-    observer.disconnect();
-    const slides = carouselRef.current.querySelectorAll("[data-carousel-slide]");
-    slides.forEach((el) => observer.observe(el));
-  }, [photos.length]);
+    currentIdxRef.current = currentIdx;
+    // Reset dragX so carouselX snaps to new position
+    dragX.set(0);
+  }, [currentIdx, dragX]);
 
-  // ── Programmatic navigation (thumbnail tap, stats jump, keyboard) ────────
+  // ── Programmatic navigation ──────────────────────────────────────────────
   const goTo = useCallback((idx) => {
     if (idx < 0 || idx >= photos.length) return;
+    snapAnimRef.current?.stop();
     setCurrentIdx(idx);
+    currentIdxRef.current = idx;
+    dragX.set(0);
     // Reset dismiss gesture
-    dragAnimRef.current?.stop();
+    dragYAnimRef.current?.stop();
     dragY.set(0);
+  }, [photos.length, dragX, dragY]);
 
-    const el = carouselRef.current;
-    if (!el) return;
-    const slide = el.querySelector(`[data-index="${idx}"]`);
-    if (slide) {
-      // Block IntersectionObserver during programmatic scroll
-      isProgrammaticRef.current = true;
-      clearTimeout(programmaticTimer.current);
-      slide.scrollIntoView({ behavior: "instant", inline: "center", block: "nearest" });
-      // Clear flag after scroll settles (generous timeout for slow devices)
-      programmaticTimer.current = setTimeout(() => {
-        isProgrammaticRef.current = false;
-      }, 400);
-    } else {
-      // Fallback: direct scrollLeft (e.g., initial mount before slides rendered)
-      el.scrollLeft = idx * el.clientWidth;
-    }
-  }, [photos.length, dragY]);
-
-  // Jump to specific photo (from stats list)
   const jumpToPhoto = useCallback((photoId) => {
     const idx = photos.findIndex((p) => String(p.id) === String(photoId));
     if (idx >= 0) goTo(idx);
@@ -636,7 +531,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
   // ── Keyboard navigation ──────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
-    if (sheetExpanded) return; // Don't navigate when sheet is open
+    if (sheetExpanded) return;
     if (e.key === "ArrowLeft" && currentIdx > 0) goTo(currentIdx - 1);
     if (e.key === "ArrowRight" && currentIdx < photos.length - 1) goTo(currentIdx + 1);
   }, [currentIdx, photos.length, goTo, sheetExpanded]);
@@ -652,13 +547,12 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  // ── Vertical dismiss gesture on photo wrapper ────────────────────────────
-  // (carousel has touch-action: pan-x, so vertical gestures bubble here)
+  // ── Unified touch handlers (axis-lock: horizontal → dragX, vertical → dragY) ──
   const onWrapperTouchStart = useCallback((e) => {
-    // Cancel any in-flight spring-back animation
-    dragAnimRef.current?.stop();
+    snapAnimRef.current?.stop();
+    dragYAnimRef.current?.stop();
     const touch = e.touches[0];
-    touchStart.current = { x: touch.clientX, y: touch.clientY };
+    touchStart.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
     gestureAxis.current = null;
   }, []);
 
@@ -674,15 +568,23 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       gestureAxis.current = absDx > absDy ? "x" : "y";
     }
 
-    // Vertical gesture: prevent default (block native scroll), update dragY
     if (gestureAxis.current === "y") {
       e.preventDefault();
       dragY.set(dy);
       return;
     }
 
-    // Horizontal gesture: do nothing — browser handles native scroll-snap
-  }, [dragY]);
+    if (gestureAxis.current === "x") {
+      e.preventDefault();
+      // Rubber-band at edges
+      let clampedDx = dx;
+      if ((currentIdxRef.current === 0 && dx > 0) ||
+          (currentIdxRef.current === photos.length - 1 && dx < 0)) {
+        clampedDx = dx * 0.3;
+      }
+      dragX.set(clampedDx);
+    }
+  }, [dragX, dragY, photos.length]);
 
   const onWrapperTouchEnd = useCallback((e) => {
     const touch = e.changedTouches?.[0];
@@ -690,22 +592,57 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
     if (gestureAxis.current === "y") {
       const currentDrag = dragY.get();
-      // 1:1 sensitivity → threshold 100px
       if (currentDrag > 100) {
         onClose();
         gestureAxis.current = null;
         return;
       }
-      dragAnimRef.current = animate(dragY, 0, {
-        type: "spring",
-        stiffness: 400,
-        damping: 30,
+      dragYAnimRef.current = animate(dragY, 0, {
+        type: "spring", stiffness: 400, damping: 30,
       });
+      gestureAxis.current = null;
+      return;
     }
 
-    // Horizontal gesture: do nothing — browser already snapped to nearest slide
+    if (gestureAxis.current === "x") {
+      const dx = touch.clientX - touchStart.current.x;
+      const dt = Date.now() - touchStart.current.time;
+      const velocity = dt > 0 ? dx / dt : 0; // px/ms
+      const projectedDx = dx + velocity * 150;
+
+      const containerWidth = carouselRef.current?.clientWidth || window.innerWidth;
+      const threshold = containerWidth * 0.3;
+
+      let targetIdx = currentIdxRef.current;
+      if (projectedDx < -threshold && targetIdx < photos.length - 1) targetIdx++;
+      if (projectedDx > threshold && targetIdx > 0) targetIdx--;
+
+      // Animate dragX to full width, then update index
+      if (targetIdx !== currentIdxRef.current) {
+        // Animate to edge of current slide, then snap to new index
+        const w = containerWidth;
+        const targetX = targetIdx > currentIdxRef.current ? -w * 0.5 : w * 0.5;
+        snapAnimRef.current = animate(dragX, targetX > 0 ? w : -w, {
+          type: "spring", stiffness: 300, damping: 30,
+          onComplete: () => {
+            setCurrentIdx(targetIdx);
+            currentIdxRef.current = targetIdx;
+            dragX.set(0);
+          },
+        });
+      } else {
+        // Snap back to current position
+        snapAnimRef.current = animate(dragX, 0, {
+          type: "spring", stiffness: 300, damping: 30,
+        });
+      }
+
+      gestureAxis.current = null;
+      return;
+    }
+
     gestureAxis.current = null;
-  }, [dragY, onClose]);
+  }, [dragX, dragY, photos.length, onClose]);
 
   const onWrapperTouchCancel = useCallback(() => {
     gestureAxis.current = null;
@@ -716,8 +653,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
   // ── Cleanup on unmount ───────────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      dragAnimRef.current?.stop();
-      clearTimeout(programmaticTimer.current);
+      snapAnimRef.current?.stop();
+      dragYAnimRef.current?.stop();
     };
   }, []);
 
@@ -729,7 +666,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         await navigator.share({ title: t("shareTitle"), url });
         setShareDone(true); setTimeout(() => setShareDone(false), 2000);
         return;
-      } catch { /* fallback to clipboard */ }
+      } catch { /* fallback */ }
     }
     try {
       await navigator.clipboard.writeText(url);
@@ -742,7 +679,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     }
   };
 
-  // ── Sort/Filter handlers for the secondary sheets ────────────────────────
+  // ── Sort/Filter handlers ─────────────────────────────────────────────────
   const openFilterSheet = () => {
     setPendingVoters(new Set(selectedVoters));
     setFilterOpen(true);
@@ -764,7 +701,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
   const voter_summaries = analytics?.voter_summaries || [];
 
-  // Render comments
   const renderComments = () => {
     if (!currentPhoto) return null;
     return (
@@ -784,71 +720,56 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       exit={{ opacity: 0, transition: { duration: 0.2 } }}
       className="fixed inset-0 z-[90] bg-black flex flex-col overflow-hidden"
     >
-      {/* Background overlay — fades during vertical dismiss */}
+      {/* Background overlay */}
       <motion.div
         className="absolute inset-0 bg-black"
         style={{ opacity: bgOpacity }}
       />
 
-      {/* ── Photo wrapper — handles visual transforms + vertical dismiss ── */}
+      {/* Photo wrapper — handles all touch gestures (axis-locked) */}
       <motion.div
         className="flex-1 relative"
-        style={{
-          scale: photoScale,
-          translateY: combinedTranslateY,
-        }}
+        style={{ scale: photoScale, translateY: combinedTranslateY }}
         onTouchStart={onWrapperTouchStart}
         onTouchMove={onWrapperTouchMove}
         onTouchEnd={onWrapperTouchEnd}
         onTouchCancel={onWrapperTouchCancel}
       >
-        {/* ── Carousel — native scroll-snap (compositor-driven) ── */}
+        {/* Carousel — transform-driven, overflow hidden */}
         <div
           ref={carouselRef}
-          className="absolute inset-0 flex overflow-x-auto overflow-y-hidden"
-          style={{
-            touchAction: "pan-x",                   // browser handles horizontal natively
-            scrollSnapType: "x mandatory",          // snap to nearest slide
-            overscrollBehaviorX: "contain",         // prevent parent scroll at edges
-            WebkitOverflowScrolling: "touch",       // iOS momentum scroll
-            scrollbarWidth: "none",                 // hide scrollbar (Firefox)
-            msOverflowStyle: "none",                // hide scrollbar (IE/Edge)
-            scrollBehavior: "auto",                 // instant scroll (not smooth)
-            willChange: "scroll-position",          // compositor optimization
-            pointerEvents: carouselPointerEvents,   // locked when BottomSheet open
-          }}
+          className="absolute inset-0 overflow-hidden"
+          style={{ pointerEvents: carouselPointerEvents }}
         >
-          {photos.map((photo, i) => (
-            <div
-              key={photo.id}
-              data-carousel-slide=""
-              data-index={i}
-              className="flex-shrink-0 w-full h-full flex items-center justify-center py-8"
-              style={{
-                scrollSnapAlign: "center",          // snap target
-                contentVisibility: "auto",          // skip rendering off-screen slides
-                containIntrinsicSize: "auto 100%",  // stable size for content-visibility
-              }}
-            >
-              {/* Only render <img> for nearby slides; placeholder keeps layout stable */}
-              {Math.abs(i - currentIdx) <= 2 && photo?.url ? (
-                <img
-                  src={photo.url}
-                  alt=""
-                  className="max-w-full max-h-full object-contain select-none pointer-events-none"
-                  draggable={false}
-                  loading={i === currentIdx ? "eager" : "lazy"}
-                  decoding="async"
-                />
-              ) : !photo?.url ? (
-                <div className="text-white/40 text-sm">No photo</div>
-              ) : null}
-            </div>
-          ))}
+          {/* Track — moves via dragX + currentIdx */}
+          <motion.div
+            className="flex h-full"
+            style={{ x: carouselX, willChange: "transform" }}
+          >
+            {photos.map((photo, i) => (
+              <div
+                key={photo.id}
+                className="flex-shrink-0 w-full h-full flex items-center justify-center py-8"
+              >
+                {Math.abs(i - currentIdx) <= 2 && photo?.url ? (
+                  <img
+                    src={photo.url}
+                    alt=""
+                    className="max-w-full max-h-full object-contain select-none pointer-events-none"
+                    draggable={false}
+                    loading={i === currentIdx ? "eager" : "lazy"}
+                    decoding="async"
+                  />
+                ) : !photo?.url ? (
+                  <div className="text-white/40 text-sm">No photo</div>
+                ) : null}
+              </div>
+            ))}
+          </motion.div>
         </div>
       </motion.div>
 
-      {/* ── Bottom controls (ThumbStrip + PillBar) — fade as sheet opens ─── */}
+      {/* Bottom controls (ThumbStrip + PillBar) */}
       <motion.div
         className="flex flex-col items-center gap-3 pb-6 flex-shrink-0 z-10"
         style={{ opacity: controlsOpacity, pointerEvents: controlsPointerEvents }}
@@ -868,7 +789,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         )}
       </motion.div>
 
-      {/* ─── PRIMARY BottomSheet (statistics/comments) ─────────────────────── */}
+      {/* PRIMARY BottomSheet */}
       <BottomSheet
         open={sheetExpanded}
         onClose={() => setSheetExpanded(false)}
@@ -917,7 +838,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         ) : renderComments()}
       </BottomSheet>
 
-      {/* ─── SECONDARY SortSheet (independent, z-60) ────────────────────────── */}
+      {/* SECONDARY SortSheet */}
       <GallerySortSheet
         open={sortOpen}
         onClose={() => setSortOpen(false)}
@@ -925,7 +846,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         setSortKey={setSortKey}
       />
 
-      {/* ─── SECONDARY FilterSheet (independent, z-60) ─────────────────────── */}
+      {/* SECONDARY FilterSheet */}
       <GalleryFilterSheet
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
