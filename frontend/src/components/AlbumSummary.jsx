@@ -40,7 +40,7 @@ function ReactionBadge({ isLike }) {
         <FilledHeart size={10} /> Нравится
       </span>
     : <span className="inline-flex items-center gap-1 text-red-400 text-xs font-semibold">
-        <BrokenHeart size={10} /> Пропуск
+        <BrokenHeart size={10} strokeWidth={2} /> Пропуск
       </span>;
 }
 
@@ -87,7 +87,7 @@ function PhotoListRow({ photo, rank, onPhotoClick }) {
             <FilledHeart size={9} /> {photo.like_count}
           </span>
           <span className="text-red-400 flex items-center gap-0.5">
-            <BrokenHeart size={9} /> {photo.dislike_count}
+            <BrokenHeart size={9} strokeWidth={2} /> {photo.dislike_count}
           </span>
           <span className="ml-auto">
             {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
@@ -137,7 +137,7 @@ function PhotoTabBar({ tab, setTab, likeCount, dislikeCount, canViewStats }) {
           <FilledHeart size={14} />
           <span>{likeCount}</span>
           <span className="text-xs opacity-70">·</span>
-          <BrokenHeart size={14} />
+          <BrokenHeart size={14} strokeWidth={2} />
           <span>{dislikeCount}</span>
         </button>
       )}

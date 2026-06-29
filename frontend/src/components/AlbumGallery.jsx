@@ -24,7 +24,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import {
   MessageCircle, BarChart2, SlidersHorizontal, Filter, Share2, Check,
-  List, LayoutGrid, ChevronUp,
+  List, LayoutGrid,
 } from "lucide-react";
 import { albumsApi, commentsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
@@ -50,16 +50,13 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
 
   return (
     <div className="flex flex-col items-center gap-1.5">
-      {/* Swipe-up affordance chevron */}
-      <ChevronUp size={18} className="text-white/40" />
-
       <motion.button
         onClick={onExpand}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         whileTap={{ scale: 0.96 }}
         className="flex items-center gap-8 px-8 py-4 rounded-full
-                   bg-white/10 backdrop-blur-xl
+                   bg-gray-900
                    text-white shadow-lg cursor-pointer"
       >
         <span className="flex items-center gap-2.5 text-base font-semibold">
@@ -141,7 +138,7 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
     <div className="relative w-full">        {/* Scrollable strip */}
       <div
         ref={stripRef}
-        className="w-full overflow-x-auto relative"
+        className="w-full overflow-x-auto relative py-2"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         <div
@@ -157,12 +154,12 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
                 ref={(el) => { thumbRefs.current[i] = el; }}
                 onClick={() => { selectingRef.current = true; clearTimeout(selectTimer.current); onSelect(i); selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 100); }}
                 style={{ width: THUMB_SIZE, height: THUMB_SIZE, flexShrink: 0 }}
-                className={`btn-thumb overflow-hidden transition-all duration-150 outline-none
+                className={`btn-thumb transition-all duration-150 outline-none
                            ${active
                              ? "ring-[2px] ring-primary-400 ring-offset-1 ring-offset-black scale-[1.15] z-10"
-                             : "opacity-40 hover:opacity-70"}`}
+                             : ""}`}
               >
-                <img src={photo.url} alt="" className="w-full h-full object-cover select-none pointer-events-none" loading="lazy" draggable={false} />
+                <img src={photo.url} alt="" className="w-full h-full object-cover rounded-xl select-none pointer-events-none" loading="lazy" draggable={false} />
               </button>
             );
           })}
@@ -259,7 +256,7 @@ function StatisticsTab({
                   <FilledHeart size={9} /> {photo.like_count}
                 </span>
                 <span className="text-red-400 flex items-center gap-0.5">
-                  <BrokenHeart size={9} /> {photo.dislike_count}
+                  <BrokenHeart size={9} strokeWidth={2} /> {photo.dislike_count}
                 </span>
                 <span className="ml-auto">
                   {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
@@ -765,7 +762,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
           {photos.map((photo, i) => (
             <div
               key={photo.id}
-              className="flex-shrink-0 w-full h-full flex items-center justify-center"
+              className="flex-shrink-0 w-full h-full flex items-center justify-center py-8"
             >
               {/* Only render nearby images for performance */}
               {Math.abs(i - currentIdx) <= 1 && photo?.url ? (

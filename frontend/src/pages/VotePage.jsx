@@ -407,7 +407,7 @@ export default function VotePage() {
                                        ${reaction ? "bg-green-500" : "bg-red-400"}`}>
                         {reaction
                           ? <FilledHeart size={10} className="text-white" />
-                          : <BrokenHeart size={10} className="text-white" />
+                          : <BrokenHeart size={10} strokeWidth={2} className="text-white" />
                         }
                       </div>
                     )}

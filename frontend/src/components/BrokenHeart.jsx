@@ -2,7 +2,7 @@
  * BrokenHeart.jsx — Custom broken heart icon
  * Replaces lucide-react ThumbsDown
  */
-export default function BrokenHeart({ size = 24, className = "text-gray-400" }) {
+export default function BrokenHeart({ size = 24, className = "text-gray-400", strokeWidth = 2.5 }) {
   return (
     <svg
       width={size}
@@ -10,7 +10,7 @@ export default function BrokenHeart({ size = 24, className = "text-gray-400" }) 
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
