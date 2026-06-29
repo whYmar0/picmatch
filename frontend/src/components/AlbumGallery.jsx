@@ -1,24 +1,23 @@
 /**
- * AlbumGallery.jsx — v8 Full-screen photo viewer
+ * AlbumGallery.jsx — v9 Full-screen photo viewer
  *
- * CHANGES v7 → v8:
- *  - PillBar redesigned: no border, larger monochrome white/gray icons (size 22),
- *    bigger padding (px-8 py-4), ChevronUp swipe-up affordance.
- *  - Replaced Framer Motion single-photo drag with CSS scroll-snap carousel
- *    for true filmstrip-style horizontal scrolling (photos follow finger 1:1).
- *  - Axis-locked native touch gestures: horizontal → carousel scroll,
- *    vertical → dismiss with 1.5x Y sensitivity and smooth spring-back.
- *  - More aggressive photo shrink when BottomSheet opens: scale 1→0.5,
- *    translateY -30vh. Combined sheet-driven + dismiss-driven transforms
- *    via useTransform array merge.
- *  - Photo pointer events disabled when BottomSheet covers the photo.
- *  - Critical: transforms (scale, translateY) on wrapper motion.div,
- *    NOT on scroll-snap container. All useTransform at top level.
+ * CHANGES v8 → v9 — Scroll Performance Optimization:
+ *  - Replaced manual scrollLeft manipulation with native CSS scroll-snap carousel.
+ *    Browser compositor handles horizontal scrolling at 60fps (zero JS per frame).
+ *  - touch-action: pan-x on carousel lets browser handle horizontal natively.
+ *    Vertical dismiss gesture lives on parent wrapper, separated by axis-locking.
+ *  - IntersectionObserver tracks active slide (replaces scroll listeners).
+ *  - ThumbStrip: O(1) index calculation from scrollLeft, CSS scroll-snap.
+ *  - All slide wrapper divs always mounted (no layout shifts during scroll).
+ *    Images conditionally rendered inside fixed-size wrappers.
+ *  - Component memoization (ThumbStrip, PillBar) to reduce re-renders.
+ *  - Feedback loop prevention between carousel ↔ thumbnail strip sync.
+ *  - BottomSheet interaction lock: pointer-events:none on carousel when sheet open.
  *
- * CHANGES v6 → v7 (preserved):
+ * CHANGES v7 → v8 (preserved):
+ *  - PillBar: no border, larger monochrome icons, ChevronUp swipe-up affordance.
  *  - Stacked BottomSheet architecture with independent secondary sheets.
  *  - Sort/Filter buttons mirror AnalyticsPage toolbar styling.
- *  - Primary sheet's Escape handler skips when secondary is open.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
@@ -76,18 +75,18 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
   );
 }
 
-// ─── Thumbnail Strip — center-marker scroll selector ──────────────────────
+// ─── Thumbnail Strip — CSS scroll-snap + O(1) index calculation ────────────
 const THUMB_SIZE = 40;
 const THUMB_GAP = 8;
 
 function ThumbStrip({ photos, currentIdx, onSelect }) {
   const stripRef = useRef(null);
   const thumbRefs = useRef([]);
-  const selectingRef = useRef(false); // guard: prevent feedback during programmatic scroll
+  const selectingRef = useRef(false);   // guard: prevent feedback during programmatic scroll
   const selectTimer = useRef(null);
 
-  // Scroll to center a given index
-  const centerThumb = useCallback((idx, smooth = true) => {
+  // Scroll to center a given index (used when carousel changes the active photo)
+  const centerThumb = useCallback((idx) => {
     const strip = stripRef.current;
     const el = thumbRefs.current[idx];
     if (!strip || !el) return;
@@ -95,33 +94,28 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
     clearTimeout(selectTimer.current);
     const target = el.offsetLeft - strip.clientWidth / 2 + el.offsetWidth / 2;
     const max = strip.scrollWidth - strip.clientWidth;
-    strip.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: smooth ? "smooth" : "instant" });
-    selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 100);
+    strip.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: "instant" });
+    selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 150);
   }, []);
 
-  // When currentIdx changes externally, center that thumb
+  // When currentIdx changes externally (from carousel IntersectionObserver), center that thumb
   useEffect(() => {
     centerThumb(currentIdx);
   }, [currentIdx, centerThumb]);
 
-  // Scroll listener — find thumb closest to center, switch photo instantly
+  // O(1) scroll listener — calculate index from scrollLeft directly
   useEffect(() => {
     const strip = stripRef.current;
     if (!strip) return;
     const lastIdx = { current: -1 };
     const onScroll = () => {
       if (selectingRef.current) return;
-      const mid = strip.scrollLeft + strip.clientWidth / 2;
-      let best = 0, bestDist = Infinity;
-      for (let i = 0; i < photos.length; i++) {
-        const el = thumbRefs.current[i];
-        if (!el) continue;
-        const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid);
-        if (d < bestDist) { bestDist = d; best = i; }
-      }
-      if (best !== lastIdx.current) {
-        lastIdx.current = best;
-        onSelect(best);
+      // O(1) calculation: fixed thumb dimensions → index from scroll position
+      const idx = Math.round(strip.scrollLeft / (THUMB_SIZE + THUMB_GAP));
+      const clamped = Math.max(0, Math.min(idx, photos.length - 1));
+      if (clamped !== lastIdx.current) {
+        lastIdx.current = clamped;
+        onSelect(clamped);
       }
     };
     strip.addEventListener("scroll", onScroll, { passive: true });
@@ -135,25 +129,38 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
   const pad = `calc(50vw - ${THUMB_SIZE / 2}px)`;
 
   return (
-    <div className="relative w-full">        {/* Scrollable strip */}
+    <div className="relative w-full">
       <div
         ref={stripRef}
         className="w-full overflow-x-auto relative py-2"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        style={{
+          scrollSnapType: "x proximity",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
       >
         <div
           className="flex items-center w-max"
           style={{ gap: THUMB_GAP, paddingLeft: pad, paddingRight: pad }}
         >
           {photos.map((photo, i) => {
-            thumbRefs.current[i] = undefined;
             const active = i === currentIdx;
             return (
               <button
                 key={photo.id}
                 ref={(el) => { thumbRefs.current[i] = el; }}
-                onClick={() => { selectingRef.current = true; clearTimeout(selectTimer.current); onSelect(i); selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 100); }}
-                style={{ width: THUMB_SIZE, height: THUMB_SIZE, flexShrink: 0 }}
+                onClick={() => {
+                  selectingRef.current = true;
+                  clearTimeout(selectTimer.current);
+                  onSelect(i);
+                  selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 150);
+                }}
+                style={{
+                  width: THUMB_SIZE,
+                  height: THUMB_SIZE,
+                  flexShrink: 0,
+                  scrollSnapAlign: "center",
+                }}
                 className={`btn-thumb transition-all duration-150 outline-none
                            ${active
                              ? "ring-[2px] ring-primary-400 ring-offset-1 ring-offset-black scale-[1.15] z-10"
@@ -423,16 +430,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
   // ── Carousel refs ────────────────────────────────────────────────────────
   const carouselRef = useRef(null);
-  const currentIdxRef = useRef(currentIdx);
-  const carouselStartIdx = useRef(0);
-  const carouselStartScrollLeft = useRef(0);
+  const isProgrammaticRef = useRef(false);     // true during goTo() scroll
+  const programmaticTimer = useRef(null);      // timeout to clear programmatic flag
+  const observerRef = useRef(null);            // IntersectionObserver instance
+  const initialScrollDone = useRef(false);     // guard for initial scroll effect
 
-  // ── Axis-locking touch refs ──────────────────────────────────────────────
+  // ── Axis-locking touch refs (vertical dismiss only) ─────────────────────
   const touchStart = useRef({ x: 0, y: 0 });
   const gestureAxis = useRef(null); // "x" | "y" | null
-
-  // Keep currentIdx in a ref for touch handlers (stable deps)
-  useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
 
   // ── Motion values ────────────────────────────────────────────────────────
   const defaultOffset = vh * 0.35;
@@ -462,6 +467,9 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     sheetY,
     (v) => (v < defaultOffset * 0.3 ? "none" : "auto")
   );
+
+  // ── Sheet lock: pointer-events on carousel ───────────────────────────────
+  const carouselPointerEvents = sheetExpanded ? "none" : "auto";
 
   // ── Data fetching ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -530,17 +538,95 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       .catch(() => setCommentsCount(0));
   }, [currentPhoto?.id]);
 
-  // ── Programmatic navigation (thumbnail strip, stats jump, keyboard) ──────
-  const goTo = useCallback((idx, instant = false) => {
-    setCurrentIdx(idx);
-    const el = carouselRef.current;
-    if (el) {
-      el.scrollTo({ left: idx * el.clientWidth, behavior: instant ? "instant" : "smooth" });
+  // Sync sheetY to 0 immediately when sheet opens to avoid flash
+  useEffect(() => {
+    if (sheetExpanded) {
+      dragAnimRef.current?.stop();
+      dragY.set(0);
+      sheetY.set(0);
     }
+  }, [sheetExpanded, sheetY, dragY]);
+
+  // ── Initial scroll position (runs after photos load, once) ──────────────
+  useEffect(() => {
+    if (initialScrollDone.current) return;
+    if (!startPhotoId || currentIdx <= 0 || photos.length <= 1) return;
+    initialScrollDone.current = true;
+    const el = carouselRef.current?.querySelector(`[data-index="${currentIdx}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "instant", inline: "center", block: "nearest" });
+    } else if (carouselRef.current) {
+      carouselRef.current.scrollLeft = currentIdx * carouselRef.current.clientWidth;
+    }
+  }, [startPhotoId, currentIdx, photos.length]);
+
+  // ── IntersectionObserver — track active slide ────────────────────────────
+  useEffect(() => {
+    const root = carouselRef.current;
+    if (!root) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Block observer during programmatic scrolls (goTo / thumbnail tap)
+        if (isProgrammaticRef.current) return;
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            const idx = Number(entry.target.dataset.index);
+            if (!Number.isNaN(idx)) {
+              setCurrentIdx(idx);
+            }
+            break;
+          }
+        }
+      },
+      { root, threshold: 0.5 }
+    );
+
+    const observeAll = () => {
+      const slides = root.querySelectorAll("[data-carousel-slide]");
+      slides.forEach((el) => observer.observe(el));
+    };
+    observeAll();
+
+    observerRef.current = observer;
+    return () => observer.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-observe slides when photos array changes
+  useEffect(() => {
+    const observer = observerRef.current;
+    if (!observer || !carouselRef.current) return;
+    observer.disconnect();
+    const slides = carouselRef.current.querySelectorAll("[data-carousel-slide]");
+    slides.forEach((el) => observer.observe(el));
+  }, [photos.length]);
+
+  // ── Programmatic navigation (thumbnail tap, stats jump, keyboard) ────────
+  const goTo = useCallback((idx) => {
+    if (idx < 0 || idx >= photos.length) return;
+    setCurrentIdx(idx);
     // Reset dismiss gesture
     dragAnimRef.current?.stop();
     dragY.set(0);
-  }, [dragY]);
+
+    const el = carouselRef.current;
+    if (!el) return;
+    const slide = el.querySelector(`[data-index="${idx}"]`);
+    if (slide) {
+      // Block IntersectionObserver during programmatic scroll
+      isProgrammaticRef.current = true;
+      clearTimeout(programmaticTimer.current);
+      slide.scrollIntoView({ behavior: "instant", inline: "center", block: "nearest" });
+      // Clear flag after scroll settles (generous timeout for slow devices)
+      programmaticTimer.current = setTimeout(() => {
+        isProgrammaticRef.current = false;
+      }, 400);
+    } else {
+      // Fallback: direct scrollLeft (e.g., initial mount before slides rendered)
+      el.scrollLeft = idx * el.clientWidth;
+    }
+  }, [photos.length, dragY]);
 
   // Jump to specific photo (from stats list)
   const jumpToPhoto = useCallback((photoId) => {
@@ -550,9 +636,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
   // ── Keyboard navigation ──────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
+    if (sheetExpanded) return; // Don't navigate when sheet is open
     if (e.key === "ArrowLeft" && currentIdx > 0) goTo(currentIdx - 1);
     if (e.key === "ArrowRight" && currentIdx < photos.length - 1) goTo(currentIdx + 1);
-  }, [currentIdx, photos.length, goTo]);
+  }, [currentIdx, photos.length, goTo, sheetExpanded]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -565,18 +652,17 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  // ── Axis-locked touch handlers (vertical dismiss) ────────────────────────
-  const onTouchStart = useCallback((e) => {
+  // ── Vertical dismiss gesture on photo wrapper ────────────────────────────
+  // (carousel has touch-action: pan-x, so vertical gestures bubble here)
+  const onWrapperTouchStart = useCallback((e) => {
     // Cancel any in-flight spring-back animation
     dragAnimRef.current?.stop();
     const touch = e.touches[0];
     touchStart.current = { x: touch.clientX, y: touch.clientY };
     gestureAxis.current = null;
-    carouselStartIdx.current = currentIdxRef.current;
-    carouselStartScrollLeft.current = carouselRef.current?.scrollLeft || 0;
   }, []);
 
-  const onTouchMove = useCallback((e) => {
+  const onWrapperTouchMove = useCallback((e) => {
     const touch = e.touches[0];
     const dx = touch.clientX - touchStart.current.x;
     const dy = touch.clientY - touchStart.current.y;
@@ -591,25 +677,16 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     // Vertical gesture: prevent default (block native scroll), update dragY
     if (gestureAxis.current === "y") {
       e.preventDefault();
-      // 1:1 sensitivity — photo follows finger exactly
       dragY.set(dy);
       return;
     }
 
-    // Horizontal gesture: manually drive scrollLeft for 1:1 tracking (no momentum)
-    if (gestureAxis.current === "x") {
-      e.preventDefault();
-      const el = carouselRef.current;
-      if (el) {
-        el.scrollLeft = carouselStartScrollLeft.current - dx;
-      }
-    }
+    // Horizontal gesture: do nothing — browser handles native scroll-snap
   }, [dragY]);
 
-  const onTouchEnd = useCallback((e) => {
+  const onWrapperTouchEnd = useCallback((e) => {
     const touch = e.changedTouches?.[0];
     if (!touch) { gestureAxis.current = null; return; }
-    const finalDx = touch.clientX - touchStart.current.x;
 
     if (gestureAxis.current === "y") {
       const currentDrag = dragY.get();
@@ -624,31 +701,25 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         stiffness: 400,
         damping: 30,
       });
-      gestureAxis.current = null;
-      return;
     }
 
-    if (gestureAxis.current === "x") {
-      const threshold = (typeof window !== "undefined" ? window.innerWidth : 400) * 0.2;
-      if (finalDx < -threshold && carouselStartIdx.current < photos.length - 1) {
-        goTo(carouselStartIdx.current + 1, true);
-      } else if (finalDx > threshold && carouselStartIdx.current > 0) {
-        goTo(carouselStartIdx.current - 1, true);
-      } else {
-        goTo(carouselStartIdx.current, true);
-      }
-      gestureAxis.current = null;
-    }
-  }, [dragY, onClose, goTo, photos.length]);
-
-  const handleThumbSelect = useCallback((idx) => goTo(idx, true), [goTo]);
-
-  const onTouchCancel = useCallback(() => {
-    if (gestureAxis.current === "x") {
-      goTo(carouselStartIdx.current, true); // snap back on cancel
-    }
+    // Horizontal gesture: do nothing — browser already snapped to nearest slide
     gestureAxis.current = null;
-  }, [goTo]);
+  }, [dragY, onClose]);
+
+  const onWrapperTouchCancel = useCallback(() => {
+    gestureAxis.current = null;
+  }, []);
+
+  const handleThumbSelect = useCallback((idx) => goTo(idx), [goTo]);
+
+  // ── Cleanup on unmount ───────────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      dragAnimRef.current?.stop();
+      clearTimeout(programmaticTimer.current);
+    };
+  }, []);
 
   // ── Share handler ────────────────────────────────────────────────────────
   const handleShare = async () => {
@@ -706,24 +777,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
   const secondaryOpen = sortOpen || filterOpen;
 
-  // Sync sheetY to 0 immediately when sheet opens to avoid flash
-  // (BottomSheet's internal y starts at 0 and animates to defaultOffset,
-  // so we need sheetY to already be at 0 when the animation begins)
-  useEffect(() => {
-    if (sheetExpanded) {
-      dragAnimRef.current?.stop();
-      dragY.set(0);
-      sheetY.set(0);
-    }
-  }, [sheetExpanded, sheetY, dragY]);
-
-  // ── Cleanup on unmount ───────────────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      dragAnimRef.current?.stop();
-    };
-  }, []);
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -737,41 +790,55 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
         style={{ opacity: bgOpacity }}
       />
 
-      {/* ── Photo wrapper — handles visual transforms (scale, translateY) ── */}
+      {/* ── Photo wrapper — handles visual transforms + vertical dismiss ── */}
       <motion.div
         className="flex-1 relative"
         style={{
           scale: photoScale,
           translateY: combinedTranslateY,
         }}
+        onTouchStart={onWrapperTouchStart}
+        onTouchMove={onWrapperTouchMove}
+        onTouchEnd={onWrapperTouchEnd}
+        onTouchCancel={onWrapperTouchCancel}
       >
-        {/* ── Carousel — plain div for CSS scroll-snap (NO framer transforms) ── */}
+        {/* ── Carousel — native scroll-snap (compositor-driven) ── */}
         <div
           ref={carouselRef}
-          className="absolute inset-0 flex overflow-hidden"
+          className="absolute inset-0 flex overflow-x-auto overflow-y-hidden"
           style={{
-            touchAction: "none",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
+            touchAction: "pan-x",                   // browser handles horizontal natively
+            scrollSnapType: "x mandatory",          // snap to nearest slide
+            overscrollBehaviorX: "contain",         // prevent parent scroll at edges
+            WebkitOverflowScrolling: "touch",       // iOS momentum scroll
+            scrollbarWidth: "none",                 // hide scrollbar (Firefox)
+            msOverflowStyle: "none",                // hide scrollbar (IE/Edge)
+            scrollBehavior: "auto",                 // instant scroll (not smooth)
+            willChange: "scroll-position",          // compositor optimization
+            pointerEvents: carouselPointerEvents,   // locked when BottomSheet open
           }}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          onTouchCancel={onTouchCancel}
         >
           {photos.map((photo, i) => (
             <div
               key={photo.id}
+              data-carousel-slide=""
+              data-index={i}
               className="flex-shrink-0 w-full h-full flex items-center justify-center py-8"
+              style={{
+                scrollSnapAlign: "center",          // snap target
+                contentVisibility: "auto",          // skip rendering off-screen slides
+                containIntrinsicSize: "auto 100%",  // stable size for content-visibility
+              }}
             >
-              {/* Only render nearby images for performance */}
-              {Math.abs(i - currentIdx) <= 1 && photo?.url ? (
+              {/* Only render <img> for nearby slides; placeholder keeps layout stable */}
+              {Math.abs(i - currentIdx) <= 2 && photo?.url ? (
                 <img
                   src={photo.url}
                   alt=""
                   className="max-w-full max-h-full object-contain select-none pointer-events-none"
                   draggable={false}
                   loading={i === currentIdx ? "eager" : "lazy"}
+                  decoding="async"
                 />
               ) : !photo?.url ? (
                 <div className="text-white/40 text-sm">No photo</div>
