@@ -105,11 +105,13 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
         className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
                    overflow-hidden cursor-pointer">
         {firstPhoto ? (
-          <img
+          <motion.img
             src={firstPhoto.url}
             alt=""
-            className="w-full h-full object-cover"
+            layoutId={`album-cover-${album.id}`}
+            className="w-full h-full object-cover rounded-t-2xl"
             loading="lazy"
+            transition={{ type: "spring", stiffness: 340, damping: 32, mass: 0.9 }}
           />
         ) : (
           <div className="flex items-center justify-center h-full">

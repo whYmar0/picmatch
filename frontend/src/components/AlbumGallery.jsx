@@ -715,16 +715,21 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.2 } }}
-      className="fixed inset-0 z-[90] bg-black flex flex-col overflow-hidden"
+      exit={{ opacity: 0, transition: { duration: 0.18 } }}
+      className="fixed inset-0 z-[90] flex flex-col overflow-hidden"
     >
-      {/* Background overlay */}
+      {/* Background overlay — two layers: outer tween for enter/exit fade, inner style-bound for dragY-based dismiss */}
       <motion.div
-        className="absolute inset-0 bg-black"
-        style={{ opacity: bgOpacity }}
-      />
+        className="absolute inset-0"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1, transition: { duration: 0.22 } }}
+        exit={{ opacity: 0, transition: { duration: 0.18 } }}
+      >
+        <motion.div
+          className="absolute inset-0 bg-black"
+          style={{ opacity: bgOpacity }}
+        />
+      </motion.div>
 
       {/* Photo wrapper — handles all touch gestures (axis-locked) */}
       <motion.div
@@ -752,10 +757,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
                 className="flex-shrink-0 w-full h-full flex items-center justify-center py-8"
               >
                 {Math.abs(i - currentIdx) <= 2 && photo?.url ? (
-                  <img
+                  <motion.img
                     src={photo.url}
                     alt=""
-                    className="max-w-full max-h-full object-contain select-none pointer-events-none"
+                    layoutId={i === 0 ? `album-cover-${album.id}` : undefined}
+                    initial={i === 0 ? { borderRadius: 16 } : undefined}
+                    animate={i === 0 ? { borderRadius: 0 } : undefined}
+                    transition={i === 0 ? { type: "spring", stiffness: 340, damping: 32, mass: 0.9 } : undefined}
+                    className={`max-w-full max-h-full select-none pointer-events-none ${i === 0 ? "object-cover" : "object-contain"}`}
                     draggable={false}
                     loading={i === currentIdx ? "eager" : "lazy"}
                     decoding="async"
