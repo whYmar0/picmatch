@@ -3,7 +3,10 @@
  * Replaces lucide-react ThumbsUp and RoundedHeart
  */
 export default function FilledHeart({ size = 24, className = "text-gray-400" }) {
-  // Non-square viewBox (512 × 456.549) — compute proportional height for equal visual size
+  // Non-square viewBox (512 × 456.549) — compute proportional height so
+  // a FilledHeart rendered next to a BrokenHeart at the same `size` prop
+  // occupies the same screen-space box. Both icons must use this exact
+  // viewBox + height formula or they will visually drift sub-pixel.
   const heartH = size * (456.549 / 512);
   return (
     <svg
@@ -15,6 +18,8 @@ export default function FilledHeart({ size = 24, className = "text-gray-400" }) 
       shapeRendering="geometricPrecision"
       textRendering="geometricPrecision"
       imageRendering="optimizeQuality"
+      fillRule="evenodd"
+      clipRule="evenodd"
     >
       <path
         fillRule="nonzero"

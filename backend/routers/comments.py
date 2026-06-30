@@ -240,6 +240,11 @@ async def create_comment(
     db.add(comment)
     await db.flush()
 
+    # Capture comment ID BEFORE commit — after commit() the ORM object is
+    # expired, and accessing comment.id would trigger a synchronous lazy load
+    # on the async session, raising sqlalchemy.exc.MissingGreenlet.
+    new_comment_id = _s(comment.id)
+
     # Create Notification
     uid = _s(current_user.id)
     try:
@@ -269,7 +274,7 @@ async def create_comment(
                         type=NotificationType.COMMENT,
                         album_id=album_creator_id,
                         photo_id=_s(body.photo_id),
-                        comment_id=_s(comment.id),
+                        comment_id=new_comment_id,
                         text=comment.text[:100],
                     ))
         else:
@@ -281,7 +286,7 @@ async def create_comment(
                     type=NotificationType.COMMENT,
                     album_id=album_creator_id,
                     photo_id=_s(body.photo_id),
-                    comment_id=_s(comment.id),
+                    comment_id=new_comment_id,
                     text=comment.text[:100],
                 ))
     except Exception:
@@ -289,7 +294,7 @@ async def create_comment(
 
     await db.commit()
 
-    # Reload with relationships
+    # Reload with relationships — use the ID captured before commit
     result = await db.execute(
         select(Comment)
         .options(
@@ -299,7 +304,7 @@ async def create_comment(
             selectinload(Comment.replies).selectinload(Comment.likes),
             selectinload(Comment.replies).selectinload(Comment.replies),
         )
-        .where(Comment.id == _s(comment.id))
+        .where(Comment.id == new_comment_id)
     )
     c = result.scalar_one()
     return _build_comment_out(c, uid)

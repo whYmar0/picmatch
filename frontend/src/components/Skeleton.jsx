@@ -73,7 +73,7 @@ export function AnalyticsSkeleton() {
 
 export function VotePageSkeleton() {
   return (
-    <div className="min-h-screen bg-surface-light dark:bg-surface-dark flex flex-col items-center px-4 pt-6">
+    <div className="min-h-[100dvh] bg-surface-light dark:bg-surface-dark flex flex-col items-center px-4 pt-6">
       <div className="w-full max-w-[360px] space-y-4">
         <div className="flex items-center gap-3">
           <SkeletonBox className="h-11 w-11 rounded-full" />

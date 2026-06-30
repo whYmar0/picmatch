@@ -33,7 +33,13 @@ async def migrate():
             await conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expires_at TIMESTAMP WITH TIME ZONE"))
         except Exception as e:
             print(f"Skipped reset_token_expires_at: {e}")
-            
+
+        try:
+            print("Adding avatar_color...")
+            await conn.execute(text("ALTER TABLE users ADD COLUMN avatar_color VARCHAR(20)"))
+        except Exception as e:
+            print(f"Skipped avatar_color: {e}")
+
     print("Migration complete!")
 
 if __name__ == "__main__":

@@ -74,7 +74,9 @@ class UserOut(BaseModel):
     email:      str
     username:   str
     role:       UserRole
-    avatar_url: Optional[str] = None   # NEW
+    avatar_url: Optional[str] = None   # NEW: profile photo
+    avatar_color: Optional[str] = None # NEW: random fallback color
+    is_verified: bool = True
     created_at: datetime
 
 class Token(BaseModel):

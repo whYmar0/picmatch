@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SendHorizontal, X } from "lucide-react";
+import toast from "react-hot-toast";
 import { commentsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
 import { CommentSkeleton } from "./Skeleton";
@@ -165,7 +166,8 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
       });
       setText("");
       setReplyTo(null);
-      // Optimistic update + fallback reload
+      // Optimistic update — the optimistic result is reliable so we avoid
+      // calling load() which would briefly show a skeleton and could race.
       if (created) {
         setComments((prev) => replyTo?.id
           ? prev.map((comment) => String(comment.id) === String(replyTo.id)
@@ -173,9 +175,9 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
             : comment)
           : [...prev, created]);
       }
-      // Always reload to ensure consistency with server
-      load();
-    } catch { /**/ } finally {
+    } catch (err) {
+      toast.error(err?.message || "Failed to submit comment");
+    } finally {
       setSubmitting(false);
     }
   };

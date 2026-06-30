@@ -71,8 +71,15 @@ async def _commit_or_conflict(db: AsyncSession) -> None:
         raise HTTPException(status_code=409, detail="A user with this email or username already exists.") from exc
 
 
+AVATAR_COLORS = ["purple", "green", "yellow", "orange", "pink", "blue"]
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
+async def register(
+    user_data: UserRegister,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
     code = generate_verification_code()
     expires_at = get_now() + timedelta(minutes=15)
 
@@ -96,9 +103,9 @@ async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
             user.username = user_data.username
             user.hashed_password = hash_password(user_data.password)
             user.role = UserRole.CREATOR
-            user.is_verified = True
-            user.verification_code = None
-            user.verification_code_expires_at = None
+            user.is_verified = False
+            user.verification_code = code
+            user.verification_code_expires_at = expires_at
             await db.flush()
         else:
             user = User(
@@ -106,9 +113,10 @@ async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
                 username=user_data.username,
                 hashed_password=hash_password(user_data.password),
                 role=UserRole.CREATOR,
-                is_verified=True,
-                verification_code=None,
-                verification_code_expires_at=None,
+                is_verified=False,
+                verification_code=code,
+                verification_code_expires_at=expires_at,
+                avatar_color=random.choice(AVATAR_COLORS),
             )
             db.add(user)
             await db.flush()
@@ -117,12 +125,15 @@ async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
         await db.rollback()
         raise HTTPException(status_code=409, detail="A user with this email or username already exists.") from exc
 
+    # Send verification email in the background
+    background_tasks.add_task(send_verification_email, user.email, code)
+
     return {
         "access_token": create_access_token(user.id, user.role.value),
         "token_type": "bearer",
         "user": UserOut.model_validate(user),
-        "message": "User registered successfully.",
-        "requires_verification": False,
+        "message": "Account created. Please check your email for the verification code.",
+        "requires_verification": True,
     }
 
 

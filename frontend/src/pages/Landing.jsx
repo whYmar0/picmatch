@@ -81,7 +81,7 @@ export default function Landing() {
   }, [user, navigate]);
 
   return (
-    <div className="min-h-screen overflow-x-hidden">
+    <div className="min-h-[100dvh] overflow-x-hidden">
       <section className="max-w-6xl mx-auto px-4 pt-16 pb-20
                           grid lg:grid-cols-2 gap-10 items-center">
 

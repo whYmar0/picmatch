@@ -60,7 +60,14 @@ function DashboardFallback() {
 function HomeRoute() {
   const { user, loading } = useAuth();
   if (loading) return <LoadingSpinner />;
-  return user ? <Navigate to="/dashboard" replace /> : <Landing />;
+  if (user) {
+    // Если email не подтверждён — на страницу верификации, а не в Dashboard
+    if (!user.is_verified) {
+      return <Navigate to={`/verify-email?email=${encodeURIComponent(user.email)}`} replace />;
+    }
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <Landing />;
 }
 
 export default function App() {
@@ -85,7 +92,7 @@ export default function App() {
                 duration: 3000,
               }}
             />
-            <div className="min-h-screen flex flex-col overflow-x-hidden">
+            <div className="min-h-[100dvh] flex flex-col overflow-x-hidden">
               <Navbar />
               <main className="flex-1 overflow-x-hidden">
                 <Routes>

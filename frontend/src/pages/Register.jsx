@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Mail, Lock, User, Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from "lucide-react";
-import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 
@@ -49,8 +48,7 @@ export default function Register() {
     try {
       const { remember, ...payload } = form;
       const res = await register({ ...payload, role: "creator" }, remember);
-      toast.success(res.message || "Аккаунт создан");
-      navigate("/dashboard", { replace: true });
+      navigate(`/verify-email?email=${encodeURIComponent(form.email)}`, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

@@ -57,6 +57,7 @@ class User(Base):
     reset_token     = Column(String(255), nullable=True)
     reset_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     avatar_url      = Column(String(500), nullable=True)      # NEW: profile avatar
+    avatar_color    = Column(String(20), nullable=True)          # NEW: random avatar fallback color (purple, green, etc.)
     created_at      = Column(DateTime(timezone=True), default=_now)
 
     albums         = relationship("Album", back_populates="creator", cascade="all, delete-orphan")

@@ -558,10 +558,20 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // ── Lock body scroll ─────────────────────────────────────────────────────
+  // ── Lock body scroll + suppress pull-to-refresh ──────────────────────────
+  // While the gallery is mounted we lock body scroll AND set
+  // `overscroll-behavior` to `none` on the body. Without `overscroll-behavior`,
+  // the OS-level pull-to-refresh gesture fires when the user drags the photo
+  // down near the visible scroll edge — on iOS the page reloads the URL and
+  // on Android Chromium it shows the refresh spinner that interrupts the
+  // user. This useEffect is the single toggle for that suppression.
   useEffect(() => {
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
+    document.body.style.overscrollBehavior = "none";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+    };
   }, []);
 
   // ── Unified touch handlers (axis-lock: horizontal → dragX, vertical → dragY) ──
@@ -784,9 +794,18 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   // backdrop + controls fade out smoothly while the photo flies
   // continuously into the album card, with no off-screen excursion and no
   // freeze-frame at the seam.
+  //
+  // The wrapper also has `touch-action: none` and `overscroll-behavior:
+  // contain` so the OS-level pull-to-refresh gesture does NOT fire while
+  // the user is dragging the photo. `touch-action: none` tells the browser
+  // up-front not to start any default touch handling (no pan, no pinch, no
+  // tap-zoom) for this subtree; our onTouchMove handler manages everything.
+  // `overscroll-behavior: contain` blocks scroll-chaining to ancestor
+  // scroll contexts as a belt-and-suspenders to the body-level suppression.
   return (
     <motion.div
       className="fixed inset-0 z-[90] flex flex-col overflow-hidden"
+      style={{ touchAction: "none", overscrollBehavior: "contain" }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 0.22 } }}
       exit={{ opacity: 0, transition: { duration: 0.22 } }}

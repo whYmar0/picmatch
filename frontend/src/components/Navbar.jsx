@@ -18,16 +18,27 @@ import { authApi, notificationsApi } from "../api";
 import toast from "react-hot-toast";
 import AvatarCropModal from "./AvatarCropModal";
 
+// ─── Avatar color map ─────────────────────────────────────────────────────────
+const AVATAR_COLORS = {
+  purple: { bg: "bg-purple-100 dark:bg-purple-900/40", text: "text-purple-600" },
+  green:  { bg: "bg-green-100 dark:bg-green-900/40",   text: "text-green-600" },
+  yellow: { bg: "bg-yellow-100 dark:bg-yellow-900/40", text: "text-yellow-600" },
+  orange: { bg: "bg-orange-100 dark:bg-orange-900/40", text: "text-orange-600" },
+  pink:   { bg: "bg-pink-100 dark:bg-pink-900/40",     text: "text-pink-600" },
+  blue:   { bg: "bg-blue-100 dark:bg-blue-900/40",     text: "text-blue-600" },
+};
+
 // ─── User Avatar (reusable) ────────────────────────────────────────────────────
 export function UserAvatar({ user, size = 28, className = "", onClick }) {
   if (!user) return null;
   const initial = user.username?.[0]?.toUpperCase() ?? "?";
+  const c = AVATAR_COLORS[user.avatar_color] ?? AVATAR_COLORS.purple;
   return (
     <div
       onClick={onClick}
       title={user.username}
-      className={`rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center
-                  bg-primary-100 dark:bg-primary-900/40 text-primary-600 font-bold
+      className={`rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold
+                  ${c.bg} ${c.text}
                   ${onClick ? "cursor-pointer hover:ring-2 hover:ring-primary-400 transition-all" : ""}
                   ${className}`}
       style={{ width: size, height: size, fontSize: size * 0.42 }}
@@ -340,7 +351,7 @@ export default function Navbar() {
                                        hover:bg-primary-50 dark:hover:bg-primary-900/20 text-gray-700 dark:text-gray-200 transition-colors"
                           >
                             {isDark ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-primary-400" />}
-                            <span className="flex-1 text-left">{isDark ? t("lightTheme") : t("darkTheme")}</span>
+                            <span className="flex-1 text-left">{isDark ? t("darkTheme") : t("lightTheme")}</span>
                             <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isDark ? 'bg-primary-400' : 'bg-gray-200 dark:bg-gray-700'}`}>
                               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isDark ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
                             </div>
