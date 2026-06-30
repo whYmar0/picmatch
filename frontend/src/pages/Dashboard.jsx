@@ -44,9 +44,23 @@ export default function Dashboard() {
     });
   }, [galleryAlbum, baseScaleMV]);
 
-  useEffect(() => {
-    if (!galleryAlbum) dragProgressMV.set(0);
-  }, [galleryAlbum, dragProgressMV]);
+  // ─── dragProgressMV lifecycle ────────────────────────────────────────────
+  // dragProgressMV is the "page zoom-out" factor driven by the gallery's
+  // drag interaction. While the gallery is open, the AlbumGallery owns it
+  // and writes to it on every touchmove / dismiss-spring onUpdate.
+  //
+  // Architectural rule:
+  //   • On OPEN  → reset to 0 in handlePhotoClick (BEFORE React commits).
+  //   • On CLOSE → DO NOT reset here. If we did, dragProgressMV would jump
+  //                from 1.0 → 0 the moment AnimatePresence unmounts the
+  //                wrapper, which would in turn drop pageScaleMV from
+  //                1.0 → 0.94 (baseScaleMV) instantly — the user sees the
+  //                page "restart zoom" mid-FLIP. That was bug #3.
+  //   • The Shared Element Transition needs a STABLE target rect on the
+  //     AlbumCard side. With dragProgressMV pinned at 1.0 throughout the
+  //     dismiss, pageScaleMV collapses to 1.0 (base + (1-base)·1 = 1),
+  //     so the album card does not visibly resize while the FLIP runs.
+  //   • dragProgressMV is reset only on the next open, in handlePhotoClick.
 
   // Recently visited — filtered to exclude albums the user owns
   const recentAll = user ? getRecentAlbums(user.id) : [];
@@ -71,12 +85,31 @@ export default function Dashboard() {
   };
 
   const handlePhotoClick = useCallback((album, photo) => {
+    // Reset dragProgressMV BEFORE React commits the new galleryAlbum state.
+    // If we did this in a useEffect, the previous gallery could have already
+    // triggered a one-frame reflow with the stale value. By setting it on
+    // the same tick as setGalleryAlbum, the open sequence begins cleanly
+    // with pageScaleMV = baseScaleMV = 0.94.
+    dragProgressMV.set(0);
     setGalleryAlbum({ album: album, photoId: photo?.id });
-  }, []);
+  }, [dragProgressMV]);
 
   const handleGalleryClose = useCallback(() => {
+    // Pin dragProgressMV at 1.0 BEFORE React commits the galleryAlbum=null
+    // update. This collapses
+    //   pageScaleMV = baseScaleMV + (1 - baseScaleMV) * dragProgressMV
+    // to a constant 1.0 for the entire Shared Element Transition — so the
+    // album card's natural rect (the SET's destination) stays stable while
+    // baseScaleMV unzooms back toward 1 over its own 0.36s. Without this
+    // pin, the destination rect wobbles every frame and the SET path
+    // flickers visibly.
+    //
+    // AlbumGallery.onWrapperTouchEnd (dismiss branch) also calls
+    // dragProgressMV.set(1) — this callback is the defensive belt-and-
+    // suspenders for any OTHER close path that might be added later.
+    dragProgressMV.set(1);
     setGalleryAlbum(null);
-  }, []);
+  }, [dragProgressMV]);
 
   if (loading) return (
     <div className="max-w-5xl mx-auto px-4 py-8">

@@ -395,6 +395,12 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   // ── Axis-locking touch refs ──────────────────────────────────────────────
   const touchStart = useRef({ x: 0, y: 0, time: 0 });
+  // Capture dragY/dragX at touchStart so an interrupted spring (snap-back
+  // mid-flight on Y, carousel-snap mid-flight on X) can resume from its
+  // current animated value rather than snapping to "delta-from-zero" on
+  // the very next touchmove tick — a visible jump.
+  const touchStartDragY = useRef(0);
+  const touchStartDragX = useRef(0);
   const gestureAxis = useRef(null);
 
   // ── Motion values ────────────────────────────────────────────────────────
@@ -564,6 +570,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     dragYAnimRef.current?.stop();
     const touch = e.touches[0];
     touchStart.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    // Snapshot dragY / dragX so a new touchmove's delta is added on top
+    // of the current (post-interrupt) animated value. Without this, if
+    // a snap-back/dismiss Y spring OR a carousel X snap was cancelled
+    // mid-flight, the next move would snap the motion value from its
+    // mid-value straight to "dy-from-zero" (or dx-from-zero) on the very
+    // first touchmove tick — a visible translation jump.
+    touchStartDragY.current = dragY.get();
+    touchStartDragX.current = dragX.get();
     gestureAxis.current = null;
   }, []);
 
@@ -581,10 +595,13 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
     if (gestureAxis.current === "y") {
       e.preventDefault();
-      dragY.set(dy);
+      // Compose dragY from the touchStart offset so we resume from the
+      // current (possibly mid-interrupt) value, not from 0.
+      const newDragY = touchStartDragY.current + dy;
+      dragY.set(newDragY);
       // Drive parent page depth-zoom unzoom (0 = full zoom, 1 = fully unzoomed).
       if (dragProgressMV) {
-        const progress = Math.max(0, Math.min(1, dy / (vh * 0.5)));
+        const progress = Math.max(0, Math.min(1, newDragY / (vh * 0.5)));
         dragProgressMV.set(progress);
       }
       return;
@@ -593,10 +610,12 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     if (gestureAxis.current === "x") {
       e.preventDefault();
       // Rubber-band at edges
-      let clampedDx = dx;
-      if ((currentIdxRef.current === 0 && dx > 0) ||
-          (currentIdxRef.current === photos.length - 1 && dx < 0)) {
-        clampedDx = dx * 0.3;
+      let clampedDx = touchStartDragX.current + dx;
+      if ((currentIdxRef.current === 0 && clampedDx > touchStartDragX.current) ||
+          (currentIdxRef.current === photos.length - 1 && clampedDx < touchStartDragX.current)) {
+        // Over-scroll: dampen movement past the natural offset.
+        const overShoot = clampedDx - touchStartDragX.current;
+        clampedDx = touchStartDragX.current + overShoot * 0.3;
       }
       dragX.set(clampedDx);
     }
@@ -609,41 +628,29 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     if (gestureAxis.current === "y") {
       const currentDrag = dragY.get();
       if (currentDrag > 100) {
-        // Dismiss — "continue the zoom-out from where the finger was released".
-        // We animate dragY smoothly from its current value past the release
-        // point up to vh * 0.5 (the upper bound of the dragY-driven transforms).
-        // Because photoDragScale = useTransform(dragY, [0, vh*0.5], [1, 0.78]),
-        // the photo keeps shrinking PAST the release scale. The inner backdrop
-        // layer bound to bgOpacity = useTransform(dragY, [0, vh*0.5], [1, 0])
-        // finishes fading to 0 over the same trajectory, so the backdrop is
-        // transparent by the time the spring settles.
-        //
-        // We then unmount via onClose(), but only in the spring's onComplete:
-        // the wrapper stays mounted the whole time, so the user sees one
-        // continuous motion — drag → continue-shinking-and-fading → morph
-        // into the album card. Because the wrapper / backdrop / motion.img
-        // all have no exit-fade, and the motion.img shares a layoutId with the
-        // AlbumCard's image, Motion's shared-layout FLIP-extracts the img to
-        // the layout root and interpolates its position+scale to the card's
-        // rect with no opacity flicker or disappearance.
-        dragYAnimRef.current = animate(dragY, vh * 0.5, {
-          type: "spring",
-          stiffness: 240,
-          damping: 28,
-          mass: 0.95,
-          onComplete: () => {
-            onClose();
-          },
-        });
+        // Dismiss — instantly hand off to Motion's Shared Element
+        // Transition. The SET FLIP-extracts the motion.img using its
+        // CURRENT rect (the position the user's finger was at release
+        // time) and animates it to the album card's natural rect using
+        // the album card's own spring. Continuity is preserved because
+        // captured position = last seen position.
+        dragYAnimRef.current?.stop();
+        onClose();      // dragProgressMV pin = 1 is owned by handleGalleryClose
         gestureAxis.current = null;
         return;
       }
+      // Snap-back: same principle — one animation drives both.
       dragYAnimRef.current = animate(dragY, 0, {
         type: "spring", stiffness: 400, damping: 30,
+        onUpdate: (latest) => {
+          if (dragProgressMV) {
+            dragProgressMV.set(Math.max(0, Math.min(1, latest / (vh * 0.5))));
+          }
+        },
+        onComplete: () => {
+          if (dragProgressMV) dragProgressMV.set(0);
+        },
       });
-      if (dragProgressMV) {
-        animate(dragProgressMV, 0, { duration: 0.32, ease: [0.32, 0.72, 0, 1] });
-      }
       gestureAxis.current = null;
       return;
     }
@@ -695,8 +702,16 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const handleThumbSelect = useCallback((idx) => goTo(idx), [goTo]);
 
   // ── Cleanup on unmount ───────────────────────────────────────────────────
-  // Note: dragProgressMV reset is handled by the Dashboard useEffect when
-  // galleryAlbum becomes null (single source of truth, no race).
+  // We intentionally do NOT reset dragProgressMV here. The close path needs
+  // dragProgressMV to remain at 1.0 throughout the SET (Motion's layoutId
+  // FLIP) so that the page scale stays at 1.0 while the album card target
+  // rect interpolates from the gallery-photo position. Resetting it now
+  // would drop pageScaleMV instantly to baseScaleMV (≈0.94), causing the
+  // page to visibly "restart zoom" mid-FLIP.
+  //
+  // The reset is performed instead in Dashboard.handlePhotoClick BEFORE
+  // a new gallery opens, so the next open sequence starts cleanly with
+  // pageScaleMV = baseScaleMV = 0.94.
   useEffect(() => {
     return () => {
       snapAnimRef.current?.stop();
@@ -759,23 +774,29 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   const secondaryOpen = sortOpen || filterOpen;
 
-  // The wrapper has no `exit` — AnimatePresence unmounts it instantly when the
-  // gallery state flips. The motion.img with layoutId is FLIP-extracted to a
-  // shared-element layer during the close morph, so it never inherits any
-  // parent opacity (avoids the "disappearing → reappearing" perception).
-  // The inner bg layer is style-bound to dragY (via bgOpacity), so the
-  // backdrop finishes fading to 0 by the time the user releases a dismiss
-  // drag — by the moment the wrapper unmounts, the backdrop is already
-  // transparent and the img is already small, so the FLIP into the album
-  // card position is a single seamless motion with no flicker.
+  // The wrapper has `initial`/`animate`/`exit` for opacity. AnimatePresence
+  // detects the exit and fades the wrapper out over 0.22s rather than
+  // unmounting it instantly. During this fade, the motion.img with layoutId
+  // is FLIP-extracted to the shared-element layer at the root — it does
+  // NOT inherit the wrapper's fading opacity — and Motion animates it from
+  // its captured rect (finger release position) to the album card's
+  // natural rect using the album-card's own spring. End result: the
+  // backdrop + controls fade out smoothly while the photo flies
+  // continuously into the album card, with no off-screen excursion and no
+  // freeze-frame at the seam.
   return (
     <motion.div
       className="fixed inset-0 z-[90] flex flex-col overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: 0.22 } }}
+      exit={{ opacity: 0, transition: { duration: 0.22 } }}
     >
-      {/* Background overlay — outer tween does the enter fade only;
-          there is no exit fade because the wrapper itself is unmounted
-          without animation when state flips. Inner layer is style-bound
-          to dragY (so backdrop already fades during a swipe-down dismiss). */}
+      {/* Background overlay — outer tween handles the enter fade; the
+          wrapper itself has an exit (opacity → 0 over 0.22s) that covers
+          the backdrop's disappear. Inner bg-black layer is style-bound
+          to dragY so it is already partially faded at the moment the
+          user releases a dismiss drag — so during the exit it finishes
+          fading to 0 cleanly without any visual snap. */}
       <motion.div
         className="absolute inset-0"
         initial={{ opacity: 0 }}
