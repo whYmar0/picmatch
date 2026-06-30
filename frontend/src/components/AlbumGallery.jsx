@@ -423,8 +423,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const bgOpacity = useTransform(dragY, [0, vh * 0.5], [1, 0]);
 
   // Photo shrinks as user drags down — visual feedback tied to dragY.
-  // Clamped so excessive drag doesn't shrink below 0.88x.
-  const photoDragScale = useTransform(dragY, [0, vh * 0.5], [1, 0.88], { clamp: true });
+  // Clamped so excessive drag doesn't shrink below 0.78x.
+  const photoDragScale = useTransform(dragY, [0, vh * 0.5], [1, 0.78], { clamp: true });
 
   // Final photo scale = BottomSheet-driven shrink × drag-driven shrink.
   const combinedScale = useTransform(
@@ -609,11 +609,32 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     if (gestureAxis.current === "y") {
       const currentDrag = dragY.get();
       if (currentDrag > 100) {
-        // Dismiss: photo returns to the album card immediately via the
-        // layoutId morph. The 320ms motion.img exit-opacity transition
-        // covers the morph spring so the offset position (where the user
-        // released) doesn't flicker during the close.
-        onClose();
+        // Dismiss — "continue the zoom-out from where the finger was released".
+        // We animate dragY smoothly from its current value past the release
+        // point up to vh * 0.5 (the upper bound of the dragY-driven transforms).
+        // Because photoDragScale = useTransform(dragY, [0, vh*0.5], [1, 0.78]),
+        // the photo keeps shrinking PAST the release scale. The inner backdrop
+        // layer bound to bgOpacity = useTransform(dragY, [0, vh*0.5], [1, 0])
+        // finishes fading to 0 over the same trajectory, so the backdrop is
+        // transparent by the time the spring settles.
+        //
+        // We then unmount via onClose(), but only in the spring's onComplete:
+        // the wrapper stays mounted the whole time, so the user sees one
+        // continuous motion — drag → continue-shinking-and-fading → morph
+        // into the album card. Because the wrapper / backdrop / motion.img
+        // all have no exit-fade, and the motion.img shares a layoutId with the
+        // AlbumCard's image, Motion's shared-layout FLIP-extracts the img to
+        // the layout root and interpolates its position+scale to the card's
+        // rect with no opacity flicker or disappearance.
+        dragYAnimRef.current = animate(dragY, vh * 0.5, {
+          type: "spring",
+          stiffness: 240,
+          damping: 28,
+          mass: 0.95,
+          onComplete: () => {
+            onClose();
+          },
+        });
         gestureAxis.current = null;
         return;
       }
@@ -738,17 +759,27 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   const secondaryOpen = sortOpen || filterOpen;
 
+  // The wrapper has no `exit` — AnimatePresence unmounts it instantly when the
+  // gallery state flips. The motion.img with layoutId is FLIP-extracted to a
+  // shared-element layer during the close morph, so it never inherits any
+  // parent opacity (avoids the "disappearing → reappearing" perception).
+  // The inner bg layer is style-bound to dragY (via bgOpacity), so the
+  // backdrop finishes fading to 0 by the time the user releases a dismiss
+  // drag — by the moment the wrapper unmounts, the backdrop is already
+  // transparent and the img is already small, so the FLIP into the album
+  // card position is a single seamless motion with no flicker.
   return (
     <motion.div
-      exit={{ opacity: 0, transition: { duration: 0.18 } }}
       className="fixed inset-0 z-[90] flex flex-col overflow-hidden"
     >
-      {/* Background overlay — two layers: outer tween for enter/exit fade, inner style-bound for dragY-based dismiss */}
+      {/* Background overlay — outer tween does the enter fade only;
+          there is no exit fade because the wrapper itself is unmounted
+          without animation when state flips. Inner layer is style-bound
+          to dragY (so backdrop already fades during a swipe-down dismiss). */}
       <motion.div
         className="absolute inset-0"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1, transition: { duration: 0.22 } }}
-        exit={{ opacity: 0, transition: { duration: 0.18 } }}
       >
         <motion.div
           className="absolute inset-0 bg-black"
@@ -788,8 +819,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                     layoutId={i === 0 ? `album-cover-${album.id}` : undefined}
                     initial={i === 0 ? { borderRadius: 16 } : undefined}
                     animate={i === 0 ? { borderRadius: 0 } : undefined}
-                    transition={i === 0 ? { type: "spring", stiffness: 340, damping: 32, mass: 0.9 } : undefined}
-                    exit={{ opacity: 0, transition: { duration: 0.32, ease: [0.32, 0.72, 0, 1] } }}
+                    transition={i === 0 ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 } : undefined}
                     className={`max-w-full max-h-full select-none pointer-events-none ${i === 0 ? "object-cover" : "object-contain"}`}
                     draggable={false}
                     loading={i === currentIdx ? "eager" : "lazy"}
