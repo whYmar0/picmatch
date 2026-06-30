@@ -365,7 +365,7 @@ function GalleryFilterSheet({
 }
 
 // ─── Main Gallery Component ─────────────────────────────────────────────────
-export default function AlbumGallery({ album, onClose, startPhotoId }) {
+export default function AlbumGallery({ album, onClose, startPhotoId, dragProgressMV }) {
   const { t } = useLang();
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
 
@@ -421,6 +421,16 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
   );
 
   const bgOpacity = useTransform(dragY, [0, vh * 0.5], [1, 0]);
+
+  // Photo shrinks as user drags down — visual feedback tied to dragY.
+  // Clamped so excessive drag doesn't shrink below 0.88x.
+  const photoDragScale = useTransform(dragY, [0, vh * 0.5], [1, 0.88], { clamp: true });
+
+  // Final photo scale = BottomSheet-driven shrink × drag-driven shrink.
+  const combinedScale = useTransform(
+    [photoScale, photoDragScale],
+    ([sheetScale, dragScale]) => sheetScale * dragScale
+  );
   const controlsOpacity = useTransform(sheetY, [0, defaultOffset], [0, 1]);
   const controlsPointerEvents = useTransform(
     sheetY,
@@ -522,7 +532,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     // Reset dismiss gesture
     dragYAnimRef.current?.stop();
     dragY.set(0);
-  }, [photos.length, dragX, dragY]);
+    if (dragProgressMV) dragProgressMV.set(0);
+  }, [photos.length, dragX, dragY, dragProgressMV]);
 
   const jumpToPhoto = useCallback((photoId) => {
     const idx = photos.findIndex((p) => String(p.id) === String(photoId));
@@ -571,6 +582,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     if (gestureAxis.current === "y") {
       e.preventDefault();
       dragY.set(dy);
+      // Drive parent page depth-zoom unzoom (0 = full zoom, 1 = fully unzoomed).
+      if (dragProgressMV) {
+        const progress = Math.max(0, Math.min(1, dy / (vh * 0.5)));
+        dragProgressMV.set(progress);
+      }
       return;
     }
 
@@ -593,6 +609,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
     if (gestureAxis.current === "y") {
       const currentDrag = dragY.get();
       if (currentDrag > 100) {
+        // Dismiss: photo returns to the album card immediately via the
+        // layoutId morph. The 320ms motion.img exit-opacity transition
+        // covers the morph spring so the offset position (where the user
+        // released) doesn't flicker during the close.
         onClose();
         gestureAxis.current = null;
         return;
@@ -600,6 +620,9 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       dragYAnimRef.current = animate(dragY, 0, {
         type: "spring", stiffness: 400, damping: 30,
       });
+      if (dragProgressMV) {
+        animate(dragProgressMV, 0, { duration: 0.32, ease: [0.32, 0.72, 0, 1] });
+      }
       gestureAxis.current = null;
       return;
     }
@@ -651,6 +674,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
   const handleThumbSelect = useCallback((idx) => goTo(idx), [goTo]);
 
   // ── Cleanup on unmount ───────────────────────────────────────────────────
+  // Note: dragProgressMV reset is handled by the Dashboard useEffect when
+  // galleryAlbum becomes null (single source of truth, no race).
   useEffect(() => {
     return () => {
       snapAnimRef.current?.stop();
@@ -734,7 +759,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
       {/* Photo wrapper — handles all touch gestures (axis-locked) */}
       <motion.div
         className="flex-1 relative"
-        style={{ scale: photoScale, translateY: combinedTranslateY }}
+        style={{ scale: combinedScale, translateY: combinedTranslateY }}
         onTouchStart={onWrapperTouchStart}
         onTouchMove={onWrapperTouchMove}
         onTouchEnd={onWrapperTouchEnd}
@@ -764,6 +789,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId }) {
                     initial={i === 0 ? { borderRadius: 16 } : undefined}
                     animate={i === 0 ? { borderRadius: 0 } : undefined}
                     transition={i === 0 ? { type: "spring", stiffness: 340, damping: 32, mass: 0.9 } : undefined}
+                    exit={{ opacity: 0, transition: { duration: 0.32, ease: [0.32, 0.72, 0, 1] } }}
                     className={`max-w-full max-h-full select-none pointer-events-none ${i === 0 ? "object-cover" : "object-contain"}`}
                     draggable={false}
                     loading={i === currentIdx ? "eager" : "lazy"}
