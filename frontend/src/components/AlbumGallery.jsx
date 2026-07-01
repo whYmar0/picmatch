@@ -26,7 +26,7 @@ import {
 import { albumsApi, commentsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
 import BottomSheet from "./BottomSheet";
-import PhotoComments from "./PhotoComments";
+import { PhotoCommentsList, CommentInput } from "./PhotoComments";
 import FilledHeart from "./FilledHeart";
 import BrokenHeart from "./BrokenHeart";
 
@@ -772,12 +772,41 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   const voter_summaries = analytics?.voter_summaries || [];
 
+  // ── Comment state for split layout (list in scrollable area, input in footer) ──
+  const [replyTarget, setReplyTarget] = useState(null);
+  const replyTriggerRef = useRef({});
+  // Wire replyTrigger so PhotoCommentsList can signal CommentInput to start a reply
+  replyTriggerRef.current._onReply = (comment, root) => {
+    setReplyTarget({
+      id: root ? root.id : comment.id,
+      author: comment.author
+    });
+  };
+  const listApiRef = useRef(null);
+  const handleCommentCreated = useCallback((comment, parentId) => {
+    listApiRef.current?.addComment?.(comment, parentId);
+  }, []);
+
   const renderComments = () => {
     if (!currentPhoto) return null;
     return (
-      <PhotoComments
+      <PhotoCommentsList
         photoId={String(currentPhoto.id)}
+        onReplyTrigger={replyTriggerRef.current}
+        apiRef={listApiRef}
         albumCreatorId={album.creator_id ? String(album.creator_id) : null}
+      />
+    );
+  };
+
+  const renderCommentInput = () => {
+    if (!currentPhoto) return null;
+    return (
+      <CommentInput
+        photoId={String(currentPhoto.id)}
+        replyTarget={replyTarget}
+        onCancelReply={() => setReplyTarget(null)}
+        onCommentCreated={handleCommentCreated}
       />
     );
   };
@@ -901,6 +930,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         sharedY={sheetY}
         hideHeader={true}
         closeOnEscape={!secondaryOpen}
+        footer={sheetTab === "comments" ? renderCommentInput() : null}
         headerChildren={
           <div className="flex gap-2">
             <button

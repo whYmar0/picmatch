@@ -32,6 +32,7 @@ export default function BottomSheet({
   topContent,
   headerChildren,
   children,
+  footer,
   sharedY,
   zIndex = 50,
   hideHeader = false,
@@ -57,6 +58,8 @@ export default function BottomSheet({
   const scale = useTransform(y, [0, defaultOffset, dismissOffset], [0.85, 1, 1]);
   // Fade out top content only when dragging DOWN to dismiss
   const topOpacity = useTransform(y, [defaultOffset, dismissOffset], [1, 0]);
+  // Footer fades out when sheet is dragged toward dismiss
+  const footerOpacity = useTransform(y, [defaultOffset, defaultOffset + 100], [1, 0]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -199,10 +202,27 @@ export default function BottomSheet({
             </div>
 
             {/* Scrollable content */}
-            <div className="flex flex-col flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               {children}
             </div>
           </motion.div>
+
+          {/* Footer — sibling of sheet, pinned to viewport bottom */}
+          {footer && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              style={{ opacity: footerOpacity }}
+              className="absolute bottom-0 left-0 right-0 z-20
+                         bg-card-light dark:bg-card-dark
+                         px-4 sm:px-6 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]
+                         shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.15)]"
+            >
+              {footer}
+            </motion.div>
+          )}
         </div>
       )}
     </AnimatePresence>

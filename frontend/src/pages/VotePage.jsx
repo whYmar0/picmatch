@@ -23,7 +23,7 @@ import { LogIn, MessageCircle, Check } from "lucide-react";
 import FilledHeart from "../components/FilledHeart";
 import BrokenHeart from "../components/BrokenHeart";
 import BottomSheet from "../components/BottomSheet";
-import PhotoComments from "../components/PhotoComments";
+import { PhotoCommentsList, CommentInput } from "../components/PhotoComments";
 
 const STACK_SIZE = 3;
 const DESC_LIMIT = 100;
@@ -68,6 +68,19 @@ export default function VotePage() {
   const [albumError, setAlbumError] = useState(null);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [commentSheet, setCommentSheet] = useState(null); // null | photo object
+  // ── Comment split-layout state ────────────────────────────────────────────
+  const [replyTarget, setReplyTarget] = useState(null);
+  const replyTriggerRef = useRef({});
+  const listApiRef = useRef(null);
+  replyTriggerRef.current._onReply = (comment, root) => {
+    setReplyTarget({
+      id: root ? root.id : comment.id,
+      author: comment.author
+    });
+  };
+  const handleCommentCreated = useCallback((comment, parentId) => {
+    listApiRef.current?.addComment?.(comment, parentId);
+  }, []);
 
   const votingRef = useRef(false);
   const votesMapRef = useRef({});
@@ -486,8 +499,18 @@ export default function VotePage() {
 
       <BottomSheet
         open={!!commentSheet}
-        onClose={() => setCommentSheet(null)}
+        onClose={() => { setCommentSheet(null); setReplyTarget(null); }}
         title={t("Comments")}
+        footer={
+          commentSheet ? (
+            <CommentInput
+              photoId={String(commentSheet.id)}
+              replyTarget={replyTarget}
+              onCancelReply={() => setReplyTarget(null)}
+              onCommentCreated={handleCommentCreated}
+            />
+          ) : null
+        }
         topContent={
           commentSheet ? (
             <div className="w-full flex justify-center px-4">
@@ -501,9 +524,11 @@ export default function VotePage() {
         }
       >
         {commentSheet && (
-          <PhotoComments
+          <PhotoCommentsList
             photoId={String(commentSheet.id)}
             albumCreatorId={album?.creator_id}
+            onReplyTrigger={replyTriggerRef.current}
+            apiRef={listApiRef}
           />
         )}
       </BottomSheet>

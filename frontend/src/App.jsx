@@ -96,7 +96,7 @@ export default function App() {
               <Navbar />
               <main className="flex-1 overflow-x-hidden">
                 <Routes>
-                  <Route path="/"         element={<HomeRoute />} />
+                  <Route path="/"         element={<Suspense fallback={<PageFallback />}><HomeRoute /></Suspense>} />
                   <Route path="/login"    element={<Suspense fallback={<PageFallback />}><Login /></Suspense>} />
                   <Route path="/register" element={<Suspense fallback={<PageFallback />}><Register /></Suspense>} />
                   <Route path="/verify-email" element={<Suspense fallback={<PageFallback />}><VerifyEmail /></Suspense>} />

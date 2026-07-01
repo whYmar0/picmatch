@@ -95,23 +95,176 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Comment input bar (exported for BottomSheet footer) ─────────────────────
+export function CommentInput({ photoId, replyTarget, onCancelReply, onCommentCreated }) {
+  const { lang, t } = useLang();
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const inputRef = useRef(null);
+
+  // When replyTarget changes, populate the input with @mention
+  useEffect(() => {
+    if (replyTarget) {
+      const mention = `@${replyTarget.author?.username} `;
+      setText((prev) => {
+        if (prev.startsWith('@')) {
+          const spaceIdx = prev.indexOf(' ');
+          if (spaceIdx !== -1) return mention + prev.slice(spaceIdx + 1);
+        }
+        return mention + prev;
+      });
+      setTimeout(() => {
+        const el = inputRef.current;
+        if (el) {
+          el.focus();
+          el.setSelectionRange(mention.length, mention.length);
+        }
+      }, 10);
+    }
+  }, [replyTarget]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    setSubmitting(true);
+    try {
+      const created = await commentsApi.create({
+        photo_id: photoId,
+        text: text.trim(),
+        parent_id: replyTarget?.id ?? null,
+      });
+      setText("");
+      if (onCancelReply) onCancelReply();
+      if (created && onCommentCreated) {
+        onCommentCreated(created, replyTarget?.id ?? null);
+      }
+    } catch (err) {
+      toast.error(err?.message || "Failed to submit comment");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div>
+      {replyTarget && (
+        <div className="flex items-center gap-2 mb-2 text-xs text-gray-500 dark:text-gray-400
+                        bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-xl">
+          <span>{t("replyToUser")} <strong>{replyTarget.author?.username}</strong></span>
+          <button onClick={onCancelReply} className="ml-auto p-1 hover:text-gray-700 dark:hover:text-gray-200"><X size={12} /></button>
+        </div>
+      )}
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <input
+          ref={inputRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={t("addCommentPlaceholder")}
+          className="flex-1 py-2.5 px-4 text-[15px] rounded-full
+                     bg-border-light dark:bg-border-dark
+                     text-gray-900 dark:text-gray-100
+                     placeholder:text-gray-400 dark:placeholder:text-gray-500
+                     focus:outline-none focus:ring-2 focus:ring-primary-400
+                     border-0"
+          autoComplete="off"
+          autoCorrect="off"
+        />
+        <motion.button type="submit"
+          disabled={submitting || !text.trim()}
+          whileTap={{ scale: 0.9 }}
+          className="btn-primary w-11 h-11 flex-shrink-0 p-0">
+          <SendHorizontal size={18} strokeWidth={2.4} />
+        </motion.button>
+      </form>
+    </div>
+  );
+}
+
+// ─── Comments list only (for scrollable BottomSheet content) ──────────────────
+export function PhotoCommentsList({ photoId, initialComments, onReplyTrigger, apiRef, albumCreatorId }) {
+  const { user } = useAuth();
+  const { lang } = useLang();
+  const isAlbumOwner = !!(user && albumCreatorId && String(user.id) === String(albumCreatorId));
+  const [comments, setComments] = useState(() => initialComments ?? []);
+  const [loading, setLoading] = useState(initialComments === null);
+
+  const load = useCallback(() => {
+    if (!photoId) return;
+    setLoading(true);
+    commentsApi.getForPhoto(photoId)
+      .then(setComments)
+      .catch(() => { })
+      .finally(() => setLoading(false));
+  }, [photoId]);
+
+  useEffect(() => {
+    if (initialComments !== null) return;
+    const timer = setTimeout(() => load(), 350);
+    return () => clearTimeout(timer);
+  }, [load]);
+
+  const handleDelete = async (id) => {
+    try { await commentsApi.delete(id); load(); } catch { /**/ }
+  };
+
+  // When a new comment is created externally (via CommentInput), insert it
+  const handleCommentCreated = useCallback((comment, parentId) => {
+    setComments((prev) => parentId
+      ? prev.map((c) => String(c.id) === String(parentId)
+        ? { ...c, replies: [...(c.replies || []), comment] }
+        : c)
+      : [...prev, comment]);
+  }, []);
+
+  // Expose addComment via apiRef for parent (AlbumGallery) to call
+  useEffect(() => {
+    if (apiRef) {
+      apiRef.current = { addComment: handleCommentCreated };
+    }
+  }, [apiRef, handleCommentCreated]);
+
+  if (loading) return <CommentSkeleton count={4} />;
+
+  return (
+    <div className="flex-1">
+      {comments.length === 0
+        ? <p className="text-center text-gray-400 text-sm py-6">
+          {lang === "ru" ? "Комментариев пока нет. Будьте первым!" : "No comments yet. Be the first!"}
+        </p>
+        : (
+          <div className="mb-4">
+            <AnimatePresence>
+              {comments.map((c) => (
+                <CommentItem key={c.id} comment={c}
+                  onDelete={handleDelete}
+                  onReply={(comment, root) => {
+                    if (onReplyTrigger?._onReply) {
+                      onReplyTrigger._onReply(comment, root);
+                    }
+                  }}
+                  isAlbumOwner={isAlbumOwner} />
+              ))}
+            </AnimatePresence>
+          </div>
+        )
+      }
+    </div>
+  );
+}
+
+// ─── Full PhotoComments (backwards-compatible, list + input together) ──────────
 export default function PhotoComments({ photoId, albumCreatorId, initialComments = null }) {
   const { user } = useAuth();
   const { lang, t } = useLang();
   const isAlbumOwner = !!(user && albumCreatorId && String(user.id) === String(albumCreatorId));
-  // If initialComments is provided (pre-fetched from outside), use them and skip the first fetch.
-  // After submit/delete we still refresh via load().
   const [comments, setComments] = useState(() => initialComments ?? []);
-  const [loading, setLoading] = useState(initialComments === null); // skip spinner if pre-loaded
+  const [loading, setLoading] = useState(initialComments === null);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef(null);
 
   const startReply = (targetComment, rootComment) => {
-    // If replying to a nested comment, we attach it to the root comment to prevent disappearing comments
-    // But we keep the targetComment's author for the UI display
     setReplyTo({
       id: rootComment ? rootComment.id : targetComment.id,
       author: targetComment.author
@@ -128,8 +281,15 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
       return mention + prev;
     });
 
-    // Focus with a small delay for smoother mobile keyboard opening
-    setTimeout(() => inputRef.current?.focus(), 10);
+    // Focus and place cursor AFTER the mention
+    setTimeout(() => {
+      const el = inputRef.current;
+      if (el) {
+        el.focus();
+        const mentionLen = `@${targetComment.author?.username} `.length;
+        el.setSelectionRange(mentionLen, mentionLen);
+      }
+    }, 10);
   };
 
   const load = useCallback(() => {
@@ -142,17 +302,10 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
   }, [photoId]);
 
   useEffect(() => {
-    // Only auto-fetch if no pre-loaded data was provided at mount
     if (initialComments !== null) return;
-
-    // Delay the initial fetch slightly so it doesn't block the UI thread 
-    // during the 300ms BottomSheet slide-up animation
-    const timer = setTimeout(() => {
-      load();
-    }, 350);
-
+    const timer = setTimeout(() => load(), 350);
     return () => clearTimeout(timer);
-  }, [load]); // intentionally omitting initialComments — it's only read at mount
+  }, [load]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -166,8 +319,6 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
       });
       setText("");
       setReplyTo(null);
-      // Optimistic update — the optimistic result is reliable so we avoid
-      // calling load() which would briefly show a skeleton and could race.
       if (created) {
         setComments((prev) => replyTo?.id
           ? prev.map((comment) => String(comment.id) === String(replyTo.id)

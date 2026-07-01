@@ -11,6 +11,8 @@ visibility rules:
   - album.is_public=False -> each commenter sees only their own top-level comments + all replies;
                              the album owner sees everything
 """
+import logging
+import os
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +23,10 @@ from database import get_db
 from models import User, Comment, CommentLike, Photo, Album, Notification, NotificationType
 from schemas import CommentCreate, CommentOut, MessageResponse, CommentThreadOut
 from auth import get_current_user
+from cloudinary_utils import is_cloudinary_configured as _cloudinary_enabled, get_image_url as _cloudinary_url
+
+logger = logging.getLogger("pickmatch")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 router = APIRouter(prefix="/comments", tags=["Comments"])
 
@@ -29,9 +35,11 @@ def _s(v) -> str:
     return str(v)
 
 def _build_comment_out(c: Comment, viewer_id: str, _depth: int = 0) -> CommentOut:
+    # Safely access replies — they may not be loaded for deeply nested comments
     try:
         reply_list = c.replies
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to load replies for comment %s: %s", c.id, e)
         reply_list = []
 
     if _depth == 0:
@@ -39,15 +47,24 @@ def _build_comment_out(c: Comment, viewer_id: str, _depth: int = 0) -> CommentOu
                    sorted(reply_list, key=lambda x: x.created_at)]
     else:
         replies = []
-        
+
+    # Author MUST be loaded (caller always eager-loads via selectinload).
+    # If it fails, log the real error and let it propagate — masking as None
+    # causes a cryptic Pydantic ValidationError downstream.
     try:
         author_data = c.author
-    except Exception:
-        author_data = None
-        
+    except Exception as e:
+        logger.exception("Failed to load author for comment %s", c.id)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal error loading comment author"
+        ) from e
+
+    # Safely access likes
     try:
         likes_data = c.likes
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to load likes for comment %s: %s", c.id, e)
         likes_data = []
 
     liked_by_me = any(_s(lk.user_id) == viewer_id for lk in likes_data)
@@ -200,11 +217,18 @@ async def get_comment_thread(
             if str(r.author.id) in (album_creator_id, comment_owner_id)
         ]
 
+    # Generate photo URL — Photo model has no .url attribute;
+    # construct it the same way albums.py does via stored_filename.
+    if _cloudinary_enabled():
+        photo_url_val = _cloudinary_url(photo.stored_filename)
+    else:
+        photo_url_val = f"{BASE_URL}/uploads/{photo.stored_filename}"
+
     return CommentThreadOut(
         thread=[filtered_root],
         is_public=album.is_public,
         is_owner=is_album_owner,
-        photo_url=photo.url
+        photo_url=photo_url_val
     )
 
 
@@ -290,7 +314,7 @@ async def create_comment(
                     text=comment.text[:100],
                 ))
     except Exception:
-        pass  # Silently fail notifications
+        logger.exception("Failed to create notifications for comment %s", new_comment_id)
 
     await db.commit()
 
