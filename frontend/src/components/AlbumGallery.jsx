@@ -203,18 +203,20 @@ function StatisticsTab({
             </span>
           )}
         </button>
+        <div className="ml-auto flex items-center gap-2 text-sm font-semibold
+                        text-gray-600 dark:text-gray-300">
+          <BarChart2 size={16} />
+          <span className="tabular-nums">{analytics.total_votes}</span>
+        </div>
         <button onClick={onShare}
-          className="ml-auto w-10 h-10 rounded-2xl flex items-center justify-center
+          className="w-10 h-10 rounded-2xl flex items-center justify-center
                      bg-border-light dark:bg-border-dark text-gray-400
                      hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
           {shareDone ? <Check size={15} /> : <Share2 size={15} />}
         </button>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-gray-400">
-        <span className="font-semibold">{t("statistics")}</span>
-        <span>{analytics.total_votes} {t("totalVotes")}</span>
-      </div>
+      {/* "Statistics" title row removed — total votes count moved into the toolbar above, next to Share */}
 
       {photos.length === 0 && (
         <p className="text-center text-gray-400 py-8 text-sm">{t("noVotes")}</p>
@@ -227,9 +229,9 @@ function StatisticsTab({
             className={`w-full flex items-center gap-3 py-2 px-2 rounded-xl transition-colors
                        ${String(photo.id) === String(currentPhotoId)
                          ? "bg-primary-50 dark:bg-primary-900/20"
-                         : "hover:bg-border-light dark:bg-border-dark"}`}
+                         : ""}`}
           >
-            <span className="w-5 text-center text-xs font-bold text-gray-400 flex-shrink-0">
+            <span className="w-6 text-center text-sm font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 tabular-nums">
               #{i + 1}
             </span>
             <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0
@@ -245,14 +247,15 @@ function StatisticsTab({
                   transition={{ delay: i * 0.03 + 0.2, duration: 0.4 }}
                 />
               </div>
-              <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
-                <span className="text-green-500 flex items-center gap-0.5">
-                  <FilledHeart size={9} /> {photo.like_count}
+              <div className="flex items-center gap-3 mt-1.5 text-sm font-semibold tabular-nums
+                              text-gray-600 dark:text-gray-300">
+                <span className="flex items-center gap-1.5">
+                  <FilledHeart size={14} /> {photo.like_count}
                 </span>
-                <span className="text-red-400 flex items-center gap-0.5">
-                  <BrokenHeart size={9} strokeWidth={2} /> {photo.dislike_count}
+                <span className="flex items-center gap-1.5">
+                  <BrokenHeart size={14} strokeWidth={2} /> {photo.dislike_count}
                 </span>
-                <span className="ml-auto">
+                <span className="ml-auto text-gray-500 dark:text-gray-400 font-normal">
                   {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
                 </span>
               </div>
@@ -301,7 +304,7 @@ function GallerySortSheet({ open, onClose, sortKey, setSortKey }) {
                       text-sm font-medium transition-colors mb-2
                       ${sortKey === key
                         ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-                        : "hover:bg-border-light dark:hover:bg-border-dark"}`}
+                        : ""}`}
         >
           {label}
           {sortKey === key && <Check size={16} className="text-primary-400" />}
@@ -336,7 +339,7 @@ function GalleryFilterSheet({
                               text-sm transition-colors
                               ${selected
                                 ? "bg-primary-50 dark:bg-primary-900/20"
-                                : "hover:bg-border-light dark:hover:bg-border-dark"}`}
+                                : ""}`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
