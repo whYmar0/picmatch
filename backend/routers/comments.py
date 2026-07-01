@@ -48,17 +48,13 @@ def _build_comment_out(c: Comment, viewer_id: str, _depth: int = 0) -> CommentOu
     else:
         replies = []
 
-    # Author MUST be loaded (caller always eager-loads via selectinload).
-    # If it fails, log the real error and let it propagate — masking as None
-    # causes a cryptic Pydantic ValidationError downstream.
-    try:
-        author_data = c.author
-    except Exception as e:
-        logger.exception("Failed to load author for comment %s", c.id)
+    author_data = c.author
+    if author_data is None:
+        logger.error("Author is None for comment %s (user_id=%s)", c.id, c.user_id)
         raise HTTPException(
             status_code=500,
             detail="Internal error loading comment author"
-        ) from e
+        )
 
     # Safely access likes
     try:
@@ -264,10 +260,13 @@ async def create_comment(
     db.add(comment)
     await db.flush()
 
-    # Capture comment ID BEFORE commit — after commit() the ORM object is
-    # expired, and accessing comment.id would trigger a synchronous lazy load
+    # Capture fields BEFORE commit — after commit() the ORM object is
+    # expired, and accessing attributes would trigger a synchronous lazy load
     # on the async session, raising sqlalchemy.exc.MissingGreenlet.
     new_comment_id = _s(comment.id)
+    new_comment_text = comment.text
+    new_comment_created_at = comment.created_at
+    new_comment_parent_id = comment.parent_id
 
     # Create Notification
     uid = _s(current_user.id)
@@ -318,20 +317,21 @@ async def create_comment(
 
     await db.commit()
 
-    # Reload with relationships — use the ID captured before commit
-    result = await db.execute(
-        select(Comment)
-        .options(
-            selectinload(Comment.author),
-            selectinload(Comment.likes),
-            selectinload(Comment.replies).selectinload(Comment.author),
-            selectinload(Comment.replies).selectinload(Comment.likes),
-            selectinload(Comment.replies).selectinload(Comment.replies),
-        )
-        .where(Comment.id == new_comment_id)
+    # Build CommentOut directly from current_user — a brand-new comment has
+    # no likes and no replies, so there's no need to re-query with selectinload.
+    # This avoids a production bug where selectinload(Comment.author) returns
+    # None on PostgreSQL after commit.
+    return CommentOut(
+        id=new_comment_id,
+        photo_id=_s(body.photo_id),
+        text=new_comment_text,
+        created_at=new_comment_created_at,
+        author=current_user,
+        like_count=0,
+        liked_by_me=False,
+        parent_id=new_comment_parent_id,
+        replies=[],
     )
-    c = result.scalar_one()
-    return _build_comment_out(c, uid)
 
 
 @router.delete("/{comment_id}", response_model=MessageResponse)
