@@ -1,4 +1,4 @@
-/**
+﻿/**
  * contexts/LangContext.jsx — 100% bilingual EN / RU
  * New keys: seeMore, seeLess, sort, filterBy, filterByVoter,
  *           noVoters, selectVoters, sortMostLikes, sortMostDislikes
@@ -9,6 +9,7 @@ const T = {
   en: {
     appName: "Pickmatch",
     login: "Log in",
+    loggedInAs: "Logged in as @{username}",
     register: "Sign up",
     logout: "Log out",
     dashboard: "My Albums",
@@ -39,6 +40,7 @@ const T = {
     votes: "votes",
     viewAnalytics: "Results",
     deleteAlbum: "Delete",
+    albumDeleted: "Deleted",
     sharedWithMe: "Shared with me",
     sharedBy: "Shared by",
     shareAlbum: "Share album",
@@ -173,6 +175,7 @@ const T = {
   ru: {
     appName: "Pickmatch",
     login: "Войти",
+    loggedInAs: "Вы вошли в аккаунт @{username}",
     register: "Регистрация",
     logout: "Выйти",
     dashboard: "Мои альбомы",
@@ -203,6 +206,7 @@ const T = {
     votes: "голосов",
     viewAnalytics: "Результаты",
     deleteAlbum: "Удалить",
+    albumDeleted: "Удалено",
     sharedWithMe: "Поделились со мной",
     sharedBy: "Поделился",
     shareAlbum: "Поделиться альбомом",
@@ -210,7 +214,7 @@ const T = {
     shareSuccess: "Альбом открыт",
     revokeAccess: "Отозвать доступ",
     sharedAccess: "Общий доступ",
-    noSharedAlbums: "Вам ещё не поделились альбомами",
+    noSharedAlbums: "C вами ещё не поделились альбомами",
 
     swipeHint: "Вправо — нравится · влево — пропустить",
     allDone: "Вы оценили все фото!",
@@ -299,10 +303,10 @@ const T = {
     reqMinLength: "Минимум 8 символов",
     reqUppercase: "Минимум 1 заглавная буква",
     reqSpecial: "Минимум 1 специальный символ",
-    notifCommentPhoto: "прокомментировал фото с альбома",
-    notifLikedComment: "оценил ваш комментарий",
-    notifVotedAlbum: "проголосовал в вашем альбоме",
-    notifRepliedComment: "ответил на ваш комментарий",
+    notifCommentPhoto: "прокомментировал(-а) фото с альбома",
+    notifLikedComment: "оценил(-а) ваш комментарий",
+    notifVotedAlbum: "проголосовал(-а) в вашем альбоме",
+    notifRepliedComment: "ответил(-а) на ваш комментарий",
     privateAlbumThreadHint: "Это приватный альбом. Вы можете видеть только свои ветки комментариев.",
     commentNotFound: "Комментарий не найден.",
     errorEnterEmail: "Пожалуйста, введите ваш email.",

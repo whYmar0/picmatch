@@ -153,8 +153,8 @@ function ThumbStrip({ photos, currentIdx, onSelect }) {
                 style={{ width: THUMB_SIZE, height: THUMB_SIZE, flexShrink: 0 }}
                 className={`btn-thumb transition-all duration-150 outline-none
                            ${active
-                             ? "ring-[2px] ring-primary-400 ring-offset-1 ring-offset-black scale-[1.15] z-10"
-                             : ""}`}
+                    ? "ring-[2px] ring-primary-400 ring-offset-1 ring-offset-black scale-[1.15] z-10"
+                    : ""}`}
               >
                 <img src={photo.url} alt="" className="w-full h-full object-cover rounded-xl select-none pointer-events-none" loading="lazy" draggable={false} />
               </button>
@@ -194,8 +194,8 @@ function StatisticsTab({
           className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm
                       transition-colors
                       ${selectedVotersSize > 0
-                        ? "bg-primary-400 text-white"
-                        : "bg-border-light dark:bg-border-dark hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}>
+              ? "bg-primary-400 text-white"
+              : "bg-border-light dark:bg-border-dark hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}>
           <Filter size={15} /> {t("filterBy")}
           {selectedVotersSize > 0 && (
             <span className="bg-white/30 text-white text-xs font-bold px-1.5 rounded-md">
@@ -228,8 +228,8 @@ function StatisticsTab({
             onClick={() => onJump(photo.id)}
             className={`w-full flex items-center gap-3 py-2 px-2 rounded-xl transition-colors
                        ${String(photo.id) === String(currentPhotoId)
-                         ? "bg-primary-50 dark:bg-primary-900/20"
-                         : ""}`}
+                ? "bg-primary-50 dark:bg-primary-900/20"
+                : ""}`}
           >
             <span className="w-6 text-center text-sm font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 tabular-nums">
               #{i + 1}
@@ -239,7 +239,7 @@ function StatisticsTab({
               <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
             </div>
             <div className="flex-1 min-w-0 text-left">
-              <div className="h-1.5 bg-border-light dark:bg-border-dark rounded-full overflow-hidden">
+              <div className="h-1.5 max-w-[95%] bg-border-light dark:bg-border-dark rounded-full overflow-hidden">
                 <motion.div
                   className="h-full bg-primary-400 rounded-full"
                   initial={{ width: 0 }}
@@ -255,7 +255,7 @@ function StatisticsTab({
                 <span className="flex items-center gap-1.5">
                   <BrokenHeart size={14} strokeWidth={2} /> {photo.dislike_count}
                 </span>
-                <span className="ml-auto text-gray-500 dark:text-gray-400 font-normal">
+                <span className="ml-auto mr-4 text-gray-500 dark:text-gray-400 font-normal">
                   {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
                 </span>
               </div>
@@ -285,8 +285,8 @@ function GallerySortSheet({ open, onClose, sortKey, setSortKey }) {
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl
                         font-medium text-sm transition-colors
                         ${viewMode === key
-                          ? "bg-primary-400 text-white"
-                          : "bg-border-light dark:bg-border-dark hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}
+                ? "bg-primary-400 text-white"
+                : "bg-border-light dark:bg-border-dark hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}
           >
             {icon} {label}
           </button>
@@ -303,8 +303,8 @@ function GallerySortSheet({ open, onClose, sortKey, setSortKey }) {
           className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
                       text-sm font-medium transition-colors mb-2
                       ${sortKey === key
-                        ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-                        : ""}`}
+              ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
+              : ""}`}
         >
           {label}
           {sortKey === key && <Check size={16} className="text-primary-400" />}
@@ -338,8 +338,8 @@ function GalleryFilterSheet({
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl
                               text-sm transition-colors
                               ${selected
-                                ? "bg-primary-50 dark:bg-primary-900/20"
-                                : ""}`}
+                      ? "bg-primary-50 dark:bg-primary-900/20"
+                      : ""}`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
@@ -521,7 +521,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       // Force dragX to 0 so carouselX recalculates
       dragX.set(0);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startPhotoId, photos.length]);
 
   // ── Sync ref when state changes from goTo ───────────────────────────────
@@ -625,7 +625,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       // Rubber-band at edges
       let clampedDx = touchStartDragX.current + dx;
       if ((currentIdxRef.current === 0 && clampedDx > touchStartDragX.current) ||
-          (currentIdxRef.current === photos.length - 1 && clampedDx < touchStartDragX.current)) {
+        (currentIdxRef.current === photos.length - 1 && clampedDx < touchStartDragX.current)) {
         // Over-scroll: dampen movement past the natural offset.
         const overShoot = clampedDx - touchStartDragX.current;
         clampedDx = touchStartDragX.current + overShoot * 0.3;
@@ -938,22 +938,20 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
           <div className="flex gap-2">
             <button
               onClick={() => setSheetTab("stats")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${
-                sheetTab === "stats"
-                  ? "bg-primary-400 text-white"
-                  : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "stats"
+                ? "bg-primary-400 text-white"
+                : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
+                }`}
             >
               <BarChart2 size={14} />
               {t("statistics")}
             </button>
             <button
               onClick={() => setSheetTab("comments")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${
-                sheetTab === "comments"
-                  ? "bg-primary-400 text-white"
-                  : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "comments"
+                ? "bg-primary-400 text-white"
+                : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
+                }`}
             >
               <MessageCircle size={14} />
               {t("Comments")}

@@ -27,7 +27,7 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(form.email, form.password, form.remember);
-      toast.success(`${t("login")} ✓ @${user.username}`);
+      toast.success(t("loggedInAs").replace("{username}", user.username));
       navigate(from === "/" ? "/dashboard" : from, { replace: true });
     } catch (err) {
       setError(err.message);    // inline — no page refresh

@@ -78,7 +78,7 @@ export default function Dashboard() {
     try {
       await albumsApi.delete(albumId);
       setAlbums((prev) => prev.filter((a) => a.id !== albumId));
-      toast.success(t("deleteAlbum") + " ✓");
+      toast.success(t("albumDeleted"));
     } catch (err) {
       toast.error(err.message);
     }

@@ -106,7 +106,7 @@ export default function CreateAlbum() {
 
       formData.append("is_public", isPublic);
       const album = await albumsApi.create(formData);
-      toast.success("Album created! 🎉");
+      toast.success("Album created!");
       navigate(`/dashboard`);
     } catch (err) {
       toast.error(err.message);
