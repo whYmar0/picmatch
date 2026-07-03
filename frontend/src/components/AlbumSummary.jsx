@@ -11,7 +11,7 @@ import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Users, LayoutGrid, List,
-  SlidersHorizontal, Filter, Share2, Check, MessageCircle,
+  SlidersHorizontal, Filter, Share2, MessageCircle, Check,
 } from "lucide-react";
 import FilledHeart   from "./FilledHeart";
 import BrokenHeart   from "./BrokenHeart";
@@ -20,19 +20,8 @@ import { useAuth }        from "../contexts/AuthContext";
 import BottomSheet        from "./BottomSheet";
 import ImageLightbox      from "./ImageLightbox";
 import PhotoComments      from "./PhotoComments";
+import AnalyticsShareSheet from "./AnalyticsShareSheet";
 import { UserAvatar }     from "./Navbar";
-
-async function smartShare(title, url) {
-  if (/Mobi|Android/i.test(navigator.userAgent) && navigator.share) {
-    try { await navigator.share({ title, url }); return; } catch { /**/ }
-  }
-  try { await navigator.clipboard.writeText(url); }
-  catch {
-    const ta = document.createElement("textarea");
-    ta.value = url; document.body.appendChild(ta); ta.select();
-    document.execCommand("copy"); document.body.removeChild(ta);
-  }
-}
 
 function ReactionBadge({ isLike }) {
   return isLike
@@ -170,7 +159,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
   const [reactionSheet,  setReactionSheet]  = useState(null);  // null | "voters" | photo object
   const [reactionTab,    setReactionTab]    = useState("reactions"); // "reactions" | "comments"
   const [lightbox,       setLightbox]       = useState(null);
-  const [shareDone,      setShareDone]      = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
 
   if (!analytics) return null;
   const { title, description, total_votes, unique_voters,
@@ -275,10 +264,9 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
   const openFilter  = () => { setPendingVoters(new Set(selectedVoters)); setFilterOpen(true); };
   const applyFilter = () => { setSelectedVoters(new Set(pendingVoters)); setFilterOpen(false); };
   const clearFilter = () => { setPendingVoters(new Set()); setSelectedVoters(new Set()); setFilterOpen(false); };
-  const handleShare = async () => {
-    await smartShare(t("shareTitle"), window.location.href);
-    setShareDone(true); setTimeout(() => setShareDone(false), 2000);
-  };
+  // Owner-only: opens the token-share bottom sheet. Visitors have nothing
+  // to share — they arrived via someone else's link.
+  const handleShare = () => setShareSheetOpen(true);
 
   const sheetTitle =
     reactionSheet === "voters" ? t("voters") :
@@ -301,18 +289,21 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
             {can_view_stats && (
               <button onClick={() => setReactionSheet("voters")}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl
-                           text-gray-500 dark:text-gray-400 hover:text-primary-500 hover:bg-primary-50 
+                           text-gray-500 dark:text-gray-400 hover:text-primary-500 hover:bg-primary-50
                            dark:hover:bg-primary-900/20 transition-all font-sans font-bold text-sm">
                 <Users size={15} />
                 <span>{unique_voters}</span>
               </button>
             )}
-            <button onClick={handleShare}
-              className="w-10 h-10 rounded-2xl flex items-center justify-center
-                         bg-gray-100 dark:bg-gray-800 text-primary-500
-                         hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
-              {shareDone ? <Check size={18} /> : <Share2 size={18} />}
-            </button>
+            {isOwner && (
+              <button onClick={handleShare}
+                aria-label={t("shareAnalytics")}
+                className="w-10 h-10 rounded-2xl flex items-center justify-center
+                           bg-gray-100 dark:bg-gray-800 text-primary-500
+                           hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
+                <Share2 size={18} />
+              </button>
+            )}
           </div>
         </div>
         <h1 className="font-display font-bold text-2xl truncate">{title}</h1>
@@ -473,6 +464,15 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
         alt={lightbox?.filename}
         onClose={() => setLightbox(null)}
       />
+
+      {/* Owner-only: share-link bottom sheet (token-protected analytics URL). */}
+      {isOwner && (
+        <AnalyticsShareSheet
+          open={shareSheetOpen}
+          onClose={() => setShareSheetOpen(false)}
+          albumId={String(analytics.id)}
+        />
+      )}
     </div>
   );
 }

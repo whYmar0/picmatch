@@ -106,6 +106,14 @@ export const albumsApi = {
     });
   },
   getMyCommentsInAlbum: (albumId) => api.get(`/albums/${albumId}/my-comments`),
+
+  // ── Token-based share link for analytics (owner-only endpoints) ───────────
+  // Stored per-album, lazy-generated. Anyone holding the resulting URL can
+  // view the album's analytics after signing in.
+  getShareToken:   (albumId)       => api.post(`/albums/${albumId}/share-token`),
+  rotateShareToken:(albumId)       => api.post(`/albums/${albumId}/share-token/rotate`),
+  // Visitor endpoint — authenticated; backend auto-grants SharedAccess.
+  getByShareToken: (token)         => api.get(`/albums/shared/${token}/analytics`),
 };
 
 export const votesApi = {

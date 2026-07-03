@@ -223,109 +223,9 @@ async def get_album_analytics(
 
     is_shared = False
     can_view_stats = True
-    photos = album.photos
-    photo_ids = [p.id for p in photos]
 
-    # 2. Fetch raw vote rows (columns only, no ORM objects) in one query
-    total_likes = 0
-    total_votes = 0
-    voter_map: dict = {}
-    photo_data: dict = {}
-
-    if photo_ids:
-        vote_query = (
-            select(Vote.photo_id, Vote.voter_id, Vote.is_like, User.username)
-            .join(User, Vote.voter_id == User.id)
-            .where(Vote.photo_id.in_(photo_ids))
-        )
-        vote_rows = await db.execute(vote_query)
-
-        # Build lookup dict for photos
-        for p in photos:
-            photo_data[_s(p.id)] = {"photo": p, "likes": 0, "total": 0, "reactions": []}
-
-        # Single O(n) pass through all votes
-        for row in vote_rows:
-            row_photo_id, row_voter_id, row_is_like, row_username = row
-            pid = _s(row_photo_id)
-            vid = _s(row_voter_id)
-            uname = row_username or vid[:8]
-
-            if pid not in photo_data:
-                continue
-
-            pd = photo_data[pid]
-            pd["total"] += 1
-            total_votes += 1
-            if row_is_like:
-                pd["likes"] += 1
-                total_likes += 1
-
-            pd["reactions"].append(
-                VoterReaction(voter_id=vid, username=uname, is_like=row_is_like)
-            )
-
-            if vid not in voter_map:
-                voter_map[vid] = {"username": uname, "vote_count": 0, "voter_id": vid}
-            voter_map[vid]["vote_count"] += 1
-
-    # Build photo_stats from aggregated data
-    photo_stats: List[PhotoStats] = []
-    for p in photos:
-        pid = _s(p.id)
-        if pid in photo_data:
-            pd = photo_data[pid]
-            likes = pd["likes"]
-            total = pd["total"]
-            dislikes = total - likes
-            pct = round((likes / total * 100), 1) if total else 0.0
-            photo_stats.append(PhotoStats(
-                id=p.id, filename=p.filename,
-                url=photo_url(p.stored_filename),
-                order=p.order,
-                like_count=likes, dislike_count=dislikes,
-                total_votes=total, like_percentage=pct,
-                is_winner=False,
-                reactions=pd["reactions"],
-            ))
-        else:
-            photo_stats.append(PhotoStats(
-                id=p.id, filename=p.filename,
-                url=photo_url(p.stored_filename),
-                order=p.order,
-                like_count=0, dislike_count=0,
-                total_votes=0, like_percentage=0.0,
-                is_winner=False,
-                reactions=[],
-            ))
-
-    # Winner
-    winner = None
-    voted = [ps for ps in photo_stats if ps.total_votes > 0]
-    if voted:
-        best = max(voted, key=lambda ps: (ps.like_percentage, ps.total_votes))
-        best.is_winner = True
-        winner = best
-
-    global_like_rate = round((total_likes / total_votes) * 100, 1) if total_votes else 0.0
-    voter_summaries = [
-        VoterSummary(voter_id=v["voter_id"], username=v["username"], vote_count=v["vote_count"])
-        for v in sorted(voter_map.values(), key=lambda x: x["vote_count"], reverse=True)
-    ]
-
-    return AlbumAnalytics(
-        id=album.id, title=album.title, description=album.description,
-        creator_id=album.creator_id,
-        creator=album.creator,
-        is_public=album.is_public,
-        total_photos=len(photos),
-        total_votes=total_votes, unique_voters=len(voter_map),
-        global_like_rate=global_like_rate,
-        voter_summaries=voter_summaries,
-        photos=photo_stats, winner=winner,
-        created_at=album.created_at,
-        is_shared=is_shared,
-        can_view_stats=can_view_stats,
+    return await _build_analytics(
+        album=album, db=db, is_shared=is_shared, can_view_stats=can_view_stats,
     )
 
 
@@ -435,3 +335,123 @@ async def toggle_album_privacy(
     await db.commit()
     await db.refresh(album)
     return album_to_out(album)
+
+
+# ─── Analytics builder (shared by /albums/{id}/analytics and share-link route) ──
+
+async def _build_analytics(
+    album: Album,
+    db: AsyncSession,
+    is_shared: bool,
+    can_view_stats: bool,
+) -> AlbumAnalytics:
+    """
+    Pure builder that takes an already-loaded `album` (with `.photos` and
+    `.creator` populated) and produces the AlbumAnalytics response. The
+    owner/access gating is the caller's responsibility — this function
+    only does the aggregation so ./share_links.py can reuse it without
+    duplicating ~80 lines of vote/photo/winner math.
+    """
+    photos = album.photos
+    photo_ids = [p.id for p in photos]
+
+    # Fetch raw vote rows (columns only, no ORM objects) in one query
+    total_likes = 0
+    total_votes = 0
+    voter_map: dict = {}
+    photo_data: dict = {}
+
+    if photo_ids:
+        vote_query = (
+            select(Vote.photo_id, Vote.voter_id, Vote.is_like, User.username)
+            .join(User, Vote.voter_id == User.id)
+            .where(Vote.photo_id.in_(photo_ids))
+        )
+        vote_rows = await db.execute(vote_query)
+
+        for p in photos:
+            photo_data[_s(p.id)] = {"photo": p, "likes": 0, "total": 0, "reactions": []}
+
+        # Single O(n) pass through all votes
+        for row in vote_rows:
+            row_photo_id, row_voter_id, row_is_like, row_username = row
+            pid = _s(row_photo_id)
+            vid = _s(row_voter_id)
+            uname = row_username or vid[:8]
+
+            if pid not in photo_data:
+                continue
+
+            pd = photo_data[pid]
+            pd["total"] += 1
+            total_votes += 1
+            if row_is_like:
+                pd["likes"] += 1
+                total_likes += 1
+
+            pd["reactions"].append(
+                VoterReaction(voter_id=vid, username=uname, is_like=row_is_like)
+            )
+
+            if vid not in voter_map:
+                voter_map[vid] = {"username": uname, "vote_count": 0, "voter_id": vid}
+            voter_map[vid]["vote_count"] += 1
+
+    # Build photo_stats from aggregated data
+    photo_stats: List[PhotoStats] = []
+    for p in photos:
+        pid = _s(p.id)
+        if pid in photo_data:
+            pd = photo_data[pid]
+            likes = pd["likes"]
+            total = pd["total"]
+            dislikes = total - likes
+            pct = round((likes / total * 100), 1) if total else 0.0
+            photo_stats.append(PhotoStats(
+                id=p.id, filename=p.filename,
+                url=photo_url(p.stored_filename),
+                order=p.order,
+                like_count=likes, dislike_count=dislikes,
+                total_votes=total, like_percentage=pct,
+                is_winner=False,
+                reactions=pd["reactions"],
+            ))
+        else:
+            photo_stats.append(PhotoStats(
+                id=p.id, filename=p.filename,
+                url=photo_url(p.stored_filename),
+                order=p.order,
+                like_count=0, dislike_count=0,
+                total_votes=0, like_percentage=0.0,
+                is_winner=False,
+                reactions=[],
+            ))
+
+    # Winner
+    winner = None
+    voted = [ps for ps in photo_stats if ps.total_votes > 0]
+    if voted:
+        best = max(voted, key=lambda ps: (ps.like_percentage, ps.total_votes))
+        best.is_winner = True
+        winner = best
+
+    global_like_rate = round((total_likes / total_votes) * 100, 1) if total_votes else 0.0
+    voter_summaries = [
+        VoterSummary(voter_id=v["voter_id"], username=v["username"], vote_count=v["vote_count"])
+        for v in sorted(voter_map.values(), key=lambda x: x["vote_count"], reverse=True)
+    ]
+
+    return AlbumAnalytics(
+        id=album.id, title=album.title, description=album.description,
+        creator_id=album.creator_id,
+        creator=album.creator,
+        is_public=album.is_public,
+        total_photos=len(photos),
+        total_votes=total_votes, unique_voters=len(voter_map),
+        global_like_rate=global_like_rate,
+        voter_summaries=voter_summaries,
+        photos=photo_stats, winner=winner,
+        created_at=album.created_at,
+        is_shared=is_shared,
+        can_view_stats=can_view_stats,
+    )

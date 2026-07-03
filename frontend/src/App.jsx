@@ -25,6 +25,7 @@ const VotePage          = lazy(() => import("./pages/VotePage"));
 const AnalyticsPage     = lazy(() => import("./pages/AnalyticsPage"));
 const Notifications     = lazy(() => import("./pages/Notifications"));
 const CommentThreadPage = lazy(() => import("./pages/CommentThreadPage"));
+const SharedAnalyticsPage = lazy(() => import("./pages/SharedAnalyticsPage"));
 
 function PageFallback() {
   return <LoadingSpinner fullscreen />;
@@ -110,6 +111,7 @@ export default function App() {
                   <Route path="/create"            element={<ProtectedRoute><Suspense fallback={<PageFallback />}><CreateAlbum /></Suspense></ProtectedRoute>} />
                   <Route path="/analytics/:albumId" element={<ProtectedRoute><Suspense fallback={<PageFallback />}><AnalyticsPage /></Suspense></ProtectedRoute>} />
                   <Route path="/comment/:commentId" element={<ProtectedRoute><Suspense fallback={<PageFallback />}><CommentThreadPage /></Suspense></ProtectedRoute>} />
+                  <Route path="/share/:token"      element={<ProtectedRoute><Suspense fallback={<PageFallback />}><SharedAnalyticsPage /></Suspense></ProtectedRoute>} />
 
                   <Route path="*" element={
                     <div className="min-h-[60vh] flex items-center justify-center text-center px-4">

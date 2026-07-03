@@ -77,6 +77,9 @@ class Album(Base):
     creator_id  = uuid_column(foreign_key="users.id")
     is_active   = Column(Boolean, default=True)
     is_public   = Column(Boolean, default=True, server_default=text("true"))
+    # Token-protected analytics share link (see routers/share_links.py).
+    # Lazy-generated so existing albums get a token on first request.
+    share_token = Column(String(64), nullable=True, unique=True, index=True)
     created_at  = Column(DateTime(timezone=True), default=_now)
 
     creator       = relationship("User",  back_populates="albums")

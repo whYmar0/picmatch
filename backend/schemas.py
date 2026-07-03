@@ -247,13 +247,21 @@ class NotificationOut(BaseModel):
     type: NotificationType
     is_read: bool
     created_at: datetime
-    
+
     actor: Optional[UserOut] = None
     album_id: Optional[AnyUUID] = None
     photo_id: Optional[AnyUUID] = None
     comment_id: Optional[AnyUUID] = None
     text: Optional[str] = None
     thumbnail_url: Optional[str] = None
+
+
+# ─── Share Link ───────────────────────────────────────────────────────────────
+
+class ShareTokenOut(BaseModel):
+    """Response for album share-token creation / rotation."""
+    share_token: str
+    share_url:   str
 
 # ─── Generic ──────────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@
  * pages/Login.jsx — Clean, fully translated, inline error banner.
  */
 import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
@@ -14,7 +14,23 @@ export default function Login() {
   const { t } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || "/dashboard";
+  const [searchParams] = useSearchParams();
+
+  // Two return paths:
+  //   1. ProtectedRoute sets `state.from` (e.g. visiting /share/:token while logged out).
+  //   2. The api axios 401 interceptor does a full-page redirect with `?returnTo=`.
+  // Pick whichever the URL supplies so session-expired users land back where they were.
+  //
+  // SECURITY: only accept returnTo that begins with a single "/" — anything
+  // starting with "//" (or any absolute URL with a scheme/host) would let an
+  // attacker craft /login?returnTo=//evil.com and phish via the login redirect.
+  const safeReturnTo = (val) =>
+    typeof val === "string" && val.startsWith("/") && !val.startsWith("//") && !val.startsWith("/\\")
+      ? val : null;
+  const from =
+    location.state?.from?.pathname ||
+    safeReturnTo(searchParams.get("returnTo")) ||
+    "/dashboard";
 
   const [form, setForm] = useState({ email: "", password: "", remember: true });
   const [showPwd, setShowPwd] = useState(false);
