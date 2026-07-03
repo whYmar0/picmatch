@@ -46,7 +46,7 @@ async function copyLink(url, title) {
   }
 }
 
-export default function AnalyticsShareSheet({ open, onClose, albumId }) {
+export default function AnalyticsShareSheet({ open, onClose, albumId, zIndex = 50 }) {
   const { t } = useLang();
 
   const [url,       setUrl]      = useState("");
@@ -104,7 +104,7 @@ export default function AnalyticsShareSheet({ open, onClose, albumId }) {
   };
 
   return (
-    <BottomSheet open={open} onClose={onClose} title={t("shareAnalytics")}>
+    <BottomSheet open={open} onClose={onClose} title={t("shareAnalytics")} zIndex={zIndex}>
       <div className="space-y-5 pt-1">
         {/* Hint */}
         <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">

@@ -23,10 +23,13 @@ import {
   MessageCircle, BarChart2, SlidersHorizontal, Filter, Share2, Check,
   List, LayoutGrid,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { albumsApi, commentsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
+import { useAuth } from "../contexts/AuthContext";
 import BottomSheet from "./BottomSheet";
 import { PhotoCommentsList, CommentInput } from "./PhotoComments";
+import AnalyticsShareSheet from "./AnalyticsShareSheet";
 import FilledHeart from "./FilledHeart";
 import BrokenHeart from "./BrokenHeart";
 
@@ -370,6 +373,7 @@ function GalleryFilterSheet({
 // ─── Main Gallery Component ─────────────────────────────────────────────────
 export default function AlbumGallery({ album, onClose, startPhotoId, dragProgressMV }) {
   const { t } = useLang();
+  const { user } = useAuth();
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
 
   // ── State ────────────────────────────────────────────────────────────────
@@ -389,7 +393,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const [sortKey, setSortKey] = useState("likes_desc");
   const [selectedVoters, setSelectedVoters] = useState(new Set());
   const [pendingVoters, setPendingVoters] = useState(new Set());
-  const [shareDone, setShareDone] = useState(false);
+  const [shareDone,      setShareDone]      = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+
+  // Owner-only token share — Dashboard opens this gallery from the user's own
+  // album cards, so the creator comparison is mostly defensive (in case the
+  // wrapper is reused for shared-with-me albums in the future).
+  const isOwner = !!user && !!album?.creator_id &&
+                  String(user.id) === String(album.creator_id);
 
   // ── Carousel refs ────────────────────────────────────────────────────────
   const carouselRef = useRef(null);
@@ -733,24 +744,36 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   }, []);
 
   // ── Share handler ────────────────────────────────────────────────────────
+  // Owners get the AnalyticsShareSheet flow (token-protected URL that grants
+  // analytics access to anyone who opens it after login). Non-owners get the
+  // voting invite link so they can pass the album around for more votes.
+  // The old behavior — copying `window.location.href` (= `/dashboard`) — was
+  // reported as a placeholder that gave recipients a dead URL. Removed.
   const handleShare = async () => {
-    const url = window.location.href;
+    if (isOwner) {
+      setShareSheetOpen(true);
+      return;
+    }
+    const url = album?.invite_url;
+    if (!url) return;
     if (/Mobi|Android/i.test(navigator.userAgent) && navigator.share) {
       try {
-        await navigator.share({ title: t("shareTitle"), url });
+        await navigator.share({ title: t("appName"), url });
         setShareDone(true); setTimeout(() => setShareDone(false), 2000);
         return;
-      } catch { /* fallback */ }
+      } catch { /* user cancelled or unsupported — fall through to clipboard */ }
     }
     try {
       await navigator.clipboard.writeText(url);
-      setShareDone(true); setTimeout(() => setShareDone(false), 2000);
+      toast.success(t("copied"));
     } catch {
       const ta = document.createElement("textarea");
       ta.value = url; document.body.appendChild(ta); ta.select();
       document.execCommand("copy"); document.body.removeChild(ta);
-      setShareDone(true); setTimeout(() => setShareDone(false), 2000);
+      toast.success(t("copied"));
     }
+    setShareDone(true);
+    setTimeout(() => setShareDone(false), 2000);
   };
 
   // ── Sort/Filter handlers ─────────────────────────────────────────────────
@@ -991,6 +1014,17 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         togglePending={togglePending}
         applyFilter={applyFilter}
         clearFilter={clearFilter}
+      />
+
+      {/* Owner-only token share sheet — zIndex=70 layers above the primary
+          (50) and Sort/Filter secondary (60) sheets so it always wins the
+          stacking order, even if the user taps Share while a Sort sheet is
+          open on top. */}
+      <AnalyticsShareSheet
+        open={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        albumId={String(album?.id || "")}
+        zIndex={70}
       />
     </motion.div>
   );
