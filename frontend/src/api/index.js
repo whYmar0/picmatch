@@ -3,7 +3,14 @@
  */
 import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_URL || "/api";
+// Trim is applied BEFORE the `||` fallback so a whitespace-only env var
+// still resolves to "/api" (otherwise we'd produce an empty baseURL, which
+// silently breaks every request). `.replace(/\/+$/, "")` also strips a
+// stray trailing slash — without it, axios would build "...api//auth/login".
+// Together these guard against the "trailing-space /api" and ".../api/"
+// paste artefacts that have hit Vercel deployments twice already.
+const BASE_URL =
+    ((import.meta.env.VITE_API_URL || "").trim().replace(/\/+$/, "") || "/api");
 
 const api = axios.create({
   baseURL: BASE_URL,
