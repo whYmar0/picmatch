@@ -9,8 +9,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from database import init_db
+from middleware.rate_limit import limiter, custom_rate_limit_exceeded_handler
 from routers import albums, auth_router, comments, notifications, shared_access, share_links, votes
 from cloudinary_utils import setup_cloudinary, is_cloudinary_configured as cloudinary_enabled
 
@@ -78,6 +81,19 @@ app.add_middleware(
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
+# Register the limiter on app.state so @limiter.limit() decorators in routers
+# can find it via `request.app.state.limiter`. The exception handler converts
+# slowapi's RateLimitExceeded into a clean 429 JSON response.
+app.state.limiter = limiter
+# Use the project's custom 429 handler -- it returns a generic
+# "Too many requests" detail + Retry-After header, instead of slowapi's
+# default which echoes back the configured limit string (a fingerprint
+# adversaries can use to probe-and-time our rate limits).
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_exceeded_handler)
+# SlowAPIMiddleware injects X-RateLimit-Limit / X-RateLimit-Remaining /
+# X-RateLimit-Reset headers on every response so clients can self-throttle.
+app.add_middleware(SlowAPIMiddleware)
+
 app.include_router(auth_router.router, prefix="/api")
 app.include_router(albums.router, prefix="/api")
 app.include_router(votes.router, prefix="/api")
@@ -105,9 +121,16 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
 
+    # proxy_headers=True + forwarded_allow_ips=<env-trusted-list> per the
+    # security audit. Naive "*" lets clients forge X-Forwarded-For and
+    # bypass per-IP rate limits. Empty TRUSTED_PROXY_IPS falls back to
+    # "127.0.0.1" (no XFF trust on prod, local LB on dev).
+    trusted_proxies = os.getenv("TRUSTED_PROXY_IPS", "").strip() or "127.0.0.1"
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=int(os.getenv("PORT", 8000)),
         reload=os.getenv("DEBUG", "false").lower() == "true",
+        proxy_headers=True,
+        forwarded_allow_ips=trusted_proxies,
     )

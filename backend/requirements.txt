@@ -4,6 +4,7 @@ uvicorn[standard]==0.32.0
 python-multipart==0.0.12
 resend==2.30.1
 python-dotenv==1.0.1
+slowapi==0.1.10            # rate limiting (lib + limits transitive)
 
 # ─── Database ─────────────────────────────────────────────────────────────────
 sqlalchemy[asyncio]==2.0.36

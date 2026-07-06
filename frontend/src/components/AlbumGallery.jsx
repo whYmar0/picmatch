@@ -911,7 +911,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                   <motion.img
                     src={photo.url}
                     alt=""
-                    layoutId={i === 0 ? `album-cover-${album.id}` : undefined}
+                    layoutId={i === 0 && currentIdx === 0 ? `album-cover-${album.id}` : undefined}
                     initial={i === 0 ? { borderRadius: 16 } : undefined}
                     animate={i === 0 ? { borderRadius: 0 } : undefined}
                     transition={i === 0 ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 } : undefined}

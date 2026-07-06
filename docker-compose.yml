@@ -36,9 +36,13 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    # Non-secret defaults can stay in `environment:`. Anything sensitive
+    # (SECRET_KEY, DB passwords, Cloudinary creds, Resend API key) MUST come
+    # from .env via `env_file:` so it doesn't ship in a public repo.
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/pickmatch
-      SECRET_KEY: local-dev-secret-32-chars-pickmatch
       BASE_URL: http://localhost:8000
       FRONTEND_URL: http://localhost:5173
       UPLOAD_DIR: /app/uploads

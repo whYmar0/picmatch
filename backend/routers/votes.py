@@ -6,14 +6,16 @@ BUGFIX: All UUID comparisons now cast to str() before querying SQLite.
         objects; comparing UUID == String silently returns no rows in SQLite.
 """
 
+import os
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 
 from database import get_db
+from middleware.rate_limit import _get_limit, limiter
 from models import User, Photo, Vote, Album, Notification, NotificationType
 from schemas import VoteCreate, VoteOut, SwipeSession
 from auth import get_current_user
@@ -27,7 +29,9 @@ def _str(val) -> str:
 
 
 @router.post("/", response_model=VoteOut, status_code=status.HTTP_201_CREATED)
+@limiter.limit(_get_limit("RATE_LIMIT_VOTE", "60/minute"))
 async def cast_vote(
+    request: Request,
     vote_data: VoteCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -112,7 +116,9 @@ async def cast_vote(
 
 
 @router.get("/session/{invite_code}", response_model=SwipeSession)
+@limiter.limit(_get_limit("RATE_LIMIT_VOTE_SESSION", "30/minute"))
 async def get_swipe_session(
+    request: Request,
     invite_code: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

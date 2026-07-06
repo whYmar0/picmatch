@@ -14,12 +14,13 @@ visibility rules:
 import logging
 import os
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 
 from database import get_db
+from middleware.rate_limit import _get_limit, limiter
 from models import User, Comment, CommentLike, Photo, Album, Notification, NotificationType
 from schemas import CommentCreate, CommentOut, MessageResponse, CommentThreadOut
 from auth import get_current_user
@@ -229,7 +230,9 @@ async def get_comment_thread(
 
 
 @router.post("/", response_model=CommentOut, status_code=status.HTTP_201_CREATED)
+@limiter.limit(_get_limit("RATE_LIMIT_COMMENT", "30/minute"))
 async def create_comment(
+    request: Request,
     body: CommentCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -368,7 +371,9 @@ async def delete_comment(
 
 
 @router.post("/{comment_id}/like", response_model=MessageResponse)
+@limiter.limit(_get_limit("RATE_LIMIT_COMMENT_LIKE", "60/minute"))
 async def toggle_like(
+    request: Request,
     comment_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

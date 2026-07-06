@@ -49,6 +49,11 @@ class User(Base):
     email           = Column(String(255), unique=True, nullable=False, index=True)
     username        = Column(String(100), unique=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
+    # Monotonic counter incremented on every password change. Embedded in
+    # the JWT as `pwd_version`; if a token's value is stale, `get_current_user`
+    # in auth.py rejects it as a 401. Provides a cheap "log out everywhere"
+    # mechanism without needing a token blacklist.
+    password_version = Column(Integer, default=0, nullable=False, server_default=text("0"))
     role            = Column(SAEnum(UserRole), default=UserRole.CREATOR, nullable=False)
     is_active       = Column(Boolean, default=True)
     is_verified     = Column(Boolean, default=False, server_default=text("false"))

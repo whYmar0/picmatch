@@ -15,13 +15,14 @@ import os
 import secrets
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 
 from database import get_db
+from middleware.rate_limit import _get_limit, limiter
 from models import User, Album, SharedAccess
 from schemas import AlbumAnalytics, ShareTokenOut
 from auth import get_current_user
@@ -40,7 +41,9 @@ def _share_url(token: str) -> str:
 # ─── Lazy-generate / fetch token ──────────────────────────────────────────────
 
 @router.post("/{album_id}/share-token", response_model=ShareTokenOut)
+@limiter.limit(_get_limit("RATE_LIMIT_SHARE_TOKEN_GET", "30/hour"))
 async def get_or_create_share_token(
+    request: Request,
     album_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -74,7 +77,9 @@ async def get_or_create_share_token(
 # ─── Rotate token ────────────────────────────────────────────────────────────
 
 @router.post("/{album_id}/share-token/rotate", response_model=ShareTokenOut)
+@limiter.limit(_get_limit("RATE_LIMIT_SHARE_TOKEN_ROTATE", "10/hour"))
 async def rotate_share_token(
+    request: Request,
     album_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -106,7 +111,9 @@ async def rotate_share_token(
 # ─── Public analytics-by-token endpoint ──────────────────────────────────────
 
 @router.get("/shared/{token}/analytics", response_model=AlbumAnalytics)
+@limiter.limit(_get_limit("RATE_LIMIT_SHARE_ANALYTICS_BY_TOKEN", "30/minute"))
 async def get_album_analytics_by_token(
+    request: Request,
     token: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

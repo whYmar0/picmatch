@@ -8,13 +8,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from PIL import Image
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, Form, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, Form, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from auth import create_access_token, get_current_user, hash_password, verify_password
 from database import get_db
+from middleware.rate_limit import _get_limit, limiter
 from email_utils import send_password_reset_email, send_verification_email
 from models import User, UserRole
 from schemas import (
@@ -75,7 +76,9 @@ AVATAR_COLORS = ["purple", "green", "yellow", "orange", "pink", "blue"]
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
+@limiter.limit(_get_limit("RATE_LIMIT_REGISTER", "3/hour"))
 async def register(
+    request: Request,
     user_data: UserRegister,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
@@ -101,7 +104,13 @@ async def register(
         if existing_by_email:
             user = existing_by_email
             user.username = user_data.username
+            # Bump pwd_version on re-register so the prior register-time JWT
+            # (pwd_version=0) is rejected by get_current_user. register()
+            # itself issues a working JWT, and get_current_user does NOT
+            # check is_verified — without this bump, a stolen old JWT keeps
+            # authenticating after the user changed their password.
             user.hashed_password = hash_password(user_data.password)
+            user.password_version = int(user.password_version) + 1
             user.role = UserRole.CREATOR
             user.is_verified = False
             user.verification_code = code
@@ -129,7 +138,7 @@ async def register(
     background_tasks.add_task(send_verification_email, user.email, code)
 
     return {
-        "access_token": create_access_token(user.id, user.role.value),
+        "access_token": create_access_token(user),
         "token_type": "bearer",
         "user": UserOut.model_validate(user),
         "message": "Account created. Please check your email for the verification code.",
@@ -138,7 +147,8 @@ async def register(
 
 
 @router.post("/login")
-async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit(_get_limit("RATE_LIMIT_LOGIN", "5/minute"))
+async def login(request: Request, credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     user = (
         await db.execute(select(User).where(User.email == credentials.email))
     ).scalar_one_or_none()
@@ -150,7 +160,7 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     if not user.is_verified:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not verified. Please verify your email first.")
 
-    return Token(access_token=create_access_token(user.id, user.role.value), user=UserOut.model_validate(user))
+    return Token(access_token=create_access_token(user), user=UserOut.model_validate(user))
 
 
 @router.post("/verify-email")
@@ -175,7 +185,8 @@ async def verify_email(req: VerifyEmailRequest, db: AsyncSession = Depends(get_d
 
 
 @router.post("/resend-verification")
-async def resend_verification(req: ResendVerificationRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+@limiter.limit(_get_limit("RATE_LIMIT_RESEND_VERIFICATION", "5/hour"))
+async def resend_verification(request: Request, req: ResendVerificationRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     user = (await db.execute(select(User).where(User.email == req.email))).scalar_one_or_none()
 
     if not user:
@@ -192,7 +203,8 @@ async def resend_verification(req: ResendVerificationRequest, background_tasks: 
 
 
 @router.post("/forgot-password")
-async def forgot_password(req: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+@limiter.limit(_get_limit("RATE_LIMIT_FORGOT_PASSWORD", "3/hour"))
+async def forgot_password(request: Request, req: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     user = (await db.execute(select(User).where(User.email == req.email))).scalar_one_or_none()
 
     if user:
@@ -207,7 +219,8 @@ async def forgot_password(req: ForgotPasswordRequest, background_tasks: Backgrou
 
 
 @router.post("/reset-password")
-async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(_get_limit("RATE_LIMIT_RESET_PASSWORD", "5/minute"))
+async def reset_password(request: Request, req: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
     user = (await db.execute(select(User).where(User.reset_token == req.token))).scalar_one_or_none()
 
     if not user:
@@ -217,13 +230,17 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
         raise HTTPException(status_code=400, detail="Reset token has expired.")
 
     user.hashed_password = hash_password(req.password)
+    # Invalidate every JWT issued before this password change. Combined with
+    # the `pwd_version` JWT claim and the check in get_current_user, this
+    # forces a re-login on any device still holding a stolen or leaked token.
+    user.password_version = int(user.password_version) + 1
     user.reset_token = None
     user.reset_token_expires_at = None
     await _commit_or_conflict(db)
     await db.refresh(user)
     return {
         "message": "Password reset successfully.",
-        "access_token": create_access_token(user.id, user.role.value),
+        "access_token": create_access_token(user),
         "token_type": "bearer",
         "user": UserOut.model_validate(user),
     }
@@ -235,7 +252,9 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/avatar", response_model=UserOut)
+@limiter.limit(_get_limit("RATE_LIMIT_AVATAR_UPLOAD", "30/minute"))
 async def upload_avatar(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

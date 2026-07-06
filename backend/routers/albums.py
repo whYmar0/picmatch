@@ -26,6 +26,7 @@ from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
 
 from database import get_db
+from middleware.rate_limit import _get_limit, limiter
 from models import User, Album, Photo, Vote, SharedAccess, Comment
 from schemas import (
     AlbumOut, AlbumWithPhotos, AlbumAnalytics,
@@ -107,7 +108,9 @@ def album_to_out(album: Album, creator: User | None = None) -> AlbumOut:
 
 
 @router.post("/", response_model=AlbumWithPhotos, status_code=status.HTTP_201_CREATED)
+@limiter.limit(_get_limit("RATE_LIMIT_ALBUM_CREATE", "10/hour"))
 async def create_album(
+    request: Request,
     title: str = Form(...),
     description: str = Form(None),
     is_public: bool = Form(True),

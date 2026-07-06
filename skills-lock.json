@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "hardening-docker-containers-for-production": {
+      "source": "mukul975/Anthropic-Cybersecurity-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/hardening-docker-containers-for-production/SKILL.md",
+      "computedHash": "87eb08dd0b02de58ba5fc1bc2fee50dbeeac038b8c858034805f5c42dfef4263"
+    },
+    "implementing-api-key-security-controls": {
+      "source": "mukul975/Anthropic-Cybersecurity-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/implementing-api-key-security-controls/SKILL.md",
+      "computedHash": "d5ac5e4c02ac01f6e553c68b46e2543648c14573992402dde96640842cad14d6"
+    },
+    "implementing-api-rate-limiting-and-throttling": {
+      "source": "mukul975/Anthropic-Cybersecurity-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/implementing-api-rate-limiting-and-throttling/SKILL.md",
+      "computedHash": "ec9371576a6a3eaa290d22bd1a25d4bbc25db021105e14e1c88d09d0cd6cbdb5"
+    },
+    "implementing-api-schema-validation-security": {
+      "source": "mukul975/Anthropic-Cybersecurity-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/implementing-api-schema-validation-security/SKILL.md",
+      "computedHash": "5834546ed538c81de16d7c441a9732615f42e09f3e784d964a79a4c32d31d93c"
+    },
+    "implementing-jwt-signing-and-verification": {
+      "source": "mukul975/Anthropic-Cybersecurity-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/implementing-jwt-signing-and-verification/SKILL.md",
+      "computedHash": "555086dbded585bcc64747d60bf8e229ccb00adec8d89128da769a79acdac2ee"
+    },
+    "performing-cryptographic-audit-of-application": {
+      "source": "mukul975/Anthropic-Cybersecurity-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/performing-cryptographic-audit-of-application/SKILL.md",
+      "computedHash": "4714c4ca3dc2af95c60217ca767210c6ae19e4b9dbc9a0b34b30bed01316ad9c"
+    },
+    "performing-security-headers-audit": {
+      "source": "mukul975/Anthropic-Cybersecurity-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/performing-security-headers-audit/SKILL.md",
+      "computedHash": "d3cfac17964fd398dc54468f1bfe92ea74433fb53c07601875ae3fc156f4e172"
+    },
+    "performing-ssl-tls-security-assessment": {
+      "source": "mukul975/Anthropic-Cybersecurity-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/performing-ssl-tls-security-assessment/SKILL.md",
+      "computedHash": "fcc1f02de7030dcd790514c8c4c249eb99535c283b45ecd294f76598e7d8b192"
+    },
+    "testing-for-broken-access-control": {
+      "source": "mukul975/Anthropic-Cybersecurity-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/testing-for-broken-access-control/SKILL.md",
+      "computedHash": "d9f19e9cdc7d013c397a8c692e2857236edfff1c2a73c4a577aa60394b76464a"
+    }
+  }
+}
