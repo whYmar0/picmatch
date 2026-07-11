@@ -224,8 +224,28 @@ async def get_album_analytics(
     if not is_owner and not album.is_public:
         raise HTTPException(403, detail="Access denied. This album is private.")
 
+    # M1 fix (code-review): previously hardcoded `can_view_stats = True` for
+    # any authenticated viewer of a public album, which made the privacy gate
+    # in `_build_analytics` a no-op on this route. Now we compute it correctly:
+    #   • owner                                → can_view_stats=True
+    #   • explicit SharedAccess(can_view_stats)→ can_view_stats=<the-bit>
+    #   • anyone else                          → can_view_stats=False
+    #                                          → builder strips voter identities
     is_shared = False
-    can_view_stats = True
+    can_view_stats = is_owner
+    if not is_owner:
+        sa_res = await db.execute(
+            select(SharedAccess).where(
+                and_(
+                    SharedAccess.user_id == _s(current_user.id),
+                    SharedAccess.album_id == album_id,
+                )
+            )
+        )
+        sa = sa_res.scalar_one_or_none()
+        if sa:
+            is_shared = True
+            can_view_stats = sa.can_view_stats
 
     return await _build_analytics(
         album=album, db=db, is_shared=is_shared, can_view_stats=can_view_stats,
@@ -439,10 +459,34 @@ async def _build_analytics(
         winner = best
 
     global_like_rate = round((total_likes / total_votes) * 100, 1) if total_votes else 0.0
-    voter_summaries = [
-        VoterSummary(voter_id=v["voter_id"], username=v["username"], vote_count=v["vote_count"])
-        for v in sorted(voter_map.values(), key=lambda x: x["vote_count"], reverse=True)
-    ]
+
+    # ── Privacy gate — OWASP A01 / data-minimization ───────────────────────────
+    # `can_view_stats` is the contract this builder already accepts:
+    #   True  → owner OR a user with SharedAccess(can_view_stats=True)
+    #   False → any other authenticated viewer, including public-album browsers
+    #
+    # Voter identities (WHO voted, and HOW they voted on each photo) are
+    # sensitive. Aggregate counts (likes/total per photo) are not. The
+    # public-album "browse" path was leaking per-voter reactions to every
+    # registered user — minimum-necessary says: strip identities, keep
+    # totals. Recipients who passed the explicit auth check above still
+    # see everything.
+    photo_stats_out: List[PhotoStats] = []
+    for ps in photo_stats:
+        if can_view_stats:
+            photo_stats_out.append(ps)
+        else:
+            # Strip the reactions field; counts + percentages are preserved.
+            ps_anonymised = ps.model_copy(update={"reactions": []})
+            photo_stats_out.append(ps_anonymised)
+
+    if can_view_stats:
+        voter_summaries = [
+            VoterSummary(voter_id=v["voter_id"], username=v["username"], vote_count=v["vote_count"])
+            for v in sorted(voter_map.values(), key=lambda x: x["vote_count"], reverse=True)
+        ]
+    else:
+        voter_summaries = []  
 
     return AlbumAnalytics(
         id=album.id, title=album.title, description=album.description,
@@ -453,7 +497,7 @@ async def _build_analytics(
         total_votes=total_votes, unique_voters=len(voter_map),
         global_like_rate=global_like_rate,
         voter_summaries=voter_summaries,
-        photos=photo_stats, winner=winner,
+        photos=photo_stats_out, winner=winner,
         created_at=album.created_at,
         is_shared=is_shared,
         can_view_stats=can_view_stats,

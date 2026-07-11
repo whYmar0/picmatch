@@ -23,4 +23,8 @@ RUN mkdir -p /app/uploads
 EXPOSE 8000
 
 # Start command / Команда запуска
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --no-server-header strips the default "Server: uvicorn" header that leaks
+# the framework version (OWASP Security Headers Audit). The --header flag
+# replaces it with a generic "Server: Pickmatch". See main.py's security_headers
+# middleware for the matching logic on the ASGI app side.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--header", "server: Pickmatch"]

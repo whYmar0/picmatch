@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db
 from middleware.rate_limit import _get_limit, limiter
-from models import User, Photo, Vote, Album, Notification, NotificationType
+from models import User, Photo, Vote, Album, SharedAccess, Notification, NotificationType
 from schemas import VoteCreate, VoteOut, SwipeSession
 from auth import get_current_user
 
@@ -57,6 +57,36 @@ async def cast_vote(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Photo not found. Check that the photo ID is correct.",
         )
+
+    # ── IDOR / access control gate ─────────────────────────────────────────────
+    # `POST /votes/` accepts any photo_id from any authenticated user. Without
+    # this check, a registered user could brute-force UUIDs across the
+    # `photos` table and pollute analytics on PRIVATE albums they were
+    # never invited to. The OWASP "Broken Access Control" workflow in
+    # `.agents/skills/testing-for-broken-access-control/SKILL.md` (Step 4
+    # — horizontal privilege escalation) calls this exact gap.
+    #
+    # Rule:
+    #   • album.is_public=True   → anyone authenticated may vote
+    #   • album.is_public=False  → only owner OR SharedAccess user may vote
+    album_obj = photo.album
+    album_creator_id = _str(album_obj.creator_id) if album_obj else None
+    voter_id_str = _str(current_user.id)
+    if album_obj and not album_obj.is_public:
+        if album_creator_id != voter_id_str:
+            access_res = await db.execute(
+                select(SharedAccess).where(
+                    and_(
+                        SharedAccess.user_id == voter_id_str,
+                        SharedAccess.album_id == _str(album_obj.id),
+                    )
+                )
+            )
+            if not access_res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This album is private. You do not have access to vote here.",
+                )
 
     # Check for an existing vote from this voter on this photo
     result = await db.execute(

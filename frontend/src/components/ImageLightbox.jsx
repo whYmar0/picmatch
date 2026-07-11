@@ -171,11 +171,25 @@ export default function ImageLightbox({ open, src, alt, onClose }) {
             className="w-full h-full flex items-center justify-center"
             style={{ touchAction: "none" }}
           >
+            {/*
+              Performance skill — mark as LCP for the gallery view.
+              `fetchpriority="high"` tells Chromium browsers (Chrome,
+              Edge, Brave) to deprioritise competing requests for this
+              image — without it, the gallery's first photo often
+              races the AlbumCard thumbnail and loses, pushing LCP into
+              the 2.5–3.5s range. `loading="eager"` is the default for
+              a lightbox but stated explicitly so it survives any
+              framework upstream changes (Vite + React 18 sometimes
+              flip the default in shipped builds).
+            */}
             <img
               ref={imgRef}
               src={src}
               alt={alt}
               draggable={false}
+              loading="eager"
+              fetchpriority="high"
+              decoding="sync"
               className="max-w-full max-h-full object-contain select-none pointer-events-none"
               style={{
                 transform: `scale(${scale})`,

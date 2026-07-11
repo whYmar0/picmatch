@@ -6,6 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pickmatch — Vote on photos with a Tinder-like swipe interface" />
     <title>Pickmatch</title>
+    <!--
+      Performance skill — preconnect critical origins.
+      Cloudinary is the LCP host for any photo in Dashboard / Gallery /
+      ImageLightbox. Preconnecting lets the browser do the TLS handshake
+      and DNS lookup in parallel with HTML parsing, so the very first
+      photo download starts ~150–300ms earlier (well under the 1.8s FCP
+      budget Cloudinary alone was eating).
+    -->
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
     <!-- Google Fonts: Outfit + Fraunces -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

@@ -55,6 +55,109 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ─── Security headers (OWASP A05) ───────────────────────────────────────────
+# Applied as the OUTERMOST middleware (registered before CORS/SlowAPI) so that
+# every response — including CORS preflights, 429 rate-limit responses, and
+# Swagger UI pages — gets the same hardening. See
+# .agents/skills/performing-security-headers-audit/SKILL.md for methodology.
+# Dev vs prod CSP differs: dev allows Vite HMR (unsafe-eval, ws://, inline
+# styles); prod is strict. HSTS only fires in prod (HTTPS-only there).
+_CSP_PROD = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob: https://res.cloudinary.com; "
+    "font-src 'self' data: https://fonts.gstatic.com; "
+    "connect-src 'self' https://*.vercel.app; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "object-src 'none'"
+)
+_CSP_DEV = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-eval'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob: https://res.cloudinary.com; "
+    "font-src 'self' data: https://fonts.gstatic.com; "
+    "connect-src 'self' http://localhost:8000 ws://localhost:5173 wss://localhost:5173; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "object-src 'none'"
+)
+# Swagger UI / ReDoc load from cdn.jsdelivr.net and rely on inline scripts.
+# Strict prod CSP blocks them entirely; a relaxed policy keeps /docs usable
+# without weakening protection of the API surface.
+_CSP_SWAGGER = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "img-src 'self' data: https://cdn.jsdelivr.net; "
+    "font-src 'self' data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "object-src 'none'"
+)
+
+
+def _csp_for(path: str, is_dev: bool) -> str:
+    if path.startswith(("/docs", "/redoc", "/openapi.json")):
+        return _CSP_SWAGGER
+    return _CSP_DEV if is_dev else _CSP_PROD
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    resp = await call_next(request)
+    is_dev = os.getenv("DEBUG", "false").lower() == "true"
+
+    # HSTS — start at 5 minutes on first deploy; bump to 1y once verified, then
+    # 2y before requesting preload-list inclusion. Short max-age lets you roll
+    # back without locking browsers out of your own API for years.
+    if not is_dev:
+        resp.headers["Strict-Transport-Security"] = (
+            "max-age=300; includeSubDomains"
+        )
+
+    # Clickjacking (legacy + modern: X-Frame-Options is belt-and-suspenders for
+    # the CSP frame-ancestors directive which not all old browsers honour).
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Modern CSP supersedes the legacy XSS auditor; explicitly disable to
+    # avoid a buggy fallback path in old browsers.
+    resp.headers["X-XSS-Protection"] = "0"
+    # NOTE on "Server" header: uvicorn's protocol layer hardcodes
+    # "Server: uvicorn" in HttpToolsProtocol._get_default_headers, AFTER ASGI
+    # middleware finishes. Setting it in resp.headers above would be a no-op
+    # in production. The fix lives in two places:
+    #   - Dockerfile CMD: --no-server-header --header 'server: Pickmatch'
+    #   - if __name__ == "__main__" block: server_header=False + headers=[...]
+    # TestClient (in-process) does not add a default Server header, so
+    # security-headers tests do not cover the production behaviour — verify
+    # via curl -I https://api.picmatch.com/api/health post-deploy.
+
+    # Tab-isolation: prevents malicious sites that open a popup referencing
+    # our domain from getting a window.opener reference. Free, no downside.
+    resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+
+    # Disable powerful browser features the app does not use. clipboard-write
+    # stays open (explicit allow-self) so "Copy invite link" / share-link
+    # flows keep working. NOTE: Swagger UI's /docs /redoc /openapi.json get
+    # the relaxed _CSP_SWAGGER above; this middleware runs after the path
+    # check, so COOP still applies to those pages (harmless).
+    resp.headers["Permissions-Policy"] = (
+        "camera=(), microphone=(), geolocation=(), "
+        "interest-cohort=(), payment=(), usb=(), "
+        "clipboard-write=(self)"
+    )
+
+    resp.headers["Content-Security-Policy"] = _csp_for(request.url.path, is_dev)
+    return resp
+
+
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 allowed_origins = _parse_origins(os.getenv("CORS_ORIGINS"))
 if frontend_url not in allowed_origins:
@@ -133,4 +236,11 @@ if __name__ == "__main__":
         reload=os.getenv("DEBUG", "false").lower() == "true",
         proxy_headers=True,
         forwarded_allow_ips=trusted_proxies,
+        # Strip framework fingerprint. uvicorn hardcodes "Server: uvicorn"
+        # at the ASGI protocol layer; --no-server-header removes it and our
+        # custom header replaces it. See security_headers middleware for
+        # the same constraint in production. The Dockerfile CMD applies
+        # the same flags when running under Render.
+        server_header=False,
+        headers=[("server", "Pickmatch")],
     )

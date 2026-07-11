@@ -58,14 +58,24 @@ def get_image_url(public_id: str) -> str:
     """
     Generate a Cloudinary URL from a public_id.
 
-    Args:
-        public_id: Cloudinary public_id (e.g. "picmatch/uuid").
+    Applies the `f_auto,q_auto` transformation globally so every photo,
+    avatar, and album cover is served in WebP/AVIF to capable browsers
+    (~97% of users per caniuse.com) with the optimal perceptual quality
+    dial. We deliberately do NOT hard-code quality=`auto:low` etc. —
+    q_auto picks the lowest quality that still looks acceptable for
+    each image individually.
 
-    Returns:
-        Full HTTPS URL to the image.
+    Expected payload reduction: ~60% vs. serving the original upload.
+    Single edit-point so all consumers (album cards, gallery carousel,
+    ImageLightbox, avatars) benefit simultaneously.
     """
     import cloudinary.utils
-    url, _ = cloudinary.utils.cloudinary_url(public_id, secure=True)
+    url, _ = cloudinary.utils.cloudinary_url(
+        public_id,
+        secure=True,
+        fetch_format="auto",
+        quality="auto",
+    )
     return url
 
 
