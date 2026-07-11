@@ -103,6 +103,22 @@ async def async_client(app) -> AsyncGenerator[AsyncClient, None]:
         yield client
 
 
+@pytest_asyncio.fixture
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Yields a real AsyncSession against the test SQLite engine.
+
+    Tests can use this for direct DB setup (e.g. seeding an Album before
+    hitting the API). The session is closed at teardown. Each test starts
+    with a freshly-dropped schema thanks to the autouse `_prepare_schema`
+    fixture above, so no per-test cleanup is required here.
+    """
+    async with AsyncSession(_TEST_ENGINE, expire_on_commit=False) as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
 # ─── 5. Auth helpers ─────────────────────────────────────────────────────────
 from auth import create_access_token, hash_password        # noqa: E402
 from models import User, UserRole                           # noqa: E402

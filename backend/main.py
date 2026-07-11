@@ -112,12 +112,14 @@ async def security_headers(request, call_next):
     resp = await call_next(request)
     is_dev = os.getenv("DEBUG", "false").lower() == "true"
 
-    # HSTS — start at 5 minutes on first deploy; bump to 1y once verified, then
-    # 2y before requesting preload-list inclusion. Short max-age lets you roll
-    # back without locking browsers out of your own API for years.
+    # HSTS — 1 year, includeSubDomains, NOT preload yet. After ~1 month of
+    # stable production traffic, bump to max-age=63072000 (2y) and add
+    # `; preload` to qualify for the Chrome HSTS preload list. Submitting
+    # too early risks lockout if a subdomain ever needs HTTP for health
+    # probes or similar.
     if not is_dev:
         resp.headers["Strict-Transport-Security"] = (
-            "max-age=300; includeSubDomains"
+            "max-age=31536000; includeSubDomains"
         )
 
     # Clickjacking (legacy + modern: X-Frame-Options is belt-and-suspenders for

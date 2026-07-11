@@ -15,38 +15,28 @@ pytestmark = [pytest.mark.smoke, pytest.mark.security]
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
-async def _seed_album(async_client, headers, *, is_public=True, title="T") -> str:
-    """Create an empty album via direct DB write (avoids photo-upload in tests)
-    and return its album_id string."""
+async def _seed_album(db_session, async_client, headers, *, is_public=True, title="T") -> str:
+    """Create an empty album via direct DB write and return its album_id.
+
+    Uses the conftest `db_session` fixture directly (no app.dependency_overrides
+    generator hack — that pattern is fragile because it relies on the override
+    still being in place AND it leaks the generator's lifecycle).
+    """
     from models import Album
-    # We don't go via POST /albums/ because that requires multipart upload.
-    # Instead inject an Album row directly. conftest autouse fixture wiped the
-    # schema so we're clean.
     uid = (await async_client.get("/api/auth/me", headers=headers)).json()["id"]
-    # Borrow the app's overridden DB session via the same dependency.
-    from database import get_db
-    from main import app
-    async def _override_gen():
-        async for s in app.dependency_overrides[get_db]():
-            yield s
-    gen = _override_gen()
-    session = await gen.__anext__()
-    try:
-        album = Album(
-            title=title,
-            invite_code="INV" + uid[:8],
-            creator_id=uid,
-            is_public=is_public,
-        )
-        session.add(album)
-        await session.commit()
-        await session.refresh(album)
-        return str(album.id), session
-    finally:
-        await gen.aclose()
+    album = Album(
+        title=title,
+        invite_code="INV" + uid[:8],
+        creator_id=uid,
+        is_public=is_public,
+    )
+    db_session.add(album)
+    await db_session.commit()
+    await db_session.refresh(album)
+    return str(album.id)
 
 
-async def _seed_photo(session, album_id: str) -> str:
+async def _seed_photo(db_session, album_id: str) -> str:
     from models import Photo
     p = Photo(
         album_id=album_id,
@@ -54,9 +44,9 @@ async def _seed_photo(session, album_id: str) -> str:
         stored_filename="test-test.jpg",
         order=0,
     )
-    session.add(p)
-    await session.commit()
-    await session.refresh(p)
+    db_session.add(p)
+    await db_session.commit()
+    await db_session.refresh(p)
     return str(p.id)
 
 

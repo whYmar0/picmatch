@@ -19,45 +19,39 @@ pytestmark = pytest.mark.security
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
-async def _seed_album_with_vote(async_client, headers, *, is_public=True) -> tuple[str, str]:
-    """Create an album via DB injection, add one photo, cast one vote so the
-    builder has data to (potentially) reveal."""
+async def _seed_album_with_vote(db_session, async_client, headers, *, is_public=True) -> tuple[str, str]:
+    """Create an album + photo + vote via direct DB writes. Uses the conftest
+    `db_session` fixture directly — no app.dependency_overrides generator hack.
+    """
     from models import Album, Photo, Vote
-    from main import app
-    from database import get_db
 
     uid = (await async_client.get("/api/auth/me", headers=headers)).json()["id"]
-    gen = app.dependency_overrides[get_db]()
-    session = await gen.__anext__()
-    try:
-        album = Album(
-            title="Test Album",
-            invite_code="INV" + uid[:8],
-            creator_id=uid,
-            is_public=is_public,
-        )
-        session.add(album)
-        await session.commit()
-        await session.refresh(album)
-        photo = Photo(
-            album_id=str(album.id),
-            filename="t.jpg",
-            stored_filename="t.jpg",
-            order=0,
-        )
-        session.add(photo)
-        await session.commit()
-        await session.refresh(photo)
-        vote = Vote(
-            photo_id=str(photo.id),
-            voter_id=uid,           # owner voted on own photo
-            is_like=True,
-        )
-        session.add(vote)
-        await session.commit()
-        return str(album.id), str(photo.id)
-    finally:
-        await gen.aclose()
+    album = Album(
+        title="Test Album",
+        invite_code="INV" + uid[:8],
+        creator_id=uid,
+        is_public=is_public,
+    )
+    db_session.add(album)
+    await db_session.commit()
+    await db_session.refresh(album)
+    photo = Photo(
+        album_id=str(album.id),
+        filename="t.jpg",
+        stored_filename="t.jpg",
+        order=0,
+    )
+    db_session.add(photo)
+    await db_session.commit()
+    await db_session.refresh(photo)
+    vote = Vote(
+        photo_id=str(photo.id),
+        voter_id=uid,           # owner voted on own photo
+        is_like=True,
+    )
+    db_session.add(vote)
+    await db_session.commit()
+    return str(album.id), str(photo.id)
 
 
 # ─── Tests ──────────────────────────────────────────────────────────────────

@@ -85,9 +85,13 @@ async def test_login_with_invalid_password_returns_401(async_client, make_user):
     assert resp_bad_pw.status_code == 401
     obfuscated_msg = resp_bad_pw.json()["detail"]
 
-    # Compare with the unknown-email branch — must use the same message
+    # Compare with the unknown-email branch — must use the same message.
+    # Note on TLD choice: pydantic v2 + email-validator requires the TLD to be
+    # in the public-suffix list (which excludes RFC 2606 reserved `.test` /
+    # `.invalid` / `.example`). We use `.com` because it's a public-suffix
+    # TLD that obviously doesn't resolve to a real mailbox in this test DB.
     resp_unknown_email = await async_client.post("/api/auth/login", json={
-        "email": "ghost@nowhere.invalid", "password": "irrelevant",
+        "email": "ghost@nowhere.com", "password": "irrelevant",
     })
     assert resp_unknown_email.status_code == 401
     assert resp_unknown_email.json()["detail"] == obfuscated_msg, (
