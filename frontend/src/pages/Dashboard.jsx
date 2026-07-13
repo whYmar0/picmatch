@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
   const [galleryAlbum, setGalleryAlbum] = useState(null);
+  const [galleryKey, setGalleryKey] = useState(0);
   const [showRecent, setShowRecent] = useState(false);
 
   // Page depth-zoom: stretches from 1.0 down to 0.94 when gallery opens,
@@ -91,6 +92,7 @@ export default function Dashboard() {
     // the same tick as setGalleryAlbum, the open sequence begins cleanly
     // with pageScaleMV = baseScaleMV = 0.94.
     dragProgressMV.set(0);
+    setGalleryKey((k) => k + 1);
     setGalleryAlbum({ album: album, photoId: photo?.id });
   }, [dragProgressMV]);
 
@@ -223,6 +225,7 @@ export default function Dashboard() {
       <AnimatePresence>
         {galleryAlbum && (
           <AlbumGallery
+            key={galleryKey}
             album={galleryAlbum.album}
             startPhotoId={galleryAlbum.photoId}
             onClose={handleGalleryClose}

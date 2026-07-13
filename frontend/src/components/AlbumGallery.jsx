@@ -60,15 +60,25 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
                    text-white shadow-lg cursor-pointer"
       >
         <span className="flex items-center gap-2.5 text-base font-semibold">
-          <FilledHeart size={22} className={likeCount > 0 ? "text-white" : "text-gray-400"} />
+          <span className="flex items-center justify-center w-[22px] h-[22px]">
+            <FilledHeart size={22} className={likeCount > 0 ? "text-white" : "text-white/40"} />
+          </span>
           {likeCount}
         </span>
         <span className="flex items-center gap-2.5 text-base font-semibold">
-          <BrokenHeart size={22} className={dislikeCount > 0 ? "text-white" : "text-gray-400"} />
+          <span className="flex items-center justify-center w-[22px] h-[22px]">
+            <BrokenHeart size={22} className={dislikeCount > 0 ? "text-white" : "text-white/40"} />
+          </span>
           {dislikeCount}
         </span>
         <span className="flex items-center gap-2.5 text-base font-semibold">
-          <MessageCircle size={22} className={commentCount > 0 ? "text-white" : "text-gray-400"} />
+          <span className="flex items-center justify-center w-[22px] h-[22px]">
+            <MessageCircle
+              size={20}
+              strokeWidth={1.75}
+              className={commentCount > 0 ? "text-white" : "text-white/40"}
+            />
+          </span>
           {commentCount}
         </span>
       </motion.button>
@@ -180,6 +190,7 @@ function StatisticsTab({
   onOpenFilter,
   onShare,
   shareDone,
+  viewMode = "list",
 }) {
   const { t } = useLang();
   if (!analytics) return <p className="text-center text-gray-400 py-8 text-sm">Loading stats...</p>;
@@ -224,7 +235,28 @@ function StatisticsTab({
       {photos.length === 0 && (
         <p className="text-center text-gray-400 py-8 text-sm">{t("noVotes")}</p>
       )}
-      <div className="space-y-1">
+      {viewMode === "grid" ? (
+        <div className="grid grid-cols-3 gap-2">
+          {photos.map((photo, i) => (
+            <button
+              key={photo.id}
+              onClick={() => onJump(photo.id)}
+              className={`relative aspect-square rounded-xl overflow-hidden
+                         bg-border-light dark:bg-border-dark
+                         ${String(photo.id) === String(currentPhotoId)
+                           ? "ring-2 ring-primary-400"
+                           : ""}`}
+            >
+              <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 text-white text-[10px] font-semibold flex justify-between">
+                <span>#{i + 1}</span>
+                <span>{photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-1">
         {photos.map((photo, i) => (
           <button
             key={photo.id}
@@ -266,14 +298,14 @@ function StatisticsTab({
           </button>
         ))}
       </div>
+      )}
     </div>
   );
 }
 
 // ─── Secondary SortSheet ────────────────────────────────────────────────────
-function GallerySortSheet({ open, onClose, sortKey, setSortKey }) {
+function GallerySortSheet({ open, onClose, sortKey, setSortKey, viewMode, setViewMode }) {
   const { t } = useLang();
-  const [viewMode, setViewMode] = useState("list");
 
   return (
     <BottomSheet open={open} onClose={onClose} title={t("sort")} zIndex={60}>
@@ -391,6 +423,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortKey, setSortKey] = useState("likes_desc");
+  const [viewMode, setViewMode] = useState("list");
   const [selectedVoters, setSelectedVoters] = useState(new Set());
   const [pendingVoters, setPendingVoters] = useState(new Set());
   const [shareDone,      setShareDone]      = useState(false);
@@ -659,6 +692,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // the album card's own spring. Continuity is preserved because
         // captured position = last seen position.
         dragYAnimRef.current?.stop();
+        setSheetExpanded(false);
         onClose();      // dragProgressMV pin = 1 is owned by handleGalleryClose
         gestureAxis.current = null;
         return;
@@ -863,7 +897,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       style={{ touchAction: "none", overscrollBehavior: "contain" }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 0.22 } }}
-      exit={{ opacity: 0, transition: { duration: 0.22 } }}
+      exit={{ opacity: 0, pointerEvents: "none", transition: { duration: 0.22 } }}
     >
       {/* Background overlay — outer tween handles the enter fade; the
           wrapper itself has an exit (opacity → 0 over 0.22s) that covers
@@ -911,7 +945,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                   <motion.img
                     src={photo.url}
                     alt=""
-                    layoutId={i === 0 && currentIdx === 0 ? `album-cover-${album.id}` : undefined}
+                    layoutId={i === 0 ? `album-cover-${album.id}` : undefined}
                     initial={i === 0 ? { borderRadius: 16 } : undefined}
                     animate={i === 0 ? { borderRadius: 0 } : undefined}
                     transition={i === 0 ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 } : undefined}
@@ -993,6 +1027,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             onOpenFilter={openFilterSheet}
             onShare={handleShare}
             shareDone={shareDone}
+            viewMode={viewMode}
           />
         ) : renderComments()}
       </BottomSheet>
@@ -1003,6 +1038,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         onClose={() => setSortOpen(false)}
         sortKey={sortKey}
         setSortKey={setSortKey}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
       />
 
       {/* SECONDARY FilterSheet */}

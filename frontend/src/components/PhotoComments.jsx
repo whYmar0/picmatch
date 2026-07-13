@@ -186,7 +186,7 @@ export function PhotoCommentsList({ photoId, initialComments, onReplyTrigger, ap
   const { lang } = useLang();
   const isAlbumOwner = !!(user && albumCreatorId && String(user.id) === String(albumCreatorId));
   const [comments, setComments] = useState(() => initialComments ?? []);
-  const [loading, setLoading] = useState(initialComments === null);
+  const [loading, setLoading] = useState(initialComments == null);
 
   const load = useCallback(() => {
     if (!photoId) return;
@@ -198,7 +198,7 @@ export function PhotoCommentsList({ photoId, initialComments, onReplyTrigger, ap
   }, [photoId]);
 
   useEffect(() => {
-    if (initialComments !== null) return;
+    if (initialComments != null) return;
     const timer = setTimeout(() => load(), 350);
     return () => clearTimeout(timer);
   }, [load]);
@@ -258,7 +258,7 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
   const { lang, t } = useLang();
   const isAlbumOwner = !!(user && albumCreatorId && String(user.id) === String(albumCreatorId));
   const [comments, setComments] = useState(() => initialComments ?? []);
-  const [loading, setLoading] = useState(initialComments === null);
+  const [loading, setLoading] = useState(initialComments == null);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -302,7 +302,7 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
   }, [photoId]);
 
   useEffect(() => {
-    if (initialComments !== null) return;
+    if (initialComments != null) return;
     const timer = setTimeout(() => load(), 350);
     return () => clearTimeout(timer);
   }, [load]);
