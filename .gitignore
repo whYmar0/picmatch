@@ -33,3 +33,6 @@ Thumbs.db
 
 # Docker
 *.log
+
+# AI agent personal skills (per-developer, installed via `npx skills add`)
+.agents/
