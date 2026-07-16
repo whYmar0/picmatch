@@ -442,7 +442,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const carouselRef = useRef(null);
   const currentIdxRef = useRef(0);
   const snapAnimRef = useRef(null);        // in-flight carousel snap animation
-  const [snapInProgress, setSnapInProgress] = useState(false);
   const isDismissingRef = useRef(false);   // guards snap onComplete during exit
 
   // ── Axis-locking touch refs ──────────────────────────────────────────────
@@ -589,7 +588,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const goTo = useCallback((idx) => {
     if (idx < 0 || idx >= photos.length) return;
     snapAnimRef.current?.stop();
-    setSnapInProgress(false);
     setCurrentIdx(idx);
     currentIdxRef.current = idx;
     dragX.set(0);
@@ -616,21 +614,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // ── Lock body scroll + suppress pull-to-refresh ──────────────────────────
-  // While the gallery is mounted we lock body scroll AND set
-  // `overscroll-behavior` to `none` on the body. Without `overscroll-behavior`,
-  // the OS-level pull-to-refresh gesture fires when the user drags the photo
-  // down near the visible scroll edge — on iOS the page reloads the URL and
-  // on Android Chromium it shows the refresh spinner that interrupts the
-  // user. This useEffect is the single toggle for that suppression.
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    document.body.style.overscrollBehavior = "none";
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.overscrollBehavior = "";
-    };
-  }, []);
+  // Body scroll lock is now managed by Dashboard.jsx based on galleryAlbum state,
+  // so it is restored even if Framer Motion's exit animation stalls.
 
   // ── Unified touch handlers (axis-lock: horizontal → dragX, vertical → dragY) ──
   const onWrapperTouchStart = useCallback((e) => {
@@ -744,12 +729,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // Animate to edge of current slide, then snap to new index
         const w = containerWidth;
         const targetX = targetIdx > currentIdxRef.current ? -w * 0.5 : w * 0.5;
-        setSnapInProgress(true);
         snapAnimRef.current = animate(dragX, targetX > 0 ? w : -w, {
           type: "spring", stiffness: 300, damping: 30,
           onComplete: () => {
             if (isDismissingRef.current) return;
-            setSnapInProgress(false);
             setCurrentIdx(targetIdx);
             currentIdxRef.current = targetIdx;
             dragX.set(0);
@@ -757,12 +740,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         });
       } else {
         // Snap back to current position
-        setSnapInProgress(true);
         snapAnimRef.current = animate(dragX, 0, {
           type: "spring", stiffness: 300, damping: 30,
           onComplete: () => {
             if (isDismissingRef.current) return;
-            setSnapInProgress(false);
           },
         });
       }
@@ -960,7 +941,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
           >
             {photos.map((photo, i) => {
               const isVisible = Math.abs(i - currentIdx) <= 2 && photo?.url;
-              const isSharedElement = i === 0 && currentIdx === 0 && !snapInProgress;
+              const isSharedElement = i === 0 && currentIdx === 0;
               const photoClassName = `max-w-full max-h-full select-none pointer-events-none ${i === 0 ? "object-cover" : "object-contain"}`;
               const photoProps = {
                 src: photo.url,
@@ -980,6 +961,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                     <motion.img
                       {...photoProps}
                       layoutId={`album-cover-${album.id}`}
+                      style={{ pointerEvents: "none" }}
                       initial={{ borderRadius: 16 }}
                       animate={{ borderRadius: 0 }}
                       transition={{ type: "spring", stiffness: 280, damping: 32, mass: 0.95 }}

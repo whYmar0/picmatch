@@ -63,6 +63,24 @@ export default function Dashboard() {
   //     so the album card does not visibly resize while the FLIP runs.
   //   • dragProgressMV is reset only on the next open, in handlePhotoClick.
 
+  // ─── Body scroll lock ─────────────────────────────────────────────────────
+  // Manage the lock from the parent so it is released as soon as the user
+  // closes the gallery, even if Framer Motion's exit animation stalls and
+  // AlbumGallery is not unmounted on time.
+  useEffect(() => {
+    if (galleryAlbum) {
+      document.body.style.overflow = "hidden";
+      document.body.style.overscrollBehavior = "none";
+    } else {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+    };
+  }, [galleryAlbum]);
+
   // Recently visited — filtered to exclude albums the user owns
   const recentAll = user ? getRecentAlbums(user.id) : [];
   const ownIds = new Set(albums.map((a) => a.id));

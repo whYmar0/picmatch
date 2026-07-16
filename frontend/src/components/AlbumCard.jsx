@@ -109,7 +109,8 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
             src={firstPhoto.url}
             alt=""
             layoutId={`album-cover-${album.id}`}
-            className="w-full h-full object-cover rounded-t-2xl"
+            className="w-full h-full object-cover rounded-t-2xl pointer-events-none"
+            style={{ pointerEvents: "none" }}
             loading="lazy"
             transition={{ type: "spring", stiffness: 340, damping: 32, mass: 0.9 }}
           />
