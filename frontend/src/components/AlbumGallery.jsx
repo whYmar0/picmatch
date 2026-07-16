@@ -61,13 +61,13 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
       >
         <span className="flex items-center gap-2.5 text-base font-semibold">
           <span className="flex items-center justify-center w-[22px] h-[22px]">
-            <FilledHeart size={22} className={likeCount > 0 ? "text-white" : "text-white/40"} />
+            <FilledHeart size={22} className="text-white" />
           </span>
           {likeCount}
         </span>
         <span className="flex items-center gap-2.5 text-base font-semibold">
           <span className="flex items-center justify-center w-[22px] h-[22px]">
-            <BrokenHeart size={22} className={dislikeCount > 0 ? "text-white" : "text-white/40"} />
+            <BrokenHeart size={22} className="text-white" />
           </span>
           {dislikeCount}
         </span>
@@ -76,7 +76,7 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
             <MessageCircle
               size={20}
               strokeWidth={1.75}
-              className={commentCount > 0 ? "text-white" : "text-white/40"}
+              className="text-white"
             />
           </span>
           {commentCount}
@@ -428,6 +428,9 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const [pendingVoters, setPendingVoters] = useState(new Set());
   const [shareDone,      setShareDone]      = useState(false);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [commentsData, setCommentsData] = useState(null);
+  const fetchedPhotoIdRef = useRef(null);
+  const fetchedAlbumIdRef = useRef(null);
 
   // Owner-only token share — Dashboard opens this gallery from the user's own
   // album cards, so the creator comparison is mostly defensive (in case the
@@ -439,6 +442,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const carouselRef = useRef(null);
   const currentIdxRef = useRef(0);
   const snapAnimRef = useRef(null);        // in-flight carousel snap animation
+  const [snapInProgress, setSnapInProgress] = useState(false);
+  const isDismissingRef = useRef(false);   // guards snap onComplete during exit
 
   // ── Axis-locking touch refs ──────────────────────────────────────────────
   const touchStart = useRef({ x: 0, y: 0, time: 0 });
@@ -495,6 +500,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   // ── Data fetching ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!album?.id) return;
+    if (fetchedAlbumIdRef.current === album.id) return;
+    fetchedAlbumIdRef.current = album.id;
     albumsApi.getAnalytics(album.id)
       .then(setAnalytics)
       .catch(() => setAnalytics(null));
@@ -538,8 +545,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   useEffect(() => {
     if (!currentPhoto?.id) return;
+    if (fetchedPhotoIdRef.current === currentPhoto.id) return;
+    fetchedPhotoIdRef.current = currentPhoto.id;
     commentsApi.getForPhoto(currentPhoto.id)
       .then((data) => {
+        setCommentsData(data);
         let count = data?.length ?? 0;
         if (Array.isArray(data)) {
           count = data.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0);
@@ -579,6 +589,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const goTo = useCallback((idx) => {
     if (idx < 0 || idx >= photos.length) return;
     snapAnimRef.current?.stop();
+    setSnapInProgress(false);
     setCurrentIdx(idx);
     currentIdxRef.current = idx;
     dragX.set(0);
@@ -691,6 +702,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // time) and animates it to the album card's natural rect using
         // the album card's own spring. Continuity is preserved because
         // captured position = last seen position.
+        isDismissingRef.current = true;
+        snapAnimRef.current?.stop();
         dragYAnimRef.current?.stop();
         setSheetExpanded(false);
         onClose();      // dragProgressMV pin = 1 is owned by handleGalleryClose
@@ -731,9 +744,12 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // Animate to edge of current slide, then snap to new index
         const w = containerWidth;
         const targetX = targetIdx > currentIdxRef.current ? -w * 0.5 : w * 0.5;
+        setSnapInProgress(true);
         snapAnimRef.current = animate(dragX, targetX > 0 ? w : -w, {
           type: "spring", stiffness: 300, damping: 30,
           onComplete: () => {
+            if (isDismissingRef.current) return;
+            setSnapInProgress(false);
             setCurrentIdx(targetIdx);
             currentIdxRef.current = targetIdx;
             dragX.set(0);
@@ -741,8 +757,13 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         });
       } else {
         // Snap back to current position
+        setSnapInProgress(true);
         snapAnimRef.current = animate(dragX, 0, {
           type: "spring", stiffness: 300, damping: 30,
+          onComplete: () => {
+            if (isDismissingRef.current) return;
+            setSnapInProgress(false);
+          },
         });
       }
 
@@ -852,6 +873,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     return (
       <PhotoCommentsList
         photoId={String(currentPhoto.id)}
+        initialComments={commentsData}
         onReplyTrigger={replyTriggerRef.current}
         apiRef={listApiRef}
         albumCreatorId={album.creator_id ? String(album.creator_id) : null}
@@ -936,29 +958,41 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             className="flex h-full"
             style={{ x: carouselX, willChange: "transform" }}
           >
-            {photos.map((photo, i) => (
+            {photos.map((photo, i) => {
+              const isVisible = Math.abs(i - currentIdx) <= 2 && photo?.url;
+              const isSharedElement = i === 0 && currentIdx === 0 && !snapInProgress;
+              const photoClassName = `max-w-full max-h-full select-none pointer-events-none ${i === 0 ? "object-cover" : "object-contain"}`;
+              const photoProps = {
+                src: photo.url,
+                alt: "",
+                className: photoClassName,
+                draggable: false,
+                loading: i === currentIdx ? "eager" : "lazy",
+                decoding: "async",
+              };
+              return (
               <div
                 key={photo.id}
                 className="flex-shrink-0 w-full h-full flex items-center justify-center py-8"
               >
-                {Math.abs(i - currentIdx) <= 2 && photo?.url ? (
-                  <motion.img
-                    src={photo.url}
-                    alt=""
-                    layoutId={i === 0 ? `album-cover-${album.id}` : undefined}
-                    initial={i === 0 ? { borderRadius: 16 } : undefined}
-                    animate={i === 0 ? { borderRadius: 0 } : undefined}
-                    transition={i === 0 ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 } : undefined}
-                    className={`max-w-full max-h-full select-none pointer-events-none ${i === 0 ? "object-cover" : "object-contain"}`}
-                    draggable={false}
-                    loading={i === currentIdx ? "eager" : "lazy"}
-                    decoding="async"
-                  />
+                {isVisible ? (
+                  isSharedElement ? (
+                    <motion.img
+                      {...photoProps}
+                      layoutId={`album-cover-${album.id}`}
+                      initial={{ borderRadius: 16 }}
+                      animate={{ borderRadius: 0 }}
+                      transition={{ type: "spring", stiffness: 280, damping: 32, mass: 0.95 }}
+                    />
+                  ) : (
+                    <img {...photoProps} />
+                  )
                 ) : !photo?.url ? (
                   <div className="text-white/40 text-sm">No photo</div>
                 ) : null}
               </div>
-            ))}
+            );
+            })}
           </motion.div>
         </div>
       </motion.div>

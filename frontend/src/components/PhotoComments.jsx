@@ -201,7 +201,7 @@ export function PhotoCommentsList({ photoId, initialComments, onReplyTrigger, ap
     if (initialComments != null) return;
     const timer = setTimeout(() => load(), 350);
     return () => clearTimeout(timer);
-  }, [load]);
+  }, [load, initialComments]);
 
   const handleDelete = async (id) => {
     try { await commentsApi.delete(id); load(); } catch { /**/ }
@@ -305,7 +305,7 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
     if (initialComments != null) return;
     const timer = setTimeout(() => load(), 350);
     return () => clearTimeout(timer);
-  }, [load]);
+  }, [load, initialComments]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
