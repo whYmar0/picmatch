@@ -9,7 +9,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
-import { Plus, ChevronLeft, Search, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Plus, ChevronLeft, Search, SlidersHorizontal, ChevronDown, Check } from "lucide-react";
 import toast from "react-hot-toast";
 import { albumsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
@@ -17,6 +17,7 @@ import { useLang } from "../contexts/LangContext";
 import AlbumCard from "../components/AlbumCard";
 import RecentAlbumCard from "../components/RecentAlbumCard";
 import AlbumGallery from "../components/AlbumGallery";
+import BottomSheet from "../components/BottomSheet";
 import SkeletonBox, { AlbumGridSkeleton } from "../components/Skeleton";
 import { getRecentAlbums } from "../hooks/useRecentAlbums.js";
 
@@ -74,6 +75,21 @@ function useDebounce(value, delay = 200) {
   return debounced;
 }
 
+function useScrollLeft(carouselRef, data) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const handler = () => {
+      setScrolled(el.scrollLeft > 0);
+    };
+    handler();
+    el.addEventListener('scroll', handler, { passive: true });
+    return () => el.removeEventListener('scroll', handler);
+  }, [carouselRef, data]);
+  return scrolled;
+}
+
 function parseUTC(dateStr) {
   if (!dateStr) return new Date();
   if (dateStr.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(dateStr)) return new Date(dateStr);
@@ -92,8 +108,10 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState("home"); // "home" | "my-albums" | "recent-albums"
   const [mySearch, setMySearch] = useState("");
   const [mySort, setMySort] = useState("newest");
+  const [mySortOpen, setMySortOpen] = useState(false);
   const [recentSearch, setRecentSearch] = useState("");
   const [recentSort, setRecentSort] = useState("recent");
+  const [recentSortOpen, setRecentSortOpen] = useState(false);
 
   const prefersReducedMotion = useReducedMotion();
 
@@ -105,6 +123,10 @@ export default function Dashboard() {
   // Carousel overflow detection (must come after `recent` is defined)
   const [myCarouselRef, myOverflows] = useCarouselOverflow(albums);
   const [recentCarouselRef, recentOverflows] = useCarouselOverflow(recent);
+
+  // Carousel scroll position — left fade appears only when scrolled away from start
+  const myScrolledLeft = useScrollLeft(myCarouselRef, albums);
+  const recentScrolledLeft = useScrollLeft(recentCarouselRef, recent);
 
   // Page depth-zoom motion values (preserved from v4)
   const dragProgressMV = useMotionValue(0);
@@ -223,13 +245,9 @@ export default function Dashboard() {
     ? { duration: 0.15 }
     : { duration: 0.2 };
 
-  const expandedTransition = prefersReducedMotion
-    ? { duration: 0.15 }
-    : { type: "spring", stiffness: 300, damping: 28 };
-
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-0 py-2">
+      <div className="max-w-5xl mx-auto px-0 py-8">
         <div className="mb-6 px-3">
           <SkeletonBox className="h-8 w-32" />
         </div>
@@ -256,7 +274,7 @@ export default function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={homeTransition}
-              className="space-y-10"
+              className="space-y-3"
             >
               {/* My Albums */}
               <section>
@@ -284,9 +302,10 @@ export default function Dashboard() {
                       aria-label={t("myAlbums")}
                       aria-roledescription="carousel"
                       className={`
-                        flex overflow-x-auto gap-4 py-2 pl-1 scrollbar-none
+                        flex overflow-x-auto gap-4 py-1 pl-1 scrollbar-none
                         ${myOverflows ? "mask-fade-edges" : ""}
                       `}
+                      data-scrolled-left={myOverflows ? myScrolledLeft : undefined}
                     >
                       {albums.map((album, i) => (
                         <div
@@ -303,7 +322,7 @@ export default function Dashboard() {
                       ))}
                     </div>
                     {myOverflows && (
-                      <div className="flex justify-end mt-2 px-4">
+                      <div className="flex justify-end mt-1 px-4">
                         <button
                           onClick={() => goToView("my-albums")}
                           className="text-primary-500 hover:text-primary-600 font-semibold text-sm transition-colors"
@@ -319,7 +338,7 @@ export default function Dashboard() {
               {/* Recent Albums */}
               {recent.length > 0 && (
                 <section>
-                  <div className="flex items-center justify-between mb-4 px-4">
+                  <div className="flex items-center justify-between mb-1.5 px-4">
                     <h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200">
                       {t("recentlyVisited")}
                     </h2>
@@ -328,11 +347,11 @@ export default function Dashboard() {
                     ref={recentCarouselRef}
                     role="region"
                     aria-label={t("recentlyVisited")}
-                    aria-roledescription="carousel"
-                    className={`
-                      flex overflow-x-auto gap-4 py-2 pl-1 scrollbar-none
+                    aria-roledescription="carousel"                      className={`
+                      flex overflow-x-auto gap-4 py-1 pl-1 scrollbar-none
                       ${recentOverflows ? "mask-fade-edges" : ""}
                     `}
+                    data-scrolled-left={recentOverflows ? recentScrolledLeft : undefined}
                   >
                     {recent.map((album, i) => (
                       <div
@@ -342,7 +361,7 @@ export default function Dashboard() {
                       </div>
                     ))}
                   </div>                    {recentOverflows && (
-                    <div className="flex justify-end mt-2 px-4">
+                    <div className="flex justify-end mt-1 px-4">
                       <button
                         onClick={() => goToView("recent-albums")}
                         className="text-primary-500 hover:text-primary-600 font-semibold text-sm transition-colors"
@@ -357,15 +376,8 @@ export default function Dashboard() {
           )}
 
           {activeView === "my-albums" && (
-            <motion.div
-              key="my-albums"
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={expandedTransition}
-              className="min-h-screen"
-            >
-              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-4 px-3 border-b border-border-light dark:border-border-dark flex items-center gap-3">
+            <div className="min-h-screen">
+              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-2 px-3 flex items-center gap-3">
                 <button
                   onClick={() => setActiveView("home")}
                   className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
@@ -376,38 +388,56 @@ export default function Dashboard() {
                 <h1 className="font-display font-bold text-2xl">{t("myAlbums")}</h1>
               </div>
 
-              <div className="mt-4 mb-6 flex flex-col sm:flex-row gap-3 px-4">
-                <div className="relative flex-1">
+              <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 px-4">
+                <div className="relative flex-1 min-w-[180px]">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
                     value={mySearch}
                     onChange={(e) => setMySearch(e.target.value)}
                     placeholder={t("searchAlbums")}
-                    className="input-field pl-9 pr-4 py-2.5 text-sm w-full"
+                    className="input-field pl-9 pr-4 py-2.5 text-sm w-full rounded-full"
                   />
                 </div>
-                <div className="relative">
-                  <SlidersHorizontal size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <select
-                    value={mySort}
-                    onChange={(e) => setMySort(e.target.value)}
-                    className="input-field pl-9 pr-8 py-2.5 text-sm appearance-none w-full sm:w-44"
-                  >
-                    <option value="newest">{t("sortNewest")}</option>
-                    <option value="alphabetical">{t("sortAlphabetical")}</option>
-                    <option value="mostVotes">{t("sortMostVotes")}</option>
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
+                <button
+                  onClick={() => setMySortOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm whitespace-nowrap
+                             bg-border-light dark:bg-border-dark
+                             hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                >
+                  <SlidersHorizontal size={15} />
+                  {mySort === "newest" ? t("sortNewest") : mySort === "alphabetical" ? t("sortAlphabetical") : t("sortMostVotes")}
+                </button>
               </div>
+
+              <BottomSheet open={mySortOpen} onClose={() => setMySortOpen(false)} title={t("sort")}>
+                <div className="w-full h-px bg-border-light dark:bg-border-dark mb-4" />
+                {[
+                  { key: "newest", label: t("sortNewest") },
+                  { key: "alphabetical", label: t("sortAlphabetical") },
+                  { key: "mostVotes", label: t("sortMostVotes") },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => { setMySort(key); setMySortOpen(false); }}
+                    className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
+                                text-sm font-medium transition-colors mb-2
+                                ${mySort === key
+                                  ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
+                                  : "hover:bg-border-light dark:hover:bg-border-dark"}`}
+                  >
+                    {label}
+                    {mySort === key && <Check size={16} className="text-primary-400" />}
+                  </button>
+                ))}
+              </BottomSheet>
 
               {filteredMyAlbums.length === 0 ? (
                 <div className="text-center py-16 px-3">
                   <p className="text-gray-400 text-sm">{t("noSearchResults")}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-20 px-4">
+                <div className="grid grid-cols-2 gap-4 pb-20 px-4">
                   {filteredMyAlbums.map((album, i) => (
                     <AlbumCard
                       key={album.id}
@@ -419,19 +449,12 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
 
           {activeView === "recent-albums" && (
-            <motion.div
-              key="recent-albums"
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={expandedTransition}
-              className="min-h-screen"
-            >
-              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-4 px-1 border-b border-border-light dark:border-border-dark flex items-center gap-3">
+            <div className="min-h-screen">
+              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-2 px-1 flex items-center gap-3">
                 <button
                   onClick={() => setActiveView("home")}
                   className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
@@ -442,43 +465,61 @@ export default function Dashboard() {
                 <h1 className="font-display font-bold text-2xl">{t("recentlyVisited")}</h1>
               </div>
 
-              <div className="mt-4 mb-6 flex flex-col sm:flex-row gap-3 px-4">
-                <div className="relative flex-1">
+              <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 px-4">
+                <div className="relative flex-1 min-w-[180px]">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
                     value={recentSearch}
                     onChange={(e) => setRecentSearch(e.target.value)}
                     placeholder={t("searchAlbums")}
-                    className="input-field pl-9 pr-4 py-2.5 text-sm w-full"
+                    className="input-field pl-9 pr-4 py-2.5 text-sm w-full rounded-full"
                   />
                 </div>
-                <div className="relative">
-                  <SlidersHorizontal size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <select
-                    value={recentSort}
-                    onChange={(e) => setRecentSort(e.target.value)}
-                    className="input-field pl-9 pr-8 py-2.5 text-sm appearance-none w-full sm:w-44"
-                  >
-                    <option value="recent">{t("sortMostRecent")}</option>
-                    <option value="alphabetical">{t("sortAlphabetical")}</option>
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
+                <button
+                  onClick={() => setRecentSortOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm whitespace-nowrap
+                             bg-border-light dark:bg-border-dark
+                             hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                >
+                  <SlidersHorizontal size={15} />
+                  {recentSort === "recent" ? t("sortMostRecent") : t("sortAlphabetical")}
+                </button>
               </div>
+
+              <BottomSheet open={recentSortOpen} onClose={() => setRecentSortOpen(false)} title={t("sort")}>
+                <div className="w-full h-px bg-border-light dark:bg-border-dark mb-4" />
+                {[
+                  { key: "recent", label: t("sortMostRecent") },
+                  { key: "alphabetical", label: t("sortAlphabetical") },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => { setRecentSort(key); setRecentSortOpen(false); }}
+                    className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
+                                text-sm font-medium transition-colors mb-2
+                                ${recentSort === key
+                                  ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
+                                  : "hover:bg-border-light dark:hover:bg-border-dark"}`}
+                  >
+                    {label}
+                    {recentSort === key && <Check size={16} className="text-primary-400" />}
+                  </button>
+                ))}
+              </BottomSheet>
 
               {filteredRecent.length === 0 ? (
                 <div className="text-center py-16 px-3">
                   <p className="text-gray-400 text-sm">{t("noSearchResults")}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-20 px-4">
+                <div className="grid grid-cols-2 gap-4 pb-20 px-4">
                   {filteredRecent.map((album, i) => (
                     <RecentAlbumCard key={album.id} album={album} index={i} />
                   ))}
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
         </AnimatePresence>
       </motion.div>

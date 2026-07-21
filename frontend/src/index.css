@@ -212,10 +212,16 @@ button,
     scrollbar-width: none;
   }
 
-  /* Subtle both-edges fade for horizontally scrollable tracks */
+  /* Right-edge fade for horizontally scrollable tracks */
+  /* Left fade appears dynamically when scrolled away from start */
   .mask-fade-edges {
     mask-image: linear-gradient(to right, black 97%, transparent 99%);
     -webkit-mask-image: linear-gradient(to right, black 97%, transparent 99%);
+    transition: mask-image 0.3s ease-out, -webkit-mask-image 0.3s ease-out;
+  }
+  .mask-fade-edges[data-scrolled-left="true"] {
+    mask-image: linear-gradient(to right, transparent 1%, black 3%, black 97%, transparent 99%);
+    -webkit-mask-image: linear-gradient(to right, transparent 1%, black 3%, black 97%, transparent 99%);
   }
 }
 
