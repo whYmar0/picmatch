@@ -6,7 +6,7 @@
  * - Respects prefers-reduced-motion
  * - Preserves gallery mode / depth-zoom integration
  */
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { Plus, ChevronLeft, Search, SlidersHorizontal, ChevronDown, Check } from "lucide-react";
@@ -24,24 +24,23 @@ import { getRecentAlbums } from "../hooks/useRecentAlbums.js";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function useCarouselOverflow(data) {
-  const ref = useRef(null);
+  const [node, setNode] = useState(null);
   const [overflows, setOverflows] = useState(false);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const check = () => setOverflows(el.scrollWidth > el.clientWidth);
+    if (!node) return;
+    const check = () => setOverflows(node.scrollWidth > node.clientWidth);
     check();
     const ro = new ResizeObserver(check);
-    ro.observe(el);
+    ro.observe(node);
     window.addEventListener("resize", check);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", check);
     };
-  }, [data]);
+  }, [node, data]);
 
-  return [ref, overflows];
+  return [setNode, node, overflows];
 }
 
 function useDebounce(value, delay = 200) {
@@ -53,18 +52,17 @@ function useDebounce(value, delay = 200) {
   return debounced;
 }
 
-function useScrollLeft(carouselRef, data) {
+function useScrollLeft(node, data) {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
-    const el = carouselRef.current;
-    if (!el) return;
+    if (!node) return;
     const handler = () => {
-      setScrolled(el.scrollLeft > 0);
+      setScrolled(node.scrollLeft > 0);
     };
     handler();
-    el.addEventListener('scroll', handler, { passive: true });
-    return () => el.removeEventListener('scroll', handler);
-  }, [carouselRef, data]);
+    node.addEventListener('scroll', handler, { passive: true });
+    return () => node.removeEventListener('scroll', handler);
+  }, [node, data]);
   return scrolled;
 }
 
@@ -97,12 +95,12 @@ export default function Dashboard() {
   const recent = useMemo(() => recentAll.filter((a) => !ownIds.has(a.id)), [recentAll, ownIds]);
 
   // Carousel overflow detection (must come after `recent` is defined)
-  const [myCarouselRef, myOverflows] = useCarouselOverflow(albums);
-  const [recentCarouselRef, recentOverflows] = useCarouselOverflow(recent);
+  const [myCarouselRef, myCarouselNode, myOverflows] = useCarouselOverflow(albums);
+  const [recentCarouselRef, recentCarouselNode, recentOverflows] = useCarouselOverflow(recent);
 
   // Carousel scroll position — left fade appears only when scrolled away from start
-  const myScrolledLeft = useScrollLeft(myCarouselRef, albums);
-  const recentScrolledLeft = useScrollLeft(recentCarouselRef, recent);
+  const myScrolledLeft = useScrollLeft(myCarouselNode, albums);
+  const recentScrolledLeft = useScrollLeft(recentCarouselNode, recent);
 
   // Page depth-zoom motion values (preserved from v4)
   const dragProgressMV = useMotionValue(0);
