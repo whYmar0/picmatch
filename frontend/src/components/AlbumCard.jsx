@@ -48,11 +48,12 @@ async function smartCopy(text) {
   }
 }
 
-export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhotoClick }) {
+export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick }) {
   const { t, lang } = useLang();
   const [album, setAlbum] = useState(initialAlbum);
   const [copied, setCopied] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   const photoCount = (album.photos || []).length;
 
@@ -93,12 +94,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.07, duration: 0.3 }}
-      className="bg-card-light dark:bg-card-dark rounded-3xl card-shadow overflow-hidden flex flex-col w-full min-w-0"
-    >
+    <div className="bg-card-light dark:bg-card-dark rounded-3xl card-shadow overflow-hidden flex flex-col w-full min-w-0">
       {/* Photo area */}
       <div
         onClick={handlePhotoClick}
@@ -109,9 +105,11 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
             src={firstPhoto.url}
             alt=""
             layoutId={`album-cover-${album.id}`}
-            className="w-full h-full object-cover rounded-t-2xl pointer-events-none"
+            className={`w-full h-full object-cover rounded-t-2xl pointer-events-none transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
             style={{ pointerEvents: "none" }}
             loading="lazy"
+            onLoad={() => setImgLoaded(true)}
+            onError={() => setImgLoaded(true)}
             transition={{ type: "spring", stiffness: 340, damping: 32, mass: 0.9 }}
           />
         ) : (
@@ -182,6 +180,6 @@ export default function AlbumCard({ album: initialAlbum, onDelete, index, onPhot
           </motion.button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

@@ -18,7 +18,7 @@ import AlbumCard from "../components/AlbumCard";
 import RecentAlbumCard from "../components/RecentAlbumCard";
 import AlbumGallery from "../components/AlbumGallery";
 import BottomSheet from "../components/BottomSheet";
-import SkeletonBox, { AlbumGridSkeleton } from "../components/Skeleton";
+import { DashboardSkeleton } from "../components/Skeleton";
 import { getRecentAlbums } from "../hooks/useRecentAlbums.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -39,12 +39,6 @@ function useCarouselOverflow(data) {
       ro.disconnect();
       window.removeEventListener("resize", check);
     };
-  }, []);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    setOverflows(el.scrollWidth > el.clientWidth);
   }, [data]);
 
   return [ref, overflows];
@@ -224,14 +218,7 @@ export default function Dashboard() {
   };
 
   if (loading) {
-    return (
-      <div className="max-w-5xl mx-auto px-0 py-8">
-        <div className="mb-6 px-3">
-          <SkeletonBox className="h-8 w-32" />
-        </div>
-        <AlbumGridSkeleton count={4} />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

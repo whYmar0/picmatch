@@ -5,9 +5,9 @@
  * Privacy badge kept. Single-line truncation for titles.
  * "Results" button stays as is.
  */
-import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Image, Lock, Globe, BarChart2, MessageCircle } from "lucide-react";
+import { useState } from "react";
 import { useLang } from "../contexts/LangContext";
 
 function parseUTC(dateStr) {
@@ -32,25 +32,23 @@ function timeAgo(dateStr, lang) {
 
 export default function RecentAlbumCard({ album, index }) {
   const { t, lang } = useLang();
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   const hasAccess = album.hasAccess !== false;
   const isPrivate = album.is_public === false;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.07, duration: 0.3 }}
-      className="bg-card-light dark:bg-card-dark rounded-3xl card-shadow overflow-hidden flex flex-col w-full min-w-0"
-    >
+    <div className="bg-card-light dark:bg-card-dark rounded-3xl card-shadow overflow-hidden flex flex-col w-full min-w-0">
       {/* Photo area (2/3) — same as AlbumCard */}
       <div className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark overflow-hidden">
         {album.coverUrl ? (
           <img
             src={album.coverUrl}
             alt=""
-            className="w-full h-full object-cover"
+            className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
             loading="lazy"
+            onLoad={() => setImgLoaded(true)}
+            onError={() => setImgLoaded(true)}
           />
         ) : (
           <div className="flex h-full items-center justify-center">
@@ -99,6 +97,6 @@ export default function RecentAlbumCard({ album, index }) {
           }
         </Link>
       </div>
-    </motion.div>
+    </div>
   );
 }
