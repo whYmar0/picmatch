@@ -202,6 +202,21 @@ button,
   .touch-manipulation {
     touch-action: manipulation;
   }
+
+  /* Hide scrollbars while keeping scroll functional */
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Subtle both-edges fade for horizontally scrollable tracks */
+  .mask-fade-edges {
+    mask-image: linear-gradient(to right, black 97%, transparent 99%);
+    -webkit-mask-image: linear-gradient(to right, black 97%, transparent 99%);
+  }
 }
 
 /* ─── Swipe Card & Landing Stack Anti-Aliasing ───────────────────────────────── */

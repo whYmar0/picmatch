@@ -22,7 +22,7 @@ def compress_image(image_bytes: bytes, max_size: int = 1200, quality: int = 80) 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
 
 from database import get_db
@@ -92,7 +92,7 @@ def photo_to_out(p: Photo) -> PhotoOut:
                     url=photo_url(p.stored_filename),
                     order=p.order, created_at=p.created_at)
 
-def album_to_out(album: Album, creator: User | None = None) -> AlbumOut:
+def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0) -> AlbumOut:
     resolved_creator = album.creator or creator
     return AlbumOut(
         id=album.id, title=album.title, description=album.description,
@@ -101,6 +101,7 @@ def album_to_out(album: Album, creator: User | None = None) -> AlbumOut:
         is_active=album.is_active,
         is_public=album.is_public,
         photo_count=len(album.photos),
+        total_votes=total_votes,
         created_at=album.created_at,
         creator=resolved_creator,
         photos=[photo_to_out(p) for p in album.photos],
@@ -172,7 +173,21 @@ async def get_my_albums(
         .where(Album.creator_id == _s(current_user.id))
         .order_by(Album.created_at.desc())
     )
-    return [album_to_out(a) for a in result.scalars().all()]
+    albums = result.scalars().all()
+
+    # Compute total votes per album in one query
+    album_ids = [_s(a.id) for a in albums]
+    vote_count_map = {}
+    if album_ids:
+        vote_counts = await db.execute(
+            select(Photo.album_id, func.count(Vote.id))
+            .join(Vote, Vote.photo_id == Photo.id)
+            .where(Photo.album_id.in_(album_ids))
+            .group_by(Photo.album_id)
+        )
+        vote_count_map = {str(album_id): count for album_id, count in vote_counts.all()}
+
+    return [album_to_out(a, total_votes=vote_count_map.get(str(a.id), 0)) for a in albums]
 
 
 @router.get("/invite/{invite_code}", response_model=AlbumWithPhotos)
