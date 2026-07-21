@@ -23,22 +23,6 @@ import { getRecentAlbums } from "../hooks/useRecentAlbums.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function useReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const handler = (e) => setReduced(e.matches);
-    if (mq.addEventListener) mq.addEventListener("change", handler);
-    else mq.addListener(handler);
-    return () => {
-      if (mq.removeEventListener) mq.removeEventListener("change", handler);
-      else mq.removeListener(handler);
-    };
-  }, []);
-  return reduced;
-}
-
 function useCarouselOverflow(data) {
   const ref = useRef(null);
   const [overflows, setOverflows] = useState(false);
@@ -112,8 +96,6 @@ export default function Dashboard() {
   const [recentSearch, setRecentSearch] = useState("");
   const [recentSort, setRecentSort] = useState("recent");
   const [recentSortOpen, setRecentSortOpen] = useState(false);
-
-  const prefersReducedMotion = useReducedMotion();
 
   // Recently visited — filtered to exclude albums the user owns
   const recentAll = user ? getRecentAlbums(user.id) : [];
@@ -241,10 +223,6 @@ export default function Dashboard() {
     setActiveView(view);
   };
 
-  const homeTransition = prefersReducedMotion
-    ? { duration: 0.15 }
-    : { duration: 0.2 };
-
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-0 py-8">
@@ -266,16 +244,8 @@ export default function Dashboard() {
           willChange: "transform",
         }}
       >
-        <AnimatePresence mode="wait">
-          {activeView === "home" && (
-            <motion.div
-              key="home"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={homeTransition}
-              className="space-y-3"
-            >
+        {activeView === "home" && (
+            <div className="space-y-3">
               {/* My Albums */}
               <section>
                 <div className="flex items-center justify-between mb-4 px-4">
@@ -372,12 +342,12 @@ export default function Dashboard() {
                   )}
                 </section>
               )}
-            </motion.div>
+            </div>
           )}
 
           {activeView === "my-albums" && (
             <div className="min-h-screen">
-              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-2 px-3 flex items-center gap-3">
+              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-1 px-3 flex items-center gap-3">
                 <button
                   onClick={() => setActiveView("home")}
                   className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
@@ -388,7 +358,7 @@ export default function Dashboard() {
                 <h1 className="font-display font-bold text-2xl">{t("myAlbums")}</h1>
               </div>
 
-              <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 px-4">
+              <div className="mt-2 mb-6 flex flex-wrap items-center gap-3 px-4">
                 <div className="relative flex-1 min-w-[180px]">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -409,28 +379,6 @@ export default function Dashboard() {
                   {mySort === "newest" ? t("sortNewest") : mySort === "alphabetical" ? t("sortAlphabetical") : t("sortMostVotes")}
                 </button>
               </div>
-
-              <BottomSheet open={mySortOpen} onClose={() => setMySortOpen(false)} title={t("sort")}>
-                <div className="w-full h-px bg-border-light dark:bg-border-dark mb-4" />
-                {[
-                  { key: "newest", label: t("sortNewest") },
-                  { key: "alphabetical", label: t("sortAlphabetical") },
-                  { key: "mostVotes", label: t("sortMostVotes") },
-                ].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => { setMySort(key); setMySortOpen(false); }}
-                    className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
-                                text-sm font-medium transition-colors mb-2
-                                ${mySort === key
-                                  ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-                                  : "hover:bg-border-light dark:hover:bg-border-dark"}`}
-                  >
-                    {label}
-                    {mySort === key && <Check size={16} className="text-primary-400" />}
-                  </button>
-                ))}
-              </BottomSheet>
 
               {filteredMyAlbums.length === 0 ? (
                 <div className="text-center py-16 px-3">
@@ -454,7 +402,7 @@ export default function Dashboard() {
 
           {activeView === "recent-albums" && (
             <div className="min-h-screen">
-              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-2 px-1 flex items-center gap-3">
+              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-1 px-1 flex items-center gap-3">
                 <button
                   onClick={() => setActiveView("home")}
                   className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
@@ -465,7 +413,7 @@ export default function Dashboard() {
                 <h1 className="font-display font-bold text-2xl">{t("recentlyVisited")}</h1>
               </div>
 
-              <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 px-4">
+              <div className="mt-2 mb-6 flex flex-wrap items-center gap-3 px-4">
                 <div className="relative flex-1 min-w-[180px]">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -487,27 +435,6 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              <BottomSheet open={recentSortOpen} onClose={() => setRecentSortOpen(false)} title={t("sort")}>
-                <div className="w-full h-px bg-border-light dark:bg-border-dark mb-4" />
-                {[
-                  { key: "recent", label: t("sortMostRecent") },
-                  { key: "alphabetical", label: t("sortAlphabetical") },
-                ].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => { setRecentSort(key); setRecentSortOpen(false); }}
-                    className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
-                                text-sm font-medium transition-colors mb-2
-                                ${recentSort === key
-                                  ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-                                  : "hover:bg-border-light dark:hover:bg-border-dark"}`}
-                  >
-                    {label}
-                    {recentSort === key && <Check size={16} className="text-primary-400" />}
-                  </button>
-                ))}
-              </BottomSheet>
-
               {filteredRecent.length === 0 ? (
                 <div className="text-center py-16 px-3">
                   <p className="text-gray-400 text-sm">{t("noSearchResults")}</p>
@@ -521,8 +448,51 @@ export default function Dashboard() {
               )}
             </div>
           )}
-        </AnimatePresence>
       </motion.div>
+
+      {/* Sort BottomSheets — sit outside scaled wrapper so fixed positioning works */}
+      <BottomSheet open={mySortOpen} onClose={() => setMySortOpen(false)} title={t("sort")}>
+        <div className="w-full h-px bg-border-light dark:bg-border-dark mb-4" />
+        {[
+          { key: "newest", label: t("sortNewest") },
+          { key: "alphabetical", label: t("sortAlphabetical") },
+          { key: "mostVotes", label: t("sortMostVotes") },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => { setMySort(key); setMySortOpen(false); }}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
+                        text-sm font-medium transition-colors mb-2
+                        ${mySort === key
+                          ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
+                          : "hover:bg-border-light dark:hover:bg-border-dark"}`}
+          >
+            {label}
+            {mySort === key && <Check size={16} className="text-primary-400" />}
+          </button>
+        ))}
+      </BottomSheet>
+
+      <BottomSheet open={recentSortOpen} onClose={() => setRecentSortOpen(false)} title={t("sort")}>
+        <div className="w-full h-px bg-border-light dark:bg-border-dark mb-4" />
+        {[
+          { key: "recent", label: t("sortMostRecent") },
+          { key: "alphabetical", label: t("sortAlphabetical") },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => { setRecentSort(key); setRecentSortOpen(false); }}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
+                        text-sm font-medium transition-colors mb-2
+                        ${recentSort === key
+                          ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
+                          : "hover:bg-border-light dark:hover:bg-border-dark"}`}
+          >
+            {label}
+            {recentSort === key && <Check size={16} className="text-primary-400" />}
+          </button>
+        ))}
+      </BottomSheet>
 
       {/* Gallery mode — sits outside the scaled wrapper, full size */}
       <AnimatePresence>
