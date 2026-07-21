@@ -302,7 +302,7 @@ export default function Dashboard() {
                       aria-label={t("myAlbums")}
                       aria-roledescription="carousel"
                       className={`
-                        flex overflow-x-auto gap-4 py-1 pl-1 scrollbar-none
+                        flex overflow-x-auto gap-4 py-1 pl-4 scrollbar-none
                         ${myOverflows ? "mask-fade-edges" : ""}
                       `}
                       data-scrolled-left={myOverflows ? myScrolledLeft : undefined}
@@ -348,7 +348,7 @@ export default function Dashboard() {
                     role="region"
                     aria-label={t("recentlyVisited")}
                     aria-roledescription="carousel"                      className={`
-                      flex overflow-x-auto gap-4 py-1 pl-1 scrollbar-none
+                      flex overflow-x-auto gap-4 py-1 pl-4 scrollbar-none
                       ${recentOverflows ? "mask-fade-edges" : ""}
                     `}
                     data-scrolled-left={recentOverflows ? recentScrolledLeft : undefined}
