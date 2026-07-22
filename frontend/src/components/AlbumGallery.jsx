@@ -439,10 +439,12 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                   String(user.id) === String(album.creator_id);
 
   // ── Carousel refs ────────────────────────────────────────────────────────
+  const galleryRef = useRef(null);
   const carouselRef = useRef(null);
   const currentIdxRef = useRef(0);
   const snapAnimRef = useRef(null);        // in-flight carousel snap animation
   const isDismissingRef = useRef(false);   // guards snap onComplete during exit
+  const hasSharedElementRef = useRef(false); // keep layoutId projection alive after swipe
 
   // ── Axis-locking touch refs ──────────────────────────────────────────────
   const touchStart = useRef({ x: 0, y: 0, time: 0 });
@@ -691,6 +693,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         snapAnimRef.current?.stop();
         dragYAnimRef.current?.stop();
         setSheetExpanded(false);
+        setSortOpen(false);
+        setFilterOpen(false);
+        setShareSheetOpen(false);
+        // Disable the whole gallery subtree from receiving input during the
+        // exit fade. The root motion element stays in the DOM for ~220 ms while
+        // AnimatePresence finishes; `inert` ensures it does not block clicks or
+        // touches on the underlying Dashboard during that window.
+        galleryRef.current?.setAttribute("inert", "");
         onClose();      // dragProgressMV pin = 1 is owned by handleGalleryClose
         gestureAxis.current = null;
         return;
@@ -896,11 +906,13 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   // scroll contexts as a belt-and-suspenders to the body-level suppression.
   return (
     <motion.div
+      ref={galleryRef}
+      data-testid="album-gallery"
       className="fixed inset-0 z-[90] flex flex-col overflow-hidden"
       style={{ touchAction: "none", overscrollBehavior: "contain" }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 0.22 } }}
-      exit={{ opacity: 0, pointerEvents: "none", transition: { duration: 0.22 } }}
+      exit={{ opacity: 0, transition: { duration: 0.22 } }}
     >
       {/* Background overlay — outer tween handles the enter fade; the
           wrapper itself has an exit (opacity → 0 over 0.22s) that covers
@@ -921,6 +933,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
       {/* Photo wrapper — handles all touch gestures (axis-locked) */}
       <motion.div
+        data-testid="gallery-touch-layer"
         className="flex-1 relative"
         style={{ scale: combinedScale, translateY: combinedTranslateY }}
         onTouchStart={onWrapperTouchStart}
@@ -941,7 +954,12 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
           >
             {photos.map((photo, i) => {
               const isVisible = Math.abs(i - currentIdx) <= 2 && photo?.url;
-              const isSharedElement = i === 0 && currentIdx === 0;
+              // Keep the first photo mounted as a shared layout element even
+              // when the user swipes to another photo. If we unmount it, Framer
+              // Motion destroys the layoutId projection and the album cover in
+              // AlbumCard disappears after closing from a non-first photo.
+              if (i === 0 && currentIdx === 0) hasSharedElementRef.current = true;
+              const isSharedElement = i === 0 && hasSharedElementRef.current;
               const photoClassName = `max-w-full max-h-full select-none pointer-events-none ${i === 0 ? "object-cover" : "object-contain"}`;
               const photoProps = {
                 src: photo.url,

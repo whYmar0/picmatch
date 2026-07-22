@@ -482,13 +482,18 @@ export default function Dashboard() {
       {/* Gallery mode — sits outside the scaled wrapper, full size */}
       <AnimatePresence>
         {galleryAlbum && (
-          <AlbumGallery
+          <motion.div
             key={galleryKey}
-            album={galleryAlbum.album}
-            startPhotoId={galleryAlbum.photoId}
-            onClose={handleGalleryClose}
-            dragProgressMV={dragProgressMV}
-          />
+            className="contents"
+            exit={{ opacity: 1, transition: { duration: 0.22 } }}
+          >
+            <AlbumGallery
+              album={galleryAlbum.album}
+              startPhotoId={galleryAlbum.photoId}
+              onClose={handleGalleryClose}
+              dragProgressMV={dragProgressMV}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

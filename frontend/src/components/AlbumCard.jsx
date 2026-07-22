@@ -97,6 +97,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
     <div className="bg-card-light dark:bg-card-dark rounded-3xl card-shadow overflow-hidden flex flex-col w-full min-w-0">
       {/* Photo area */}
       <div
+        data-testid="album-card-photo"
         onClick={handlePhotoClick}
         className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
                    overflow-hidden cursor-pointer">
