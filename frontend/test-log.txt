@@ -1,0 +1,71 @@
+
+Running 1 test using 1 worker
+
+[browser] debug [vite] connecting...
+[browser] info %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold
+[browser] warning ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+[browser] warning ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+[browser] debug [vite] connected.
+[browser] debug [vite] connecting...
+[browser] debug [vite] connected.
+[browser] info %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold
+[browser] warning ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+[browser] warning ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+[browser] error The above error occurred in the <AlbumGallery> component:
+
+    at AlbumGallery (http://localhost:5173/src/components/AlbumGallery.jsx?t=1784748492786:798:40)
+    at div
+    at MotionComponent (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=ad688319:945:40)
+    at PresenceChild (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=ad688319:121:24)
+    at AnimatePresence (http://localhost:5173/node_modules/.vite/deps/framer-motion.js?v=ad688319:210:26)
+    at div
+    at Dashboard (http://localhost:5173/src/pages/Dashboard.jsx?t=1784748492786:83:20)
+    at Suspense
+    at ProtectedRoute (http://localhost:5173/src/components/ProtectedRoute.jsx:21:42)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ad688319:4131:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ad688319:4601:5)
+    at main
+    at div
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ad688319:4544:15)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ad688319:5290:5)
+    at AuthProvider (http://localhost:5173/src/contexts/AuthContext.jsx:21:32)
+    at LangProvider (http://localhost:5173/src/contexts/LangContext.jsx:366:32)
+    at ThemeProvider (http://localhost:5173/src/contexts/ThemeContext.jsx:20:33)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+  ✘  1 [chromium] › e2e\freeze-repro.spec.js:17:1 › gallery close from non-first photo does not freeze dashboard (9.0s)
+
+
+  1) [chromium] › e2e\freeze-repro.spec.js:17:1 › gallery close from non-first photo does not freeze dashboard 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-testid="album-gallery"]').first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('[data-testid="album-gallery"]').first()
+
+
+      33 |   // Open the gallery from the first album card.
+      34 |   await page.locator('[data-testid="album-card-photo"]').first().click();
+    > 35 |   await expect(page.locator('[data-testid="album-gallery"]').first()).toBeVisible();
+         |                                                                       ^
+      36 |
+      37 |   // Navigate to the second photo (index 1) using the keyboard.
+      38 |   await page.keyboard.press("ArrowRight");
+        at C:\Users\zell\Documents\PythonProjects\project\picmatch_v5\frontend\e2e\freeze-repro.spec.js:35:71
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\freeze-repro-gallery-close-21d2b-o-does-not-freeze-dashboard-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\freeze-repro-gallery-close-21d2b-o-does-not-freeze-dashboard-chromium\error-context.md
+
+  1 failed
+    [chromium] › e2e\freeze-repro.spec.js:17:1 › gallery close from non-first photo does not freeze dashboard 

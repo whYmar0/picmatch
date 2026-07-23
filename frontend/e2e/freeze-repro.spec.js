@@ -1,31 +1,11 @@
 import { test, expect } from "@playwright/test";
+import { loginPage } from "./auth.js";
 
-const API = "http://localhost:8000";
 const FRONTEND = "http://localhost:5173";
-
-async function getAuthToken(page) {
-  const res = await fetch(`${API}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "tester@example.com", password: "Test1234!A" }),
-  });
-  if (!res.ok) throw new Error(`Login failed: ${await res.text()}`);
-  const data = await res.json();
-  return data;
-}
 
 test("gallery close from non-first photo does not freeze dashboard", async ({ page }) => {
   page.on("console", (msg) => console.log("[browser]", msg.type(), msg.text()));
-  const { access_token, user } = await getAuthToken(page);
-
-  await page.goto(`${FRONTEND}/login`);
-  await page.evaluate(({ token, userObj }) => {
-    const raw = JSON.stringify(userObj);
-    localStorage.setItem("pickmatch_token", token);
-    localStorage.setItem("pickmatch_user", raw);
-    sessionStorage.setItem("pickmatch_token", token);
-    sessionStorage.setItem("pickmatch_user", raw);
-  }, { token: access_token, userObj: user });
+  await loginPage(page, FRONTEND);
 
   await page.goto(`${FRONTEND}/dashboard`);
   await expect(page.locator("text=Freeze Test").first()).toBeVisible();

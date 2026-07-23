@@ -6,7 +6,7 @@
  *    Each swipe = exactly one photo. No momentum overshoot.
  *  - Framer Motion useMotionValue + animate for 60fps compositor-only drag.
  *  - Centralized touch handling: parent wrapper does axis-locking,
- *    horizontal → dragX (carousel), vertical → dragY (dismiss).
+ *    horizontal → offsetX (carousel), vertical → dragY (dismiss).
  *  - Velocity-aware snap: quick flicks count even with small distance.
  *  - Rubber-band at first/last photo edges.
  *  - ThumbStrip: native overflow-x: auto for responsive finger-follow scrolling.
@@ -86,95 +86,131 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
   );
 }
 
-// ─── Thumbnail Strip — native overflow-x: auto + O(1) index calculation ────
+// ─── Thumbnail Strip — driven by the same offsetX as the main carousel ─────
 const THUMB_SIZE = 40;
 const THUMB_GAP = 8;
 
-function ThumbStrip({ photos, currentIdx, onSelect }) {
-  const stripRef = useRef(null);
-  const thumbRefs = useRef([]);
-  const selectingRef = useRef(false);
-  const selectTimer = useRef(null);
+function ThumbItem({ photo, index, offsetX, containerWidthRef, onSelect, isDraggingRef }) {
+  const activeIdx = useTransform(offsetX, (x) => -x / containerWidthRef.current);
+  const scale = useTransform(activeIdx, (v) => (Math.round(v) === index ? 1.15 : 1));
+  const ring = useTransform(activeIdx, (v) =>
+    Math.round(v) === index ? "0 0 0 2px rgb(96 165 250)" : "none"
+  );
 
-  const centerThumb = useCallback((idx) => {
-    const strip = stripRef.current;
-    const el = thumbRefs.current[idx];
-    if (!strip || !el) return;
-    selectingRef.current = true;
-    clearTimeout(selectTimer.current);
-    const target = el.offsetLeft - strip.clientWidth / 2 + el.offsetWidth / 2;
-    const max = strip.scrollWidth - strip.clientWidth;
-    strip.scrollTo({ left: Math.max(0, Math.min(target, max)), behavior: "smooth" });
-    selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 300);
-  }, []);
-
-  useEffect(() => {
-    centerThumb(currentIdx);
-  }, [currentIdx, centerThumb]);
-
-  useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    const lastIdx = { current: -1 };
-    let rafId = null;
-    const onScroll = () => {
-      if (selectingRef.current) return;
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        const idx = Math.round(strip.scrollLeft / (THUMB_SIZE + THUMB_GAP));
-        const clamped = Math.max(0, Math.min(idx, photos.length - 1));
-        if (clamped !== lastIdx.current) {
-          lastIdx.current = clamped;
-          onSelect(clamped);
-        }
-      });
-    };
-    strip.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      strip.removeEventListener("scroll", onScroll);
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, [photos.length, onSelect]);
-
-  useEffect(() => () => { clearTimeout(selectTimer.current); }, []);
-
-  const pad = `calc(50vw - ${THUMB_SIZE / 2}px)`;
+  const handleClick = () => {
+    if (isDraggingRef.current) return;
+    onSelect(index);
+  };
 
   return (
-    <div className="relative w-full">
-      <div
+    <motion.button
+      type="button"
+      onClick={handleClick}
+      style={{ width: THUMB_SIZE, height: THUMB_SIZE, flexShrink: 0, scale, boxShadow: ring }}
+      className="btn-thumb outline-none rounded-xl"
+    >
+      <img
+        src={photo.url}
+        alt=""
+        className="w-full h-full object-cover rounded-xl select-none pointer-events-none"
+        loading="lazy"
+        draggable={false}
+      />
+    </motion.button>
+  );
+}
+
+function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd }) {
+  const stripRef = useRef(null);
+  const isDragging = useRef(false);
+  const touchStartX = useRef(0);
+  const touchStartOffset = useRef(0);
+  const touchStartTime = useRef(0);
+
+  // Drive the thumb track directly from the main carousel offset. The active
+  // thumb is always kept centered under the same `offsetX` motion value.
+  const thumbOffsetX = useTransform(offsetX, (x) => {
+    const W = containerWidthRef.current;
+    const step = THUMB_SIZE + THUMB_GAP;
+    const idx = -x / W;
+    const half = (stripRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 400)) / 2;
+    return -(idx * step) + (half - THUMB_SIZE / 2);
+  });
+
+  const step = THUMB_SIZE + THUMB_GAP;
+  const ratio = containerWidthRef.current / step;
+
+  const clampOffset = (value) => {
+    const W = containerWidthRef.current;
+    const min = -(photos.length - 1) * W;
+    if (value > 0) return value * 0.2;
+    if (value < min) return min + (value - min) * 0.2;
+    return value;
+  };
+
+  const onThumbTouchStart = (e) => {
+    const touch = e.touches[0];
+    touchStartX.current = touch.clientX;
+    touchStartOffset.current = offsetX.get();
+    touchStartTime.current = Date.now();
+    isDragging.current = false;
+  };
+
+  const onThumbTouchMove = (e) => {
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartX.current;
+    if (Math.abs(dx) > 5) isDragging.current = true;
+    e.preventDefault();
+    const raw = touchStartOffset.current + dx * ratio;
+    offsetX.set(clampOffset(raw));
+  };
+
+  const onThumbTouchEnd = (e) => {
+    // Taps are handled by the individual thumb buttons; only drag releases
+    // need a snap and a state update here.
+    if (!isDragging.current) return;
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchStartX.current;
+    const dt = Date.now() - touchStartTime.current;
+    const velocity = dt > 0 ? dx / dt : 0;
+
+    const W = containerWidthRef.current;
+    const velMain = velocity * ratio;
+    const projected = offsetX.get() + velMain * 200;
+    let targetIdx = Math.round(-projected / W);
+    targetIdx = Math.max(0, Math.min(targetIdx, photos.length - 1));
+
+    animate(offsetX, -(targetIdx * W), {
+      type: "spring", stiffness: 500, damping: 38, mass: 0.6,
+      onComplete: () => {
+        if (onDragEnd) onDragEnd(targetIdx);
+      },
+    });
+  };
+
+  return (
+    <div className="relative w-full overflow-hidden" style={{ height: THUMB_SIZE + 12 }}>
+      <motion.div
         ref={stripRef}
-        className="w-full overflow-x-auto relative py-2"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        className="absolute top-0 left-0 h-full flex items-center"
+        style={{ x: thumbOffsetX, gap: THUMB_GAP, willChange: "transform" }}
+        onTouchStart={onThumbTouchStart}
+        onTouchMove={onThumbTouchMove}
+        onTouchEnd={onThumbTouchEnd}
       >
-        <div
-          className="flex items-center w-max"
-          style={{ gap: THUMB_GAP, paddingLeft: pad, paddingRight: pad }}
-        >
-          {photos.map((photo, i) => {
-            const active = i === currentIdx;
-            return (
-              <button
-                key={photo.id}
-                ref={(el) => { thumbRefs.current[i] = el; }}
-                onClick={() => {
-                  selectingRef.current = true;
-                  clearTimeout(selectTimer.current);
-                  onSelect(i);
-                  selectTimer.current = setTimeout(() => { selectingRef.current = false; }, 300);
-                }}
-                style={{ width: THUMB_SIZE, height: THUMB_SIZE, flexShrink: 0 }}
-                className={`btn-thumb transition-all duration-150 outline-none
-                           ${active
-                    ? "ring-[2px] ring-primary-400 ring-offset-1 ring-offset-black scale-[1.15] z-10"
-                    : ""}`}
-              >
-                <img src={photo.url} alt="" className="w-full h-full object-cover rounded-xl select-none pointer-events-none" loading="lazy" draggable={false} />
-              </button>
-            );
-          })}
-        </div>
-      </div>
+        {photos.map((photo, i) => (
+          <ThumbItem
+            key={photo.id}
+            photo={photo}
+            index={i}
+            offsetX={offsetX}
+            containerWidthRef={containerWidthRef}
+            onSelect={onSelect}
+            isDraggingRef={isDragging}
+          />
+        ))}
+      </motion.div>
     </div>
   );
 }
@@ -409,14 +445,16 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
 
   // ── State ────────────────────────────────────────────────────────────────
-  const [analytics, setAnalytics] = useState(null);
-  const [currentIdx, setCurrentIdx] = useState(() => {
+  const initialIdx = (() => {
     if (startPhotoId && album.photos?.length) {
       const idx = album.photos.findIndex((p) => String(p.id) === String(startPhotoId));
       return idx >= 0 ? idx : 0;
     }
     return 0;
-  });
+  })();
+
+  const [analytics, setAnalytics] = useState(null);
+  const [currentIdx, setCurrentIdx] = useState(initialIdx);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [sheetTab, setSheetTab] = useState("stats");
 
@@ -429,6 +467,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const [shareDone,      setShareDone]      = useState(false);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [commentsData, setCommentsData] = useState(null);
+  const [isExiting, setIsExiting]      = useState(false);
   const fetchedPhotoIdRef = useRef(null);
   const fetchedAlbumIdRef = useRef(null);
 
@@ -438,22 +477,24 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const isOwner = !!user && !!album?.creator_id &&
                   String(user.id) === String(album.creator_id);
 
+
+
   // ── Carousel refs ────────────────────────────────────────────────────────
   const galleryRef = useRef(null);
   const carouselRef = useRef(null);
-  const currentIdxRef = useRef(0);
+  const currentIdxRef = useRef(initialIdx);
   const snapAnimRef = useRef(null);        // in-flight carousel snap animation
-  const isDismissingRef = useRef(false);   // guards snap onComplete during exit
-  const hasSharedElementRef = useRef(false); // keep layoutId projection alive after swipe
+  const isExitingRef = useRef(false);      // guards snap onComplete during exit
+
+  // The first photo is always rendered as a shared layout element so the
+  // album cover in Dashboard has a FLIP partner whenever the gallery closes.
 
   // ── Axis-locking touch refs ──────────────────────────────────────────────
   const touchStart = useRef({ x: 0, y: 0, time: 0 });
-  // Capture dragY/dragX at touchStart so an interrupted spring (snap-back
-  // mid-flight on Y, carousel-snap mid-flight on X) can resume from its
-  // current animated value rather than snapping to "delta-from-zero" on
-  // the very next touchmove tick — a visible jump.
+  // Snapshot absolute track offset at touchStart so an interrupted spring can
+  // resume from its current value rather than snapping to "delta-from-zero".
+  const touchStartOffsetX = useRef(0);
   const touchStartDragY = useRef(0);
-  const touchStartDragX = useRef(0);
   const gestureAxis = useRef(null);
 
   // ── Motion values ────────────────────────────────────────────────────────
@@ -461,13 +502,34 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const dragY = useMotionValue(0);
   const dragYAnimRef = useRef(null);
 
-  const dragX = useMotionValue(0);       // horizontal drag offset during swipe
+  // Container width is the single source of truth for pixel-to-index math.
+  // It is measured on mount and on resize so the carousel stays correct in
+  // landscape/portrait transitions.
+  const containerWidthRef = useRef(typeof window !== "undefined" ? window.innerWidth : 400);
+  const prevContainerWidthRef = useRef(containerWidthRef.current);
 
-  // Track position = -currentIdx * width + dragX
-  const carouselX = useTransform(dragX, (x) => {
-    const w = carouselRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 400);
-    return -(currentIdxRef.current * w) + x;
-  });
+  // Single source of truth for the main carousel and the thumbnail strip.
+  // Absolute pixel offset of the photo track. -idx * W == photo idx centered.
+  const offsetX = useMotionValue(-initialIdx * containerWidthRef.current);
+
+  useEffect(() => {
+    const measure = () => {
+      const w = carouselRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 400);
+      const prev = prevContainerWidthRef.current;
+      if (w !== prev && prev !== 0) {
+        // Width changed — re-snap to the current index with the new width so
+        // the visible photo stays centered.
+        containerWidthRef.current = w;
+        offsetX.set(-(currentIdxRef.current * w));
+      } else {
+        containerWidthRef.current = w;
+      }
+      prevContainerWidthRef.current = w;
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [offsetX]);
 
   // BottomSheet shared drag position
   const sheetY = useMotionValue(defaultOffset);
@@ -569,35 +631,30 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     }
   }, [sheetExpanded, sheetY, dragY]);
 
-  // ── Initial position (set ref, transform handles it) ────────────────────
-  useEffect(() => {
-    if (startPhotoId && currentIdx > 0 && photos.length > 1) {
-      currentIdxRef.current = currentIdx;
-      // Force dragX to 0 so carouselX recalculates
-      dragX.set(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startPhotoId, photos.length]);
-
-  // ── Sync ref when state changes from goTo ───────────────────────────────
+  // ── Sync ref when state changes from goTo ──────────────────────────────
   useEffect(() => {
     currentIdxRef.current = currentIdx;
-    // Reset dragX so carouselX snaps to new position
-    dragX.set(0);
-  }, [currentIdx, dragX]);
+  }, [currentIdx]);
 
   // ── Programmatic navigation ──────────────────────────────────────────────
   const goTo = useCallback((idx) => {
     if (idx < 0 || idx >= photos.length) return;
     snapAnimRef.current?.stop();
-    setCurrentIdx(idx);
-    currentIdxRef.current = idx;
-    dragX.set(0);
-    // Reset dismiss gesture
     dragYAnimRef.current?.stop();
+    const W = containerWidthRef.current;
+    const targetOffset = -(idx * W);
+    currentIdxRef.current = idx;
+    // Reset dismiss gesture
     dragY.set(0);
     if (dragProgressMV) dragProgressMV.set(0);
-  }, [photos.length, dragX, dragY, dragProgressMV]);
+    snapAnimRef.current = animate(offsetX, targetOffset, {
+      type: "spring", stiffness: 500, damping: 38, mass: 0.6,
+      onComplete: () => {
+        if (isExitingRef.current) return;
+        setCurrentIdx(idx);
+      },
+    });
+  }, [photos.length, offsetX, dragY, dragProgressMV]);
 
   const jumpToPhoto = useCallback((photoId) => {
     const idx = photos.findIndex((p) => String(p.id) === String(photoId));
@@ -619,22 +676,27 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   // Body scroll lock is now managed by Dashboard.jsx based on galleryAlbum state,
   // so it is restored even if Framer Motion's exit animation stalls.
 
-  // ── Unified touch handlers (axis-lock: horizontal → dragX, vertical → dragY) ──
+  // ── Unified touch handlers (axis-lock: horizontal → offsetX, vertical → dragY) ──
   const onWrapperTouchStart = useCallback((e) => {
     snapAnimRef.current?.stop();
     dragYAnimRef.current?.stop();
     const touch = e.touches[0];
     touchStart.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
-    // Snapshot dragY / dragX so a new touchmove's delta is added on top
-    // of the current (post-interrupt) animated value. Without this, if
-    // a snap-back/dismiss Y spring OR a carousel X snap was cancelled
-    // mid-flight, the next move would snap the motion value from its
-    // mid-value straight to "dy-from-zero" (or dx-from-zero) on the very
-    // first touchmove tick — a visible translation jump.
+    // Snapshot dragY and the absolute track offset so an interrupted spring
+    // (snap-back Y or carousel snap) can resume from its current value,
+    // not from zero — a visible translation jump.
     touchStartDragY.current = dragY.get();
-    touchStartDragX.current = dragX.get();
+    touchStartOffsetX.current = offsetX.get();
+    // Anchor the next snap decision to the visual position of the track, not
+    // to a possibly-stale currentIdxRef (e.g. after an spring was interrupted).
+    currentIdxRef.current = photos.length > 0
+      ? Math.max(0, Math.min(
+          Math.round(-offsetX.get() / containerWidthRef.current),
+          photos.length - 1
+        ))
+      : 0;
     gestureAxis.current = null;
-  }, []);
+  }, [offsetX]);
 
   const onWrapperTouchMove = useCallback((e) => {
     const touch = e.touches[0];
@@ -663,18 +725,21 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     }
 
     if (gestureAxis.current === "x") {
+      if (photos.length === 0) return;
       e.preventDefault();
-      // Rubber-band at edges
-      let clampedDx = touchStartDragX.current + dx;
-      if ((currentIdxRef.current === 0 && clampedDx > touchStartDragX.current) ||
-        (currentIdxRef.current === photos.length - 1 && clampedDx < touchStartDragX.current)) {
-        // Over-scroll: dampen movement past the natural offset.
-        const overShoot = clampedDx - touchStartDragX.current;
-        clampedDx = touchStartDragX.current + overShoot * 0.3;
+      const W = containerWidthRef.current;
+      const raw = touchStartOffsetX.current + dx;
+      const minX = -(photos.length - 1) * W;
+      const maxX = 0;
+      let clamped = raw;
+      if (raw > maxX) {
+        clamped = maxX + (raw - maxX) * 0.2;
+      } else if (raw < minX) {
+        clamped = minX + (raw - minX) * 0.2;
       }
-      dragX.set(clampedDx);
+      offsetX.set(clamped);
     }
-  }, [dragX, dragY, photos.length]);
+  }, [offsetX, dragY, photos.length]);
 
   const onWrapperTouchEnd = useCallback((e) => {
     const touch = e.changedTouches?.[0];
@@ -689,7 +754,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // time) and animates it to the album card's natural rect using
         // the album card's own spring. Continuity is preserved because
         // captured position = last seen position.
-        isDismissingRef.current = true;
+        isExitingRef.current = true;
         snapAnimRef.current?.stop();
         dragYAnimRef.current?.stop();
         setSheetExpanded(false);
@@ -699,7 +764,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // Disable the whole gallery subtree from receiving input during the
         // exit fade. The root motion element stays in the DOM for ~220 ms while
         // AnimatePresence finishes; `inert` ensures it does not block clicks or
-        // touches on the underlying Dashboard during that window.
+        // touches on the underlying Dashboard during that window. We also set
+        // pointer-events:none as a fallback for older browsers and aria-hidden
+        // for assistive tech.
+        setIsExiting(true);
         galleryRef.current?.setAttribute("inert", "");
         onClose();      // dragProgressMV pin = 1 is owned by handleGalleryClose
         gestureAxis.current = null;
@@ -722,54 +790,58 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     }
 
     if (gestureAxis.current === "x") {
+      if (photos.length === 0) { gestureAxis.current = null; return; }
       const dx = touch.clientX - touchStart.current.x;
       const dt = Date.now() - touchStart.current.time;
       const velocity = dt > 0 ? dx / dt : 0; // px/ms
-      const projectedDx = dx + velocity * 150;
+      const W = containerWidthRef.current;
 
-      const containerWidth = carouselRef.current?.clientWidth || window.innerWidth;
-      const threshold = containerWidth * 0.3;
+      // Anchor the snap on the photo that was visible when the gesture started,
+      // so an interrupted spring can't leave currentIdxRef out of sync.
+      const startIdx = Math.round(-touchStartOffsetX.current / W);
+      const dragFraction = -dx / W;               // positive => moving to next photo
+      const projectedFraction = dragFraction + (-velocity * 200) / W;
 
-      let targetIdx = currentIdxRef.current;
-      if (projectedDx < -threshold && targetIdx < photos.length - 1) targetIdx++;
-      if (projectedDx > threshold && targetIdx > 0) targetIdx--;
-
-      // Animate dragX to full width, then update index
-      if (targetIdx !== currentIdxRef.current) {
-        // Animate to edge of current slide, then snap to new index
-        const w = containerWidth;
-        const targetX = targetIdx > currentIdxRef.current ? -w * 0.5 : w * 0.5;
-        snapAnimRef.current = animate(dragX, targetX > 0 ? w : -w, {
-          type: "spring", stiffness: 300, damping: 30,
-          onComplete: () => {
-            if (isDismissingRef.current) return;
-            setCurrentIdx(targetIdx);
-            currentIdxRef.current = targetIdx;
-            dragX.set(0);
-          },
-        });
-      } else {
-        // Snap back to current position
-        snapAnimRef.current = animate(dragX, 0, {
-          type: "spring", stiffness: 300, damping: 30,
-          onComplete: () => {
-            if (isDismissingRef.current) return;
-          },
-        });
+      let targetIdx = startIdx;
+      if (projectedFraction > 0.25 || dragFraction > 0.4) {
+        targetIdx = startIdx + 1;
+      } else if (projectedFraction < -0.25 || dragFraction < -0.4) {
+        targetIdx = startIdx - 1;
       }
+      targetIdx = Math.max(0, Math.min(targetIdx, photos.length - 1));
+
+      const targetOffset = -(targetIdx * W);
+      snapAnimRef.current = animate(offsetX, targetOffset, {
+        type: "spring", stiffness: 500, damping: 38, mass: 0.6,
+        onComplete: () => {
+          if (isExitingRef.current) return;
+          currentIdxRef.current = targetIdx;
+          setCurrentIdx(targetIdx);
+        },
+      });
 
       gestureAxis.current = null;
       return;
     }
 
     gestureAxis.current = null;
-  }, [dragX, dragY, photos.length, onClose]);
+  }, [offsetX, dragY, photos.length, onClose]);
 
   const onWrapperTouchCancel = useCallback(() => {
     gestureAxis.current = null;
   }, []);
 
+  // Called when the user taps a thumbnail. We reuse the main spring so the
+  // photo and the thumbnail strip move in lockstep.
   const handleThumbSelect = useCallback((idx) => goTo(idx), [goTo]);
+
+  // Called only after a thumbnail-strip *drag* settles. It updates React
+  // state without starting a second animation, because the drag itself has
+  // already driven offsetX to the target position.
+  const handleThumbDragEnd = useCallback((idx) => {
+    currentIdxRef.current = idx;
+    setCurrentIdx(idx);
+  }, []);
 
   // ── Cleanup on unmount ───────────────────────────────────────────────────
   // We intentionally do NOT reset dragProgressMV here. The close path needs
@@ -909,7 +981,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       ref={galleryRef}
       data-testid="album-gallery"
       className="fixed inset-0 z-[90] flex flex-col overflow-hidden"
-      style={{ touchAction: "none", overscrollBehavior: "contain" }}
+      style={{ touchAction: "none", overscrollBehavior: "contain", pointerEvents: isExiting ? "none" : "auto" }}
+      aria-hidden={isExiting ? "true" : undefined}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 0.22 } }}
       exit={{ opacity: 0, transition: { duration: 0.22 } }}
@@ -947,26 +1020,26 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
           className="absolute inset-0 overflow-hidden"
           style={{ pointerEvents: carouselPointerEvents }}
         >
-          {/* Track — moves via dragX + currentIdx */}
+          {/* Track — moves via a single absolute offset motion value */}
           <motion.div
+            data-testid="carousel-track"
             className="flex h-full"
-            style={{ x: carouselX, willChange: "transform" }}
+            style={{ x: offsetX, willChange: "transform" }}
           >
             {photos.map((photo, i) => {
-              const isVisible = Math.abs(i - currentIdx) <= 2 && photo?.url;
-              // Keep the first photo mounted as a shared layout element even
-              // when the user swipes to another photo. If we unmount it, Framer
-              // Motion destroys the layoutId projection and the album cover in
-              // AlbumCard disappears after closing from a non-first photo.
-              if (i === 0 && currentIdx === 0) hasSharedElementRef.current = true;
-              const isSharedElement = i === 0 && hasSharedElementRef.current;
+              // Always keep the first photo as a Framer Motion layout element so
+              // the album cover in Dashboard has a FLIP partner on close. When
+              // opening from a non-first photo, skip the entrance animation so
+              // the off-screen shared element does not fly in from the card.
+              const isSharedElement = i === 0;
+              const isEager = isSharedElement || Math.abs(currentIdx - i) <= 1;
               const photoClassName = `max-w-full max-h-full select-none pointer-events-none ${i === 0 ? "object-cover" : "object-contain"}`;
               const photoProps = {
                 src: photo.url,
                 alt: "",
                 className: photoClassName,
                 draggable: false,
-                loading: i === currentIdx ? "eager" : "lazy",
+                loading: isEager ? "eager" : "lazy",
                 decoding: "async",
               };
               return (
@@ -974,22 +1047,22 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                 key={photo.id}
                 className="flex-shrink-0 w-full h-full flex items-center justify-center py-8"
               >
-                {isVisible ? (
+                {photo?.url ? (
                   isSharedElement ? (
                     <motion.img
                       {...photoProps}
                       layoutId={`album-cover-${album.id}`}
                       style={{ pointerEvents: "none" }}
-                      initial={{ borderRadius: 16 }}
+                      initial={initialIdx === 0 ? { borderRadius: 16 } : false}
                       animate={{ borderRadius: 0 }}
                       transition={{ type: "spring", stiffness: 280, damping: 32, mass: 0.95 }}
                     />
                   ) : (
                     <img {...photoProps} />
                   )
-                ) : !photo?.url ? (
+                ) : (
                   <div className="text-white/40 text-sm">No photo</div>
-                ) : null}
+                )}
               </div>
             );
             })}
@@ -1003,7 +1076,13 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         style={{ opacity: controlsOpacity, pointerEvents: controlsPointerEvents }}
       >
         {photos.length > 1 && (
-          <ThumbStrip photos={photos} currentIdx={currentIdx} onSelect={handleThumbSelect} />
+          <ThumbStrip
+            photos={photos}
+            offsetX={offsetX}
+            containerWidthRef={containerWidthRef}
+            onSelect={handleThumbSelect}
+            onDragEnd={handleThumbDragEnd}
+          />
         )}
 
         {!sheetExpanded && (
