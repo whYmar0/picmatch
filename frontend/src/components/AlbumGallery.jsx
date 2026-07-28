@@ -800,15 +800,29 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     if (gestureAxis.current === "y") {
       const currentDrag = dragY.get();
       if (currentDrag > 100) {
-        // Dismiss — instantly hand off to Motion's Shared Element
-        // Transition. The SET FLIP-extracts the motion.img using its
-        // CURRENT rect (the position the user's finger was at release
-        // time) and animates it to the album card's natural rect using
-        // the album card's own spring. Continuity is preserved because
-        // captured position = last seen position.
+        // Dismiss — hand off to Motion's Shared Element Transition while
+        // animating the photo the rest of the way down. The SET FLIP-extracts
+        // the motion.img using its CURRENT rect (the position the user's
+        // finger was at release time) and animates it to the album card's
+        // natural rect using the album card's own spring. Continuity is
+        // preserved because captured position = last seen position, while
+        // dragY continues smoothly to vh so the backdrop/scene fades out
+        // without a snap.
         isExitingRef.current = true;
         snapAnimRef.current?.stop();
         dragYAnimRef.current?.stop();
+        // Only animate the photo downward if it is not the shared cover photo;
+        // when currentIdx === 0, the layoutId FLIP transition back to the
+        // album card owns the exit motion. Animating dragY for the shared cover
+        // would fight that FLIP and cause the image to fly downward instead of
+        // into the card.
+        if (currentIdxRef.current !== 0) {
+          dragYAnimRef.current = animate(dragY, vh, {
+            type: "spring",
+            stiffness: 350,
+            damping: 32,
+          });
+        }
         setSheetExpanded(false);
         setSortOpen(false);
         setFilterOpen(false);
@@ -821,7 +835,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // for assistive tech.
         setIsExiting(true);
         galleryRef.current?.setAttribute("inert", "");
-        onClose();      // dragProgressMV pin = 1 is owned by handleGalleryClose
+        onClose();      // dragProgressMV progress to 1 is owned by handleGalleryClose
         gestureAxis.current = null;
         return;
       }

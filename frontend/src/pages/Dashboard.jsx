@@ -6,7 +6,7 @@
  * - Respects prefers-reduced-motion
  * - Preserves gallery mode / depth-zoom integration
  */
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { Plus, ChevronLeft, Search, SlidersHorizontal, ChevronDown, Check } from "lucide-react";
@@ -109,6 +109,7 @@ export default function Dashboard() {
     [baseScaleMV, dragProgressMV],
     ([base, drag]) => base + (1 - base) * drag
   );
+  const closeProgressAnimRef = useRef(null);
 
   useEffect(() => {
     animate(baseScaleMV, galleryAlbum ? 0.94 : 1, {
@@ -150,13 +151,24 @@ export default function Dashboard() {
   };
 
   const handlePhotoClick = useCallback((album, photo) => {
+    closeProgressAnimRef.current?.stop();
+    closeProgressAnimRef.current = null;
     dragProgressMV.set(0);
     setGalleryKey((k) => k + 1);
     setGalleryAlbum({ album: album, photoId: photo?.id });
   }, [dragProgressMV]);
 
   const handleGalleryClose = useCallback(() => {
-    dragProgressMV.set(1);
+    closeProgressAnimRef.current?.stop();
+    closeProgressAnimRef.current = animate(dragProgressMV, 1, {
+      type: "spring",
+      stiffness: 350,
+      damping: 32,
+      onComplete: () => {
+        closeProgressAnimRef.current = null;
+        dragProgressMV.set(0);
+      },
+    });
     setGalleryAlbum(null);
   }, [dragProgressMV]);
 
