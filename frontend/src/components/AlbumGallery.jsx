@@ -125,6 +125,14 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
   const touchStartX = useRef(0);
   const touchStartDragX = useRef(0);
   const touchStartTime = useRef(0);
+  // Snapshot of the main photo index at the start of a thumb-strip drag.
+  // Clamping the strip against this value keeps the scroll feel identical
+  // to the pre-instant-switch version.
+  const startMainIdx = useRef(0);
+  // Tracks whether an instant main-photo switch already happened during the
+  // current thumb-strip drag. When true, the release handler must not also
+  // apply a velocity flick on top of the already-applied switch.
+  const didSwitchDuringDrag = useRef(false);
   // Local offset of the thumbnail strip relative to the current photo. It is
   // only used while the user drags the strip; at rest it is always 0.
   const stripDragX = useMotionValue(0);
@@ -152,6 +160,9 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
     touchStartX.current = touch.clientX;
     touchStartDragX.current = stripDragX.get();
     touchStartTime.current = Date.now();
+    const W = containerWidthRef.current;
+    startMainIdx.current = Math.round(-offsetX.get() / W);
+    didSwitchDuringDrag.current = false;
     isDragging.current = false;
   };
 
@@ -160,14 +171,40 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
     const dx = touch.clientX - touchStartX.current;
     if (Math.abs(dx) > 5) isDragging.current = true;
     e.preventDefault();
-    // Move only the strip, not the main carousel — the photo under the
-    // centered thumbnail becomes active only on release.
+
+    // Keep the original scroll feel: clamp the strip against the index that
+    // was current when the gesture started.
     const W = containerWidthRef.current;
-    const currentIdx = Math.round(-offsetX.get() / W);
-    const maxDrag = currentIdx * step;
-    const minDrag = -(photos.length - 1 - currentIdx) * step;
+    const maxDrag = startMainIdx.current * step;
+    const minDrag = -(photos.length - 1 - startMainIdx.current) * step;
     const raw = touchStartDragX.current + dx;
     stripDragX.set(Math.max(minDrag, Math.min(maxDrag, raw)));
+
+    // Sync the main photo with whichever thumbnail is currently centered.
+    const currentMainIdx = Math.round(-offsetX.get() / W);
+    const centeredIdx = Math.max(
+      0,
+      Math.min(
+        currentMainIdx + Math.round(-stripDragX.get() / step),
+        photos.length - 1
+      )
+    );
+
+    if (centeredIdx !== currentMainIdx) {
+      offsetX.set(-(centeredIdx * W));
+      // Keep the strip visually where the finger left it while recentering on
+      // the new active thumbnail. Moving to the next photo shifts the local
+      // drag offset by +step; moving to the previous by -step.
+      const shift = (centeredIdx - currentMainIdx) * step;
+      stripDragX.set(stripDragX.get() + shift);
+      // Update the underlying touch tracking to the new reference frame so
+      // the next touchmove frame does not snap stripDragX back to the old
+      // uncompensated value and trigger a runaway switch loop.
+      touchStartDragX.current += shift;
+      startMainIdx.current = centeredIdx;
+      didSwitchDuringDrag.current = true;
+      onDragEnd?.(centeredIdx);
+    }
   };
 
   const onThumbTouchEnd = (e) => {
@@ -186,8 +223,9 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
     const shift = Math.round(-stripDragX.get() / step);
     let targetIdx = currentIdx + shift;
 
-    // Fast flick with a short distance still switches one step.
-    if (Math.abs(velocity) > 0.8 && targetIdx === currentIdx) {
+    // Fast flick with a short distance still switches one step, but only
+    // if the drag itself has not already performed an synchronous switch.
+    if (!didSwitchDuringDrag.current && Math.abs(velocity) > 0.8 && targetIdx === currentIdx) {
       targetIdx += velocity < 0 ? 1 : -1;
     }
 
@@ -203,6 +241,7 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
   return (
     <div ref={containerRef} className="relative w-full overflow-hidden" style={{ height: THUMB_SIZE + 12 }}>
       <motion.div
+        data-testid="thumb-strip"
         className="absolute top-0 left-0 h-full flex items-center"
         style={{ x: thumbOffsetX, gap: THUMB_GAP, willChange: "transform" }}
         onTouchStart={onThumbTouchStart}

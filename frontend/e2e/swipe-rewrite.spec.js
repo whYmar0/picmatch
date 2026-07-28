@@ -14,26 +14,34 @@ async function openGallery(page) {
   await expect(page.locator('[data-testid="album-gallery"]').first()).toBeVisible();
 }
 
-async function dispatchSwipe(page, layer, { start, end }) {
-  await layer.evaluate((el, { start, end }) => {
-    const mkTouch = (t) => new Touch({
-      identifier: t.identifier,
+async function dispatchTouch(page, layer, { type, point }) {
+  await layer.evaluate((el, { type, point }) => {
+    const touch = new Touch({
+      identifier: 0,
       target: el,
-      clientX: t.x,
-      clientY: t.y,
-      pageX: t.x,
-      pageY: t.y,
+      clientX: point.x,
+      clientY: point.y,
+      pageX: point.x,
+      pageY: point.y,
       radiusX: 1,
       radiusY: 1,
       rotationAngle: 0,
       force: 1,
     });
-    const startTouch = mkTouch({ ...start, identifier: 0 });
-    const endTouch = mkTouch({ ...end, identifier: 0 });
-    el.dispatchEvent(new TouchEvent("touchstart", { touches: [startTouch], targetTouches: [startTouch], changedTouches: [startTouch], bubbles: true }));
-    el.dispatchEvent(new TouchEvent("touchmove", { touches: [endTouch], targetTouches: [endTouch], changedTouches: [endTouch], bubbles: true }));
-    el.dispatchEvent(new TouchEvent("touchend", { touches: [], targetTouches: [], changedTouches: [endTouch], bubbles: true }));
-  }, { start, end });
+    const touches = type === "touchend" ? [] : [touch];
+    el.dispatchEvent(new TouchEvent(type, {
+      touches,
+      targetTouches: touches,
+      changedTouches: [touch],
+      bubbles: true,
+    }));
+  }, { type, point });
+}
+
+async function dispatchSwipe(page, layer, { start, end }) {
+  await dispatchTouch(page, layer, { type: "touchstart", point: start });
+  await dispatchTouch(page, layer, { type: "touchmove", point: end });
+  await dispatchTouch(page, layer, { type: "touchend", point: end });
 }
 
 async function getTrackX(page) {
@@ -83,4 +91,31 @@ test("thumb tap jumps to the selected photo", async ({ page }) => {
 
   const x = await getTrackX(page);
   expect(Math.abs(x + w * 2)).toBeLessThan(w * 0.1);
+});
+
+test("thumb strip drag switches main photo before release", async ({ page }) => {
+  await login(page);
+  await openGallery(page);
+
+  const w = await getContainerWidth(page);
+  const strip = page.locator('[data-testid="thumb-strip"]').first();
+  const rect = await strip.boundingBox();
+  const y = rect.y + rect.height / 2;
+  const startX = rect.x + rect.width / 2;
+
+  // Drag the thumbnail strip left by 60 px. This should make photo 1 the
+  // centered thumbnail while the finger is still on the screen.
+  await dispatchTouch(page, strip, { type: "touchstart", point: { x: startX, y } });
+  await dispatchTouch(page, strip, { type: "touchmove", point: { x: startX - 60, y } });
+
+  // The main photo should have switched instantly before touchend.
+  const xAfterMove = await getTrackX(page);
+  expect(Math.abs(xAfterMove + w)).toBeLessThan(w * 0.1);
+
+  // Releasing should keep the same photo.
+  await dispatchTouch(page, strip, { type: "touchend", point: { x: startX - 60, y } });
+  await page.waitForTimeout(100);
+
+  const xAfterRelease = await getTrackX(page);
+  expect(Math.abs(xAfterRelease + w)).toBeLessThan(w * 0.1);
 });
