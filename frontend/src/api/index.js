@@ -2,6 +2,7 @@
  * api/index.js — v2 with avatar upload
  */
 import axios from "axios";
+import toast from "react-hot-toast";
 
 // Trim is applied BEFORE the `||` fallback so a whitespace-only env var
 // still resolves to "/api" (otherwise we'd produce an empty baseURL, which
@@ -57,6 +58,7 @@ api.interceptors.response.use(
         const returnTo = window.location.pathname + window.location.search;
         window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}`;
       }
+      toast.error("Сессия истекла. Войдите снова.");
       return Promise.reject(new Error("Сессия истекла. Войдите снова."));
     }
     const detail = error.response?.data?.detail;
