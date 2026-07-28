@@ -516,6 +516,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [commentsData, setCommentsData] = useState(null);
   const [isExiting, setIsExiting]      = useState(false);
+  // The first photo starts as object-cover for the shared-element transition
+  // from the album card, then switches to object-contain like the others so
+  // gallery navigation looks consistent.
+  const [firstPhotoFitDone, setFirstPhotoFitDone] = useState(initialIdx !== 0);
   const fetchedPhotoIdRef = useRef(null);
   const fetchedAlbumIdRef = useRef(null);
 
@@ -909,6 +913,15 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     };
   }, []);
 
+  // After the shared-element open transition settles, the first photo should
+  // use object-contain like every other photo so carousel navigation is
+  // visually consistent and layout animations do not interfere with dragging.
+  useEffect(() => {
+    if (initialIdx !== 0) return;
+    const timer = setTimeout(() => setFirstPhotoFitDone(true), 500);
+    return () => clearTimeout(timer);
+  }, [initialIdx]);
+
   // ── Share handler ────────────────────────────────────────────────────────
   // Owners get the AnalyticsShareSheet flow (token-protected URL that grants
   // analytics access to anyone who opens it after login). Non-owners get the
@@ -1081,7 +1094,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               // the off-screen shared element does not fly in from the card.
               const isSharedElement = i === 0;
               const isEager = isSharedElement || Math.abs(currentIdx - i) <= 1;
-              const photoClassName = `max-w-full max-h-full select-none pointer-events-none ${i === 0 ? "object-cover" : "object-contain"}`;
+              const isFirstCover = isSharedElement && !firstPhotoFitDone;
+              const photoClassName = `max-w-full max-h-full select-none pointer-events-none ${isFirstCover ? "object-cover" : "object-contain"}`;
               const photoProps = {
                 src: photo.url,
                 alt: "",
@@ -1100,10 +1114,16 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                     <motion.img
                       {...photoProps}
                       layoutId={`album-cover-${album.id}`}
+                      layout={false}
+                      onLayoutAnimationComplete={() => setFirstPhotoFitDone(true)}
                       style={{ pointerEvents: "none" }}
                       initial={initialIdx === 0 ? { borderRadius: 16 } : false}
                       animate={{ borderRadius: 0 }}
-                      transition={{ type: "spring", stiffness: 280, damping: 32, mass: 0.95 }}
+                      transition={
+                        isExiting || !firstPhotoFitDone
+                          ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
+                          : { duration: 0 }
+                      }
                     />
                   ) : (
                     <img {...photoProps} />
