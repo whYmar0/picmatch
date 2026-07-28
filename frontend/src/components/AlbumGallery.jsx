@@ -90,11 +90,10 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
 const THUMB_SIZE = 40;
 const THUMB_GAP = 8;
 
-function ThumbItem({ photo, index, offsetX, containerWidthRef, onSelect, isDraggingRef }) {
-  const activeIdx = useTransform(offsetX, (x) => -x / containerWidthRef.current);
+function ThumbItem({ photo, index, activeIdx, onSelect, isDraggingRef }) {
   const scale = useTransform(activeIdx, (v) => (Math.round(v) === index ? 1.15 : 1));
   const ring = useTransform(activeIdx, (v) =>
-    Math.round(v) === index ? "0 0 0 2px rgb(96 165 250)" : "none"
+    Math.round(v) === index ? "0 0 0 2px var(--primary)" : "none"
   );
 
   const handleClick = () => {
@@ -120,38 +119,38 @@ function ThumbItem({ photo, index, offsetX, containerWidthRef, onSelect, isDragg
   );
 }
 
-function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd }) {
-  const stripRef = useRef(null);
+function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, snapAnimRef }) {
+  const containerRef = useRef(null);
   const isDragging = useRef(false);
   const touchStartX = useRef(0);
-  const touchStartOffset = useRef(0);
+  const touchStartDragX = useRef(0);
   const touchStartTime = useRef(0);
-
-  // Drive the thumb track directly from the main carousel offset. The active
-  // thumb is always kept centered under the same `offsetX` motion value.
-  const thumbOffsetX = useTransform(offsetX, (x) => {
-    const W = containerWidthRef.current;
-    const step = THUMB_SIZE + THUMB_GAP;
-    const idx = -x / W;
-    const half = (stripRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 400)) / 2;
-    return -(idx * step) + (half - THUMB_SIZE / 2);
-  });
+  // Local offset of the thumbnail strip relative to the current photo. It is
+  // only used while the user drags the strip; at rest it is always 0.
+  const stripDragX = useMotionValue(0);
 
   const step = THUMB_SIZE + THUMB_GAP;
-  const ratio = containerWidthRef.current / step;
 
-  const clampOffset = (value) => {
+  // Which thumbnail is in the center of the visible strip?
+  const thumbActiveIdx = useTransform([offsetX, stripDragX], ([ox, sdx]) => {
     const W = containerWidthRef.current;
-    const min = -(photos.length - 1) * W;
-    if (value > 0) return value * 0.2;
-    if (value < min) return min + (value - min) * 0.2;
-    return value;
-  };
+    return -ox / W - (sdx ?? 0) / step;
+  });
+
+  // The active thumb is always centered inside the visible strip container.
+  const thumbOffsetX = useTransform([offsetX, stripDragX], ([ox, sdx]) => {
+    const W = containerWidthRef.current;
+    const idx = -ox / W;
+    const containerW = containerRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 400);
+    const half = containerW / 2;
+    return -(idx * step) + (half - THUMB_SIZE / 2) + (sdx ?? 0);
+  });
 
   const onThumbTouchStart = (e) => {
+    snapAnimRef.current?.stop();
     const touch = e.touches[0];
     touchStartX.current = touch.clientX;
-    touchStartOffset.current = offsetX.get();
+    touchStartDragX.current = stripDragX.get();
     touchStartTime.current = Date.now();
     isDragging.current = false;
   };
@@ -161,8 +160,14 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd })
     const dx = touch.clientX - touchStartX.current;
     if (Math.abs(dx) > 5) isDragging.current = true;
     e.preventDefault();
-    const raw = touchStartOffset.current + dx * ratio;
-    offsetX.set(clampOffset(raw));
+    // Move only the strip, not the main carousel — the photo under the
+    // centered thumbnail becomes active only on release.
+    const W = containerWidthRef.current;
+    const currentIdx = Math.round(-offsetX.get() / W);
+    const maxDrag = currentIdx * step;
+    const minDrag = -(photos.length - 1 - currentIdx) * step;
+    const raw = touchStartDragX.current + dx;
+    stripDragX.set(Math.max(minDrag, Math.min(maxDrag, raw)));
   };
 
   const onThumbTouchEnd = (e) => {
@@ -176,23 +181,28 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd })
     const velocity = dt > 0 ? dx / dt : 0;
 
     const W = containerWidthRef.current;
-    const velMain = velocity * ratio;
-    const projected = offsetX.get() + velMain * 200;
-    let targetIdx = Math.round(-projected / W);
+    const currentIdx = Math.round(-offsetX.get() / W);
+    // How many thumbnails did the center shift during the drag?
+    const shift = Math.round(-stripDragX.get() / step);
+    let targetIdx = currentIdx + shift;
+
+    // Fast flick with a short distance still switches one step.
+    if (Math.abs(velocity) > 0.8 && targetIdx === currentIdx) {
+      targetIdx += velocity < 0 ? 1 : -1;
+    }
+
     targetIdx = Math.max(0, Math.min(targetIdx, photos.length - 1));
 
-    animate(offsetX, -(targetIdx * W), {
-      type: "spring", stiffness: 500, damping: 38, mass: 0.6,
-      onComplete: () => {
-        if (onDragEnd) onDragEnd(targetIdx);
-      },
-    });
+    // Switch main photo and re-center the active thumbnail — hard, instant.
+    offsetX.set(-(targetIdx * W));
+    stripDragX.set(0);
+
+    if (onDragEnd) onDragEnd(targetIdx);
   };
 
   return (
-    <div className="relative w-full overflow-hidden" style={{ height: THUMB_SIZE + 12 }}>
+    <div ref={containerRef} className="relative w-full overflow-hidden" style={{ height: THUMB_SIZE + 12 }}>
       <motion.div
-        ref={stripRef}
         className="absolute top-0 left-0 h-full flex items-center"
         style={{ x: thumbOffsetX, gap: THUMB_GAP, willChange: "transform" }}
         onTouchStart={onThumbTouchStart}
@@ -204,8 +214,7 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd })
             key={photo.id}
             photo={photo}
             index={i}
-            offsetX={offsetX}
-            containerWidthRef={containerWidthRef}
+            activeIdx={thumbActiveIdx}
             onSelect={onSelect}
             isDraggingRef={isDragging}
           />
@@ -1082,6 +1091,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             containerWidthRef={containerWidthRef}
             onSelect={handleThumbSelect}
             onDragEnd={handleThumbDragEnd}
+            snapAnimRef={snapAnimRef}
           />
         )}
 
