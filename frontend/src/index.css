@@ -62,14 +62,7 @@ button,
   }
 }
 
-/* Drop-shadow for cards — filter applies AFTER element render, not clipped by overflow-hidden */
-.card-shadow {
-  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.08));
-  transition: filter 0.2s ease;
-}
-.card-shadow:hover {
-  filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.12));
-}
+
 
 .media-thumbnail {
   border-radius: 1rem !important;
@@ -214,14 +207,15 @@ button,
 
   /* Right-edge fade for horizontally scrollable tracks */
   /* Left fade appears dynamically when scrolled away from start */
+  /* Generous fade zone (94→99%) so card drop-shadows are not clipped */
   .mask-fade-edges {
-    mask-image: linear-gradient(to right, black 97%, transparent 99%);
-    -webkit-mask-image: linear-gradient(to right, black 97%, transparent 99%);
+    mask-image: linear-gradient(to right, black 94%, transparent 99%);
+    -webkit-mask-image: linear-gradient(to right, black 94%, transparent 99%);
     transition: mask-image 0.3s ease-out, -webkit-mask-image 0.3s ease-out;
   }
   .mask-fade-edges[data-scrolled-left="true"] {
-    mask-image: linear-gradient(to right, transparent 1%, black 3%, black 97%, transparent 99%);
-    -webkit-mask-image: linear-gradient(to right, transparent 1%, black 3%, black 97%, transparent 99%);
+    mask-image: linear-gradient(to right, transparent 1%, black 5%, black 94%, transparent 99%);
+    -webkit-mask-image: linear-gradient(to right, transparent 1%, black 5%, black 94%, transparent 99%);
   }
 }
 

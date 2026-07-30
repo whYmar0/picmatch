@@ -38,9 +38,9 @@ export default function RecentAlbumCard({ album, index }) {
   const isPrivate = album.is_public === false;
 
   return (
-    <div className="bg-card-light dark:bg-card-dark rounded-3xl card-shadow overflow-hidden flex flex-col w-full min-w-0">
+    <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card hover:shadow-card-hover transition-shadow duration-200 flex flex-col w-full min-w-0">
       {/* Photo area (2/3) — same as AlbumCard */}
-      <div className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark overflow-hidden">
+      <div className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark overflow-hidden rounded-t-3xl">
         {album.coverUrl ? (
           <img
             src={album.coverUrl}
