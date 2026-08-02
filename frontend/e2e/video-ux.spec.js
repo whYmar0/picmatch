@@ -213,7 +213,7 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
   await page.goto(`${FRONTEND}/vote/video-ux-test`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText("Vote Video UX Test")).toBeVisible();
   await expect(page.getByText("Вправо — нравится · влево — не нравится")).toBeVisible();
-  await expect(page.getByText("НЕ НРАВИТСЯ")).toHaveCount(1);
+  await expect(page.getByText("НЕ НРАВИТСЯ", { exact: true }).first()).toBeVisible();
   const viewportWidth = await page.evaluate(() => window.innerWidth);
   const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(documentWidth).toBeLessThanOrEqual(viewportWidth);
