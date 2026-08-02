@@ -20,7 +20,7 @@ import VideoPlayer from "./VideoPlayer";
 const SWIPE_THRESHOLD = 64;
 
 const SwipeCard = forwardRef(function SwipeCard(
-  { photo, isTop, stackIndex, onSwipe, onImageClick },
+  { photo, isTop, stackIndex, onSwipe, onImageClick, videoScrubBottomRatio = 0.25, blurredVideoBackdrop = false },
   ref
 ) {
   const controls = useAnimation();
@@ -147,6 +147,10 @@ const SwipeCard = forwardRef(function SwipeCard(
               preload="auto"
               autoPlay={isTop}
               loop
+              stableLayout={blurredVideoBackdrop}
+              scrubBottomRatio={videoScrubBottomRatio}
+              blurredBackdrop={blurredVideoBackdrop}
+              isolateScrubGesture={blurredVideoBackdrop}
             />
           </div>
         ) : (

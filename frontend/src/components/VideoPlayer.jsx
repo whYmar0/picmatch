@@ -22,9 +22,10 @@ function clamp(value, min, max) {
  * VideoPlayer — custom, touch-friendly video controls.
  *
  * Vertical gestures are forwarded to the parent so AlbumGallery and
- * ImageLightbox can keep ownership of their dismiss animations. A horizontal
- * gesture that starts in the bottom 25% is consumed locally for scrubbing;
- * upper-area horizontal gestures continue bubbling to the gallery carousel.
+ * ImageLightbox can keep ownership of their dismiss animations. Horizontal
+ * gestures that start in the configured bottom scrub zone are consumed locally
+ * for scrubbing; upper-area gestures continue bubbling to the gallery carousel
+ * or voting card.
  */
 export default function VideoPlayer({
   src,
@@ -36,11 +37,16 @@ export default function VideoPlayer({
   loop = false,
   objectFit = "contain",
   stableLayout = false,
+  scrubBottomRatio = 0.25,
+  blurredBackdrop = false,
+  isolateScrubGesture = false,
   onVerticalSwipe,
   onVerticalSwipeMove,
 }) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
+  const backgroundVideoRef = useRef(null);
+  const pointerScrubRef = useRef(false);
   const holdTimerRef = useRef(null);
   const controlsTimerRef = useRef(null);
   const scrubTimerRef = useRef(null);
@@ -159,22 +165,50 @@ export default function VideoPlayer({
       setAspectRatio(video.videoWidth / video.videoHeight);
     }
     if (Number.isFinite(video.duration)) setDuration(video.duration);
+    syncBackgroundTime(video.currentTime);
   };
 
   const syncTime = (event) => {
     const video = event.currentTarget;
-    setCurrentTime(video.currentTime || 0);
+    const nextTime = video.currentTime || 0;
+    setCurrentTime(nextTime);
+    syncBackgroundTime(nextTime);
     if (Number.isFinite(video.duration)) setDuration(video.duration);
+  };
+
+  const playBackgroundVideo = () => {
+    const backgroundVideo = backgroundVideoRef.current;
+    if (!backgroundVideo) return;
+    const promise = backgroundVideo.play();
+    promise?.catch?.(() => {});
+  };
+
+  const pauseBackgroundVideo = () => backgroundVideoRef.current?.pause();
+
+  const syncBackgroundTime = (time) => {
+    const backgroundVideo = backgroundVideoRef.current;
+    if (!backgroundVideo || !Number.isFinite(time) || backgroundVideo.readyState < 1) return;
+    try {
+      if (Math.abs(backgroundVideo.currentTime - time) > 0.08) {
+        backgroundVideo.currentTime = time;
+      }
+    } catch {
+      // The background can still be loading metadata; the next timeupdate will sync it.
+    }
   };
 
   const playVideo = () => {
     const video = videoRef.current;
     if (!video) return;
     const promise = video.play();
-    if (promise?.catch) promise.catch(() => setIsPlaying(false));
+    promise?.catch?.(() => setIsPlaying(false));
+    if (blurredBackdrop) playBackgroundVideo();
   };
 
-  const pauseVideo = () => videoRef.current?.pause();
+  const pauseVideo = () => {
+    videoRef.current?.pause();
+    if (blurredBackdrop) pauseBackgroundVideo();
+  };
 
   const togglePlayback = () => {
     if (!videoRef.current) return;
@@ -187,8 +221,14 @@ export default function VideoPlayer({
     }
   };
 
-  const handlePlay = () => setIsPlaying(true);
-  const handlePause = () => setIsPlaying(false);
+  const handlePlay = () => {
+    setIsPlaying(true);
+    if (blurredBackdrop) playBackgroundVideo();
+  };
+  const handlePause = () => {
+    setIsPlaying(false);
+    if (blurredBackdrop) pauseBackgroundVideo();
+  };
   const handleEnded = () => {
     setIsPlaying(false);
     setCurrentTime(duration || 0);
@@ -208,7 +248,7 @@ export default function VideoPlayer({
 
   const isInBottomArea = (clientY) => {
     const rect = containerRef.current?.getBoundingClientRect();
-    return !!rect && clientY >= rect.top + rect.height * 0.75;
+    return !!rect && clientY >= rect.top + rect.height * (1 - scrubBottomRatio);
   };
 
   const scrubToClientX = (clientX) => {
@@ -218,6 +258,7 @@ export default function VideoPlayer({
     const percentage = clamp((clientX - rect.left) / rect.width, 0, 1);
     const nextTime = percentage * duration;
     video.currentTime = nextTime;
+    syncBackgroundTime(nextTime);
     setCurrentTime(nextTime);
   };
 
@@ -353,6 +394,24 @@ export default function VideoPlayer({
     gestureAxisRef.current = null;
     isHoldingRef.current = false;
     isScrubbingRef.current = false;
+    pointerScrubRef.current = false;
+  };
+
+  // Framer Motion's parent card listens for pointerdown to start the voting
+  // drag. Claim the bottom scrub zone before that listener sees the gesture.
+  const handlePointerDownCapture = (event) => {
+    const isBottomScrub = isolateScrubGesture && isInBottomArea(event.clientY);
+    pointerScrubRef.current = isBottomScrub;
+    if (isBottomScrub) event.stopPropagation();
+  };
+
+  const handlePointerMoveCapture = (event) => {
+    if (pointerScrubRef.current) event.stopPropagation();
+  };
+
+  const handlePointerUpCapture = (event) => {
+    if (pointerScrubRef.current) event.stopPropagation();
+    pointerScrubRef.current = false;
   };
 
   const handleClick = (event) => {
@@ -368,6 +427,7 @@ export default function VideoPlayer({
     const nextTime = Number(event.target.value);
     if (!videoRef.current || !Number.isFinite(nextTime)) return;
     videoRef.current.currentTime = nextTime;
+    syncBackgroundTime(nextTime);
     setCurrentTime(nextTime);
     showControls(true);
   };
@@ -413,6 +473,9 @@ export default function VideoPlayer({
       style={{ ...wrapperStyle, touchAction: "none" }}
       data-video-player="true"
       onClick={handleClick}
+      onPointerDownCapture={handlePointerDownCapture}
+      onPointerMoveCapture={handlePointerMoveCapture}
+      onPointerUpCapture={handlePointerUpCapture}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -420,6 +483,25 @@ export default function VideoPlayer({
       role="group"
       aria-label={isPlaying ? "Playing video" : "Paused video"}
     >
+      {blurredBackdrop && (
+        <video
+          ref={backgroundVideoRef}
+          src={src}
+          muted
+          autoPlay={false}
+          loop
+          playsInline
+          preload={preload}
+          className="absolute inset-0 w-full h-full max-w-none max-h-none object-cover scale-110 blur-2xl opacity-60 pointer-events-none select-none"
+          style={{ zIndex: 0 }}
+          data-video-backdrop="true"
+          onLoadedMetadata={() => syncBackgroundTime(videoRef.current?.currentTime || 0)}
+          onCanPlay={() => {
+            if (!videoRef.current?.paused) playBackgroundVideo();
+          }}
+          aria-hidden="true"
+        />
+      )}
       <video
         ref={videoRef}
         src={src}
@@ -428,19 +510,23 @@ export default function VideoPlayer({
         loop={loop}
         playsInline
         preload={preload}
-        className="max-w-full max-h-full select-none pointer-events-none"
+        className="relative z-10 max-w-full max-h-full select-none pointer-events-none"
         style={videoStyle}
         onLoadedMetadata={syncMetadata}
+        onCanPlay={() => {
+          if (blurredBackdrop && !videoRef.current?.paused) playBackgroundVideo();
+        }}
         onDurationChange={syncMetadata}
         onTimeUpdate={syncTime}
         onPlay={handlePlay}
         onPause={handlePause}
         onEnded={handleEnded}
+        data-video-main="true"
         aria-hidden="true"
       />
 
       <div
-        className={`absolute inset-0 flex flex-col justify-between transition-opacity duration-150 ${
+        className={`absolute inset-0 z-20 flex flex-col justify-between transition-opacity duration-150 ${
           controlsVisible || !isPlaying || showTimeline ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         data-video-controls="true"

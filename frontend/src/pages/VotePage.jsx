@@ -468,6 +468,8 @@ export default function VotePage() {
                       stackIndex={stackIdx}
                       onSwipe={handleSwipe}
                       onImageClick={(p) => setLightbox(p)}
+                      videoScrubBottomRatio={0.2}
+                      blurredVideoBackdrop
                     />
                     {isTop && (
                       <button

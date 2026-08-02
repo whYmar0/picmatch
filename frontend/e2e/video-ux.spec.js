@@ -173,6 +173,76 @@ test("bottom horizontal swipe reveals the timeline and seeks", async ({ page }) 
   await touch(player, "touchend", box.x + box.width * 0.75, y);
 });
 
+test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop", async ({ page }) => {
+  await page.route(`${API}/api/albums/invite/video-ux-test`, async (route) => route.fulfill({ json: {
+    id: "vote-video-album",
+    title: "Vote Video UX Test",
+    description: null,
+    invite_code: "video-ux-test",
+    invite_url: `${FRONTEND}/vote/video-ux-test`,
+    is_active: true,
+    is_public: true,
+    photo_count: 1,
+    total_votes: 0,
+    created_at: "2026-01-01T00:00:00Z",
+    creator: USER,
+    photos: [{ ...firstVideo, id: "vote-video-1" }],
+  }}));
+  await page.route(`${API}/api/votes/session/video-ux-test`, async (route) => route.fulfill({ json: { voted_photo_ids: [] } }));
+  const voteRequests = [];
+  await page.route(`${API}/api/votes/`, async (route) => {
+    voteRequests.push(route.request().postDataJSON());
+    return route.fulfill({ json: { id: "vote-result" } });
+  });
+  await page.route(`${API}/api/auth/me`, async (route) => route.fulfill({ json: USER }));
+  await page.route(`${API}/api/notifications/`, async (route) => route.fulfill({ json: [] }));
+  await page.route(`${API}/api/comments/photo/**`, async (route) => route.fulfill({ json: [] }));
+  await page.route("**/video-ux-test.mp4", async (route) => route.fulfill({
+    status: 200,
+    contentType: "video/mp4",
+    body: fs.readFileSync(VIDEO_FIXTURE),
+  }));
+  await page.addInitScript(({ token, user }) => {
+    const raw = JSON.stringify(user);
+    localStorage.setItem("pickmatch_token", token);
+    localStorage.setItem("pickmatch_user", raw);
+    sessionStorage.setItem("pickmatch_token", token);
+    sessionStorage.setItem("pickmatch_user", raw);
+  }, { token: TOKEN, user: USER });
+  await page.goto(`${FRONTEND}/vote/video-ux-test`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByText("Vote Video UX Test")).toBeVisible();
+
+  const player = page.locator('[data-video-player="true"]').first();
+  const video = player.locator('[data-video-main="true"]');
+  const background = player.locator('[data-video-backdrop="true"]');
+  await expect(player).toHaveAttribute("data-video-player", "true");
+  await expect(background).toHaveCount(1);
+  await expect(background).toHaveJSProperty("muted", true);
+  await expect(background).toHaveClass(/object-cover/);
+  await expect(background).toHaveClass(/blur-2xl/);
+  await expect.poll(() => video.evaluate((node) => Number.isFinite(node.duration) && node.duration > 0)).toBe(true);
+
+  const box = await player.boundingBox();
+  expect(box).not.toBeNull();
+  const startY = box.y + box.height * 0.9;
+  const startX = box.x + 10;
+  const endX = box.x + box.width * 0.75;
+  await touch(player, "touchstart", startX, startY);
+  await touch(player, "touchmove", endX, startY);
+  await page.waitForTimeout(100);
+  await expect(player.getByRole("slider", { name: "Video progress" })).toBeVisible();
+  await expect.poll(() => video.evaluate((node) => node.currentTime > 0)).toBe(true);
+  await touch(player, "touchend", endX, startY);
+  await page.waitForTimeout(250);
+  await expect(page.locator('[data-video-player="true"]')).toHaveCount(1);
+  await expect(page.getByText("Vote Video UX Test")).toBeVisible();
+  await expect(page.locator('[data-testid="album-gallery"]')).toHaveCount(0);
+  expect(voteRequests).toHaveLength(0);
+
+  const card = page.locator('[data-video-player="true"]').locator("..", { has: video }).first();
+  await expect(card).toBeVisible();
+});
+
 test("vertical video swipe closes through the gallery callback", async ({ page }) => {
   await setup(page);
   const player = page.locator('[data-testid="gallery-shared-video"] [data-video-player="true"]').first();
