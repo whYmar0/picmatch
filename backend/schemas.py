@@ -91,6 +91,7 @@ class PhotoOut(BaseModel):
     id:         AnyUUID
     filename:   str
     url:        str
+    media_type: str = "image"
     order:      int
     created_at: datetime
 
@@ -104,6 +105,7 @@ class PhotoStats(BaseModel):
     id:              AnyUUID
     filename:        str
     url:             str
+    media_type:      str = "image"
     order:           int
     like_count:      int
     dislike_count:   int

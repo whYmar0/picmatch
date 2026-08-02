@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import FilledHeart   from "./FilledHeart";
 import BrokenHeart   from "./BrokenHeart";
+import { isVideo } from "../utils/media";
 import { useLang }        from "../contexts/LangContext";
 import { useAuth }        from "../contexts/AuthContext";
 import BottomSheet        from "./BottomSheet";
@@ -53,14 +54,15 @@ function PhotoListRow({ photo, rank, onPhotoClick }) {
                     hover:bg-border-light dark:hover:bg-border-dark transition-colors">
       <span className="w-6 text-center text-xs font-bold text-gray-400 flex-shrink-0">
         #{rank + 1}
-      </span>
-      <button
-        onClick={() => onPhotoClick(photo)}
-        className="media-thumbnail w-12 h-12 rounded-xl overflow-hidden flex-shrink-0
+      </span>      <button onClick={() => onPhotoClick(photo)} className="media-thumbnail w-12 h-12 rounded-xl overflow-hidden flex-shrink-0
                    bg-border-light dark:bg-border-dark
                    hover:ring-2 hover:ring-primary-400 transition-all"
       >
-        <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+        {isVideo(photo) ? (
+          <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+        ) : (
+          <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+        )}
       </button>
       <button onClick={() => onPhotoClick(photo)} className="flex-1 min-w-0 text-left">
         <div className="h-1.5 bg-border-light dark:bg-border-dark rounded-full mt-1.5 overflow-hidden">
@@ -92,7 +94,11 @@ function PhotoGridCard({ photo, rank, onPhotoClick }) {
     <div className="relative aspect-square rounded-xl overflow-hidden
                     bg-border-light dark:bg-border-dark group">
       <button onClick={() => onPhotoClick(photo)} className="media-thumbnail absolute inset-0 z-10">
-        <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+        {isVideo(photo) ? (
+          <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+        ) : (
+          <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+        )}
       </button>
       <button
         onClick={(e) => { e.stopPropagation(); onPhotoClick(photo); }}
@@ -446,11 +452,20 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
         topContent={
           (reactionSheet && reactionSheet !== "voters") ? (
             <motion.div className="w-full flex justify-center px-4">
-              <img
-                src={reactionSheet.url}
-                className="max-h-[45dvh] w-auto h-auto rounded-2xl object-contain shadow-2xl border border-white/10"
-                alt=""
-              />
+              {isVideo(reactionSheet) ? (
+                <video
+                  src={reactionSheet.url}
+                  className="max-h-[45dvh] w-auto h-auto rounded-2xl object-contain shadow-2xl border border-white/10"
+                  controls
+                  playsInline
+                />
+              ) : (
+                <img
+                  src={reactionSheet.url}
+                  className="max-h-[45dvh] w-auto h-auto rounded-2xl object-contain shadow-2xl border border-white/10"
+                  alt=""
+                />
+              )}
             </motion.div>
           ) : null
         }
@@ -462,6 +477,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
         open={!!lightbox}
         src={lightbox?.url}
         alt={lightbox?.filename}
+        mediaType={lightbox?.media_type}
         onClose={() => setLightbox(null)}
       />
 

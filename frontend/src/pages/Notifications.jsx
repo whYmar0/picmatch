@@ -3,6 +3,7 @@ import { notificationsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import { UserAvatar } from "../components/Navbar";
+import { isVideoUrl } from "../utils/media";
 import { Bell, MessageSquare, BarChart2, CheckCircle, ChevronLeft } from "lucide-react";
 import FilledHeart from "../components/FilledHeart";
 import { formatDistanceToNow, isToday, isYesterday, differenceInDays } from "date-fns";
@@ -140,13 +141,23 @@ export default function Notifications() {
         </div>
         <div className="relative w-12 h-12 flex-shrink-0">
           {n.thumbnail_url ? (
-            <img
-              src={n.thumbnail_url}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              className="w-12 h-12 rounded-xl object-cover bg-gray-100 dark:bg-gray-800"
-            />
+            isVideoUrl(n.thumbnail_url) ? (
+              <video
+                src={n.thumbnail_url}
+                className="w-12 h-12 rounded-xl object-cover bg-gray-100 dark:bg-gray-800"
+                preload="metadata"
+                muted
+                playsInline
+              />
+            ) : (
+              <img
+                src={n.thumbnail_url}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="w-12 h-12 rounded-xl object-cover bg-gray-100 dark:bg-gray-800"
+              />
+            )
           ) : (
             <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-300">
               <Bell size={18} />

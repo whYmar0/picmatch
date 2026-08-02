@@ -16,7 +16,8 @@ import { useLang } from "../contexts/LangContext";
 // ─── Client-side image compression ───────────────────────────────────────────
 async function compressImage(file) {
   return new Promise((resolve, reject) => {
-    // Skip non-image or already-small files
+    // Skip video files and already-small image files
+    if (file.type.startsWith("video/")) return resolve(file);
     if (!file.type.startsWith("image/")) return resolve(file);
     if (file.size < 200 * 1024) return resolve(file); // skip < 200KB
 
@@ -73,13 +74,22 @@ export default function CreateAlbum() {
     const newFiles = compressed.map((file) =>
       Object.assign(file, { preview: URL.createObjectURL(file) })
     );
-    setFiles((prev) => [...prev, ...newFiles].slice(0, 50));
+    setFiles((prev) => [...prev, ...newFiles]);
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "image/jpeg": [], "image/png": [], "image/webp": [] },
-    maxSize: 10 * 1024 * 1024,
+    accept: {
+      "image/jpeg": [],
+      "image/png": [],
+      "image/webp": [],
+      "image/gif": [],
+      "video/mp4": [],
+      "video/webm": [],
+      "video/quicktime": [],
+      "video/avi": [],
+    },
+    maxSize: 50 * 1024 * 1024,
     onDropRejected: () => toast.error("Some files were rejected (too large or wrong format)"),
   });
 
@@ -188,7 +198,7 @@ export default function CreateAlbum() {
           transition={{ delay: 0.1 }}
         >
           <label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-1.5">
-            {t("uploadPhotos")} * ({files.length}/50)
+            {t("uploadPhotos")} * ({files.length})
           </label>
           <div
             {...getRootProps()}
@@ -204,7 +214,7 @@ export default function CreateAlbum() {
               className={`mx-auto mb-3 ${isDragActive ? "text-primary-400" : "text-gray-300"}`}
             />
             <p className="text-sm text-gray-500 dark:text-gray-400">{t("uploadDrag")}</p>
-            <p className="text-xs text-gray-400 mt-1">{t("uploadHint")}</p>
+            <p className="text-xs text-gray-400 mt-1">{t("uploadHint")} · max 50 MB per file</p>
           </div>
         </motion.div>
 
@@ -226,12 +236,20 @@ export default function CreateAlbum() {
                   transition={{ delay: idx * 0.03 }}
                   className="relative group aspect-square rounded-2xl overflow-hidden bg-border-light dark:bg-border-dark"
                 >
-                  <img
-                    src={file.preview}
-                    alt={`Фото ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                    decoding="async"
-                  />
+                  {file.type.startsWith("video/") ? (
+                    <video
+                      src={file.preview}
+                      className="w-full h-full object-cover"
+                      preload="metadata"
+                    />
+                  ) : (
+                    <img
+                      src={file.preview}
+                      alt={`Фото ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                      decoding="async"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => removeFile(idx)}

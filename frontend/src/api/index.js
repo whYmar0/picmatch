@@ -102,6 +102,7 @@ export const authApi = {
 export const albumsApi = {
   create:          (formData) => api.post("/albums/", formData, {
                      headers: { "Content-Type": "multipart/form-data" },
+                     timeout: 120000, // 2 minutes: large uploads / many files
                    }),
   getMyAlbums:     ()        => api.get("/albums/my"),
   getByInviteCode: (code)    => api.get(`/albums/invite/${code}`),

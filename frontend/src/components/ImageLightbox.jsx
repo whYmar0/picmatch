@@ -11,6 +11,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ZoomIn } from "lucide-react";
+import { isVideoUrl } from "../utils/media";
 
 // ─── Pinch-zoom hook ──────────────────────────────────────────────────────────
 function usePinchZoom({ minScale = 1, maxScale = 5 } = {}) {
@@ -81,10 +82,13 @@ function usePinchZoom({ minScale = 1, maxScale = 5 } = {}) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function ImageLightbox({ open, src, alt, onClose }) {
+export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
   const { scale, origin, onTouchStart, onTouchMove, onTouchEnd, reset } = usePinchZoom();
   const dragStartY = useRef(null);
   const imgRef     = useRef(null);
+  const touchStartedOnVideo = useRef(false);
+
+  const videoMedia = mediaType === "video" || isVideoUrl(src);
 
   // Reset zoom when opening
   useEffect(() => { if (open) reset(); }, [open, reset]);
@@ -105,11 +109,18 @@ export default function ImageLightbox({ open, src, alt, onClose }) {
 
   // Swipe-down to close on the container
   const handlePointerDown = (e) => {
+    touchStartedOnVideo.current = Boolean(e.target?.closest?.("video"));
+    if (touchStartedOnVideo.current) return;
     if (e.pointerType === "mouse" || e.touches?.length === 1) {
       dragStartY.current = e.clientY ?? e.touches?.[0]?.clientY;
     }
   };
   const handlePointerUp = (e) => {
+    if (touchStartedOnVideo.current) {
+      touchStartedOnVideo.current = false;
+      dragStartY.current = null;
+      return;
+    }
     const endY = e.clientY ?? e.changedTouches?.[0]?.clientY;
     if (dragStartY.current !== null && scale <= 1.05) {
       const dy = endY - dragStartY.current;
@@ -130,9 +141,18 @@ export default function ImageLightbox({ open, src, alt, onClose }) {
           className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
+          onTouchStart={(e) => {
+            if (e.target?.closest?.("video")) return;
+            onTouchStart(e);
+          }}
+          onTouchMove={(e) => {
+            if (e.target?.closest?.("video")) return;
+            onTouchMove(e);
+          }}
+          onTouchEnd={(e) => {
+            if (e.target?.closest?.("video")) return;
+            onTouchEnd(e);
+          }}
           onClick={(e) => { if (e.target === e.currentTarget && scale <= 1.05) onClose(); }}
         >
           {/* Close button */}
@@ -160,44 +180,42 @@ export default function ImageLightbox({ open, src, alt, onClose }) {
                           text-white/40 text-xs pointer-events-none">
               Pinch to zoom · Double-tap to zoom · Swipe down to close
             </p>
-          )}
-
-          {/* Image */}
+          )}            {/* Image / Video */}
           <motion.div
             initial={{ scale: 0.88, opacity: 0 }}
             animate={{ scale: 1,    opacity: 1 }}
             exit={{ scale: 0.88,    opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
             className="w-full h-full flex items-center justify-center"
-            style={{ touchAction: "none" }}
+            style={{ touchAction: videoMedia ? "auto" : "none" }}
           >
-            {/*
-              Performance skill — mark as LCP for the gallery view.
-              `fetchpriority="high"` tells Chromium browsers (Chrome,
-              Edge, Brave) to deprioritise competing requests for this
-              image — without it, the gallery's first photo often
-              races the AlbumCard thumbnail and loses, pushing LCP into
-              the 2.5–3.5s range. `loading="eager"` is the default for
-              a lightbox but stated explicitly so it survives any
-              framework upstream changes (Vite + React 18 sometimes
-              flip the default in shipped builds).
-            */}
-            <img
-              ref={imgRef}
-              src={src}
-              alt={alt}
-              draggable={false}
-              loading="eager"
-              fetchpriority="high"
-              decoding="sync"
-              className="max-w-full max-h-full object-contain select-none pointer-events-none"
-              style={{
-                transform: `scale(${scale})`,
-                transformOrigin: `${origin.x}px ${origin.y}px`,
-                transition: scale === 1 ? "transform 0.22s ease" : "none",
-                willChange: "transform",
-              }}
-            />
+            {videoMedia ? (
+              <video
+                src={src}
+                controls
+                playsInline
+                className="max-w-full max-h-full object-contain select-none"
+                preload="metadata"
+                style={{ touchAction: "auto" }}
+              />
+            ) : (
+              <img
+                ref={imgRef}
+                src={src}
+                alt={alt}
+                draggable={false}
+                loading="eager"
+                fetchpriority="high"
+                decoding="sync"
+                className="max-w-full max-h-full object-contain select-none pointer-events-none"
+                style={{
+                  transform: `scale(${scale})`,
+                  transformOrigin: `${origin.x}px ${origin.y}px`,
+                  transition: scale === 1 ? "transform 0.22s ease" : "none",
+                  willChange: "transform",
+                }}
+              />
+            )}
           </motion.div>
         </motion.div>
       )}

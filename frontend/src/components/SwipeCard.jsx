@@ -12,8 +12,9 @@
  */
 import { useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
-import { Heart, ImageOff } from "lucide-react";
+import { Heart, ImageOff, Play } from "lucide-react";
 import BrokenHeart from "./BrokenHeart";
+import { isVideo } from "../utils/media";
 
 const SWIPE_THRESHOLD = 64;
 
@@ -132,6 +133,23 @@ const SwipeCard = forwardRef(function SwipeCard(
           <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-gray-400">
             <ImageOff size={34} />
             <span className="text-sm">Изображение недоступно</span>
+          </div>
+        ) : isVideo(photo) ? (
+          <div className="relative w-full h-full">
+            <video
+              src={photo.url}
+              className="w-full h-full object-contain select-none pointer-events-none"
+              preload="metadata"
+              controls
+              playsInline
+              muted
+              onLoadedMetadata={onImageLoad}
+            />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center">
+                <Play size={28} className="text-white ml-1" />
+              </div>
+            </div>
           </div>
         ) : (
           <img

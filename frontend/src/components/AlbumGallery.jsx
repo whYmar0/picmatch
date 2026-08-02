@@ -27,6 +27,7 @@ import toast from "react-hot-toast";
 import { albumsApi, commentsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
 import { useAuth } from "../contexts/AuthContext";
+import { isVideo } from "../utils/media";
 import BottomSheet from "./BottomSheet";
 import { PhotoCommentsList, CommentInput } from "./PhotoComments";
 import AnalyticsShareSheet from "./AnalyticsShareSheet";
@@ -108,13 +109,23 @@ function ThumbItem({ photo, index, activeIdx, onSelect, isDraggingRef }) {
       style={{ width: THUMB_SIZE, height: THUMB_SIZE, flexShrink: 0, scale, boxShadow: ring }}
       className="btn-thumb outline-none rounded-xl"
     >
-      <img
-        src={photo.url}
-        alt=""
-        className="w-full h-full object-cover rounded-xl select-none pointer-events-none"
-        loading="lazy"
-        draggable={false}
-      />
+      {isVideo(photo) ? (
+        <video
+          src={photo.url}
+          className="w-full h-full object-cover rounded-xl select-none pointer-events-none"
+          preload="metadata"
+          muted
+          playsInline
+        />
+      ) : (
+        <img
+          src={photo.url}
+          alt=""
+          className="w-full h-full object-cover rounded-xl select-none pointer-events-none"
+          loading="lazy"
+          draggable={false}
+        />
+      )}
     </motion.button>
   );
 }
@@ -331,7 +342,11 @@ function StatisticsTab({
                            ? "ring-2 ring-primary-400"
                            : ""}`}
             >
-              <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              {isVideo(photo) ? (
+                <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+              ) : (
+                <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              )}
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 text-white text-[10px] font-semibold flex justify-between">
                 <span>#{i + 1}</span>
                 <span>{photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}</span>
@@ -355,7 +370,11 @@ function StatisticsTab({
             </span>
             <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0
                             bg-border-light dark:bg-border-dark">
-              <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              {isVideo(photo) ? (
+                <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+              ) : (
+                <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              )}
             </div>
             <div className="flex-1 min-w-0 text-left">
               <div className="h-1.5 max-w-[95%] bg-border-light dark:bg-border-dark rounded-full overflow-hidden">
@@ -548,6 +567,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const touchStartOffsetX = useRef(0);
   const touchStartDragY = useRef(0);
   const gestureAxis = useRef(null);
+  // Native video controls must keep the touch gesture for play/pause/seek.
+  const touchStartedOnVideo = useRef(false);
 
   // ── Motion values ────────────────────────────────────────────────────────
   const defaultOffset = vh * 0.35;
@@ -730,6 +751,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   // ── Unified touch handlers (axis-lock: horizontal → offsetX, vertical → dragY) ──
   const onWrapperTouchStart = useCallback((e) => {
+    touchStartedOnVideo.current = Boolean(e.target?.closest?.("video"));
+    if (touchStartedOnVideo.current) {
+      gestureAxis.current = "video";
+      return;
+    }
     snapAnimRef.current?.stop();
     dragYAnimRef.current?.stop();
     const touch = e.touches[0];
@@ -751,6 +777,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   }, [offsetX]);
 
   const onWrapperTouchMove = useCallback((e) => {
+    if (touchStartedOnVideo.current) return;
     const touch = e.touches[0];
     const dx = touch.clientX - touchStart.current.x;
     const dy = touch.clientY - touchStart.current.y;
@@ -794,6 +821,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   }, [offsetX, dragY, photos.length]);
 
   const onWrapperTouchEnd = useCallback((e) => {
+    if (touchStartedOnVideo.current) {
+      touchStartedOnVideo.current = false;
+      gestureAxis.current = null;
+      return;
+    }
     const touch = e.changedTouches?.[0];
     if (!touch) { gestureAxis.current = null; return; }
 
@@ -894,6 +926,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   }, [offsetX, dragY, photos.length, onClose]);
 
   const onWrapperTouchCancel = useCallback(() => {
+    touchStartedOnVideo.current = false;
     gestureAxis.current = null;
   }, []);
 
@@ -1056,7 +1089,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       ref={galleryRef}
       data-testid="album-gallery"
       className="fixed inset-0 z-[90] flex flex-col overflow-hidden"
-      style={{ touchAction: "none", overscrollBehavior: "contain", pointerEvents: isExiting ? "none" : "auto" }}
+      // Keep native video controls usable. Custom gallery gestures call
+      // preventDefault after axis-locking, while video touches are ignored by
+      // the gallery handlers below.
+      style={{ touchAction: "auto", overscrollBehavior: "contain", pointerEvents: isExiting ? "none" : "auto" }}
       aria-hidden={isExiting ? "true" : undefined}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 0.22 } }}
@@ -1109,11 +1145,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               const isSharedElement = i === 0;
               const isEager = isSharedElement || Math.abs(currentIdx - i) <= 1;
               const isFirstCover = isSharedElement && !firstPhotoFitDone;
-              const photoClassName = `max-w-full max-h-full select-none pointer-events-none ${isFirstCover ? "object-cover" : "object-contain"}`;
+              // Images must not capture gallery gestures, but videos need pointer
+              // events so their native play/pause and seek controls are usable.
+              const photoClassName = `max-w-full max-h-full select-none ${isFirstCover ? "object-cover" : "object-contain"}`;
+              const photoIsVideo = isVideo(photo);
               const photoProps = {
                 src: photo.url,
                 alt: "",
-                className: photoClassName,
+                className: `${photoClassName} pointer-events-none`,
                 draggable: false,
                 loading: isEager ? "eager" : "lazy",
                 decoding: "async",
@@ -1125,19 +1164,39 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               >
                 {photo?.url ? (
                   isSharedElement ? (
-                    <motion.img
-                      {...photoProps}
-                      layoutId={`album-cover-${album.id}`}
-                      layout={false}
-                      onLayoutAnimationComplete={() => setFirstPhotoFitDone(true)}
-                      style={{ pointerEvents: "none" }}
-                      initial={initialIdx === 0 ? { borderRadius: 16 } : false}
-                      animate={{ borderRadius: 0 }}
-                      transition={
-                        isExiting || !firstPhotoFitDone
-                          ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
-                          : { duration: 0 }
-                      }
+                    photoIsVideo ? (
+                      <video
+                        src={photo.url}
+                        className={`${photoClassName} pointer-events-auto`}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        style={{ touchAction: "auto" }}
+                      />
+                    ) : (
+                      <motion.img
+                        {...photoProps}
+                        layoutId={`album-cover-${album.id}`}
+                        layout={false}
+                        onLayoutAnimationComplete={() => setFirstPhotoFitDone(true)}
+                        style={{ pointerEvents: "none" }}
+                        initial={initialIdx === 0 ? { borderRadius: 16 } : false}
+                        animate={{ borderRadius: 0 }}
+                        transition={
+                          isExiting || !firstPhotoFitDone
+                            ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
+                            : { duration: 0 }
+                        }
+                      />
+                    )
+                  ) : photoIsVideo ? (
+                    <video
+                      src={photo.url}
+                      className={`${photoClassName} pointer-events-auto`}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      style={{ touchAction: "auto" }}
                     />
                   ) : (
                     <img {...photoProps} />

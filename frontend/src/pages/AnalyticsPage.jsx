@@ -18,6 +18,7 @@ import { albumsApi, commentsApi } from "../api";
 import AlbumSummary from "../components/AlbumSummary";
 import PhotoComments from "../components/PhotoComments";
 import { AnalyticsSkeleton } from "../components/Skeleton";
+import { isVideoUrl } from "../utils/media";
 
 // ─── Locked comment overlay for private-album notification deep-link ──────────
 function LockedCommentSheet({ photoId, photoUrl, initialComments, onBack }) {
@@ -78,11 +79,21 @@ function LockedCommentSheet({ photoId, photoUrl, initialComments, onBack }) {
             style={{ scale }}
             className="pointer-events-auto"
           >
-            <img
-              src={photoUrl}
-              alt=""
-              className="max-h-[38dvh] w-auto h-auto rounded-3xl object-contain shadow-2xl border border-white/10"
-            />
+            {isVideoUrl(photoUrl) ? (
+              <video
+                src={photoUrl}
+                className="max-h-[38dvh] w-auto h-auto rounded-3xl object-contain shadow-2xl border border-white/10"
+                controls
+                playsInline
+                preload="metadata"
+              />
+            ) : (
+              <img
+                src={photoUrl}
+                alt=""
+                className="max-h-[38dvh] w-auto h-auto rounded-3xl object-contain shadow-2xl border border-white/10"
+              />
+            )}
           </motion.div>
         </motion.div>
       )}

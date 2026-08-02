@@ -1,11 +1,16 @@
 """
 routers/albums.py — Album management routes
 Updated: analytics endpoint allows shared users (can_view_stats=True) to view.
+Updated: video support and concurrent uploads.
 """
+import asyncio
+import logging
 import os, uuid, secrets, io
 from typing import List
 from pathlib import Path
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 def compress_image(image_bytes: bytes, max_size: int = 1200, quality: int = 80) -> bytes:
     try:
@@ -75,21 +80,25 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 BASE_URL     = os.getenv("BASE_URL",     "http://localhost:8000")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-MAX_FILE_SIZE = 10 * 1024 * 1024
-ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB per file
+ALLOWED_TYPES = {
+    "image/jpeg", "image/png", "image/webp", "image/gif",
+    "video/mp4", "video/webm", "video/quicktime", "video/avi",
+}
 
 
 def _s(v) -> str:
     return str(v)
 
-def photo_url(stored: str) -> str:
+def photo_url(stored: str, media_type: str = "image") -> str:
     if _cloudinary_enabled():
-        return _cloudinary_url(stored)
+        return _cloudinary_url(stored, resource_type="video" if media_type == "video" else "image")
     return f"{BASE_URL}/uploads/{stored}"
 
 def photo_to_out(p: Photo) -> PhotoOut:
     return PhotoOut(id=p.id, filename=p.filename,
-                    url=photo_url(p.stored_filename),
+                    url=photo_url(p.stored_filename, media_type=p.media_type or "image"),
+                    media_type=p.media_type or "image",
                     order=p.order, created_at=p.created_at)
 
 def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0) -> AlbumOut:
@@ -108,6 +117,116 @@ def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0
     )
 
 
+def _safe_extension(filename: str | None) -> str:
+    if not filename:
+        return ""
+    from pathlib import Path as _Path
+    return _Path(filename).suffix.lower()
+
+
+def _ext_for_mime(content_type: str | None) -> str:
+    mapping = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "video/mp4": ".mp4",
+        "video/webm": ".webm",
+        "video/quicktime": ".mov",
+        "video/avi": ".avi",
+    }
+    return mapping.get(content_type or "", "")
+
+
+# Extension → set of accepted MIME types. Used as a fallback when a browser
+# reports a generic or missing Content-Type but the filename has a known extension.
+ALLOWED_EXTENSIONS = {
+    ".jpg": {"image/jpeg"},
+    ".jpeg": {"image/jpeg"},
+    ".png": {"image/png"},
+    ".webp": {"image/webp"},
+    ".gif": {"image/gif"},
+    ".mp4": {"video/mp4"},
+    ".webm": {"video/webm"},
+    ".mov": {"video/quicktime"},
+    ".avi": {"video/avi"},
+}
+
+
+def _normalize_content_type(content_type: str | None) -> str | None:
+    """Strip codecs/parameters from a Content-Type header value.
+
+    Browsers may send values like `video/mp4; codecs="avc1.42E01E"` or
+    `video/mp4; codecs=avc1.42E01E`. We only care about the base MIME type.
+    """
+    if not content_type:
+        return None
+    return content_type.split(";")[0].strip().lower() or None
+
+
+def _is_allowed_type(content_type: str | None, filename: str | None) -> bool:
+    """Return True if the upload is an allowed image or video.
+
+    Browsers usually send a Content-Type, but some devices (e.g. iOS) or
+    renamed files may arrive with a generic or missing type. As a fallback,
+    we also accept files whose extension maps to a known allowed MIME type.
+    """
+    base = _normalize_content_type(content_type)
+    if base in ALLOWED_TYPES:
+        return True
+    ext = _safe_extension(filename)
+    if ext in ALLOWED_EXTENSIONS:
+        # Accept missing content type or generic binary types for known extensions.
+        return base in (None, "", "application/octet-stream", "binary/octet-stream")
+    return False
+
+
+async def _process_upload(f: UploadFile, idx: int) -> dict:
+    """Read, validate, optionally compress, and upload a single file."""
+    base_content_type = _normalize_content_type(f.content_type)
+
+    if not _is_allowed_type(f.content_type, f.filename):
+        # Debug logging to diagnose mismatches in production.
+        logger.warning(
+            "[UPLOAD REJECTED] filename=%r, raw_content_type=%r, base=%r, allowed=%s",
+            f.filename, f.content_type, base_content_type, ALLOWED_TYPES,
+        )
+        raise HTTPException(400, detail=f"'{f.content_type}' not allowed")
+
+    content = await f.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, detail=f"'{f.filename}' exceeds 50 MB")
+
+    is_video = base_content_type.startswith("video/") if base_content_type else False
+    media_type = "video" if is_video else "image"
+
+    if is_video:
+        # Preserve original extension for local storage; Cloudinary uses public_id.
+        ext = _safe_extension(f.filename) or _ext_for_mime(base_content_type)
+        stored_ext = ext or ".mp4"
+    else:
+        content = compress_image(content)
+        stored_ext = ".jpg"
+
+    if _cloudinary_enabled():
+        stored = f"picmatch/{uuid.uuid4()}"
+        # Cloudinary SDK is blocking; run in thread pool to avoid stalling event loop.
+        await asyncio.to_thread(_cloudinary_upload, content, public_id=stored)
+    else:
+        stored = f"{uuid.uuid4()}{stored_ext}"
+        def _write():
+            with open(UPLOAD_DIR / stored, "wb") as f:
+                f.write(content)
+        await asyncio.to_thread(_write)
+
+    return {
+        "idx": idx,
+        "filename": f.filename or stored,
+        "stored": stored,
+        "media_type": media_type,
+    }
+
+
 @router.post("/", response_model=AlbumWithPhotos, status_code=status.HTTP_201_CREATED)
 @limiter.limit(_get_limit("RATE_LIMIT_ALBUM_CREATE", "10/hour"))
 async def create_album(
@@ -120,9 +239,7 @@ async def create_album(
     db: AsyncSession = Depends(get_db),
 ):
     if not photos:
-        raise HTTPException(400, detail="At least one photo is required")
-    if len(photos) > 50:
-        raise HTTPException(400, detail="Maximum 50 photos per album")
+        raise HTTPException(400, detail="At least one photo or video is required")
 
     album = Album(title=title, description=description,
                   invite_code=secrets.token_urlsafe(16),
@@ -131,26 +248,23 @@ async def create_album(
     db.add(album)
     await db.flush()
 
-    for idx, f in enumerate(photos):
-        if f.content_type not in ALLOWED_TYPES:
-            raise HTTPException(400, detail=f"'{f.content_type}' not allowed")
-        content = await f.read()
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(400, detail=f"'{f.filename}' exceeds 10 MB")
-        
-        # Compress image to optimized JPEG with max 1200px size
-        content = compress_image(content)
+    # Process all uploads concurrently to reduce proxy timeout risk.
+    try:
+        results = await asyncio.gather(*[_process_upload(f, i) for i, f in enumerate(photos)])
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, detail=f"Upload failed: {exc}")
 
-        if _cloudinary_enabled():
-            stored = f"picmatch/{uuid.uuid4()}"
-            _cloudinary_upload(content, public_id=stored)
-        else:
-            stored = f"{uuid.uuid4()}.jpg"
-            with open(UPLOAD_DIR / stored, "wb") as out:
-                out.write(content)
-
-        db.add(Photo(album_id=_s(album.id), filename=f.filename or stored,
-                      stored_filename=stored, order=idx))
+    results.sort(key=lambda r: r["idx"])
+    for row in results:
+        db.add(Photo(
+            album_id=_s(album.id),
+            filename=row["filename"],
+            stored_filename=row["stored"],
+            media_type=row["media_type"],
+            order=row["idx"],
+        ))
 
     await db.flush()
     await db.commit()
@@ -342,7 +456,7 @@ async def delete_album(
 
     for photo in album.photos:
         if _cloudinary_enabled():
-            _cloudinary_delete(photo.stored_filename)
+            _cloudinary_delete(photo.stored_filename, resource_type="video" if photo.media_type == "video" else "image")
         else:
             p = UPLOAD_DIR / photo.stored_filename
             if p.exists():
@@ -447,7 +561,8 @@ async def _build_analytics(
             pct = round((likes / total * 100), 1) if total else 0.0
             photo_stats.append(PhotoStats(
                 id=p.id, filename=p.filename,
-                url=photo_url(p.stored_filename),
+                url=photo_url(p.stored_filename, media_type=p.media_type or "image"),
+                media_type=p.media_type or "image",
                 order=p.order,
                 like_count=likes, dislike_count=dislikes,
                 total_votes=total, like_percentage=pct,
@@ -457,7 +572,8 @@ async def _build_analytics(
         else:
             photo_stats.append(PhotoStats(
                 id=p.id, filename=p.filename,
-                url=photo_url(p.stored_filename),
+                url=photo_url(p.stored_filename, media_type=p.media_type or "image"),
+                media_type=p.media_type or "image",
                 order=p.order,
                 like_count=0, dislike_count=0,
                 total_votes=0, like_percentage=0.0,

@@ -6,9 +6,10 @@
  * "Results" button stays as is.
  */
 import { Link } from "react-router-dom";
-import { Image, Lock, Globe, BarChart2, MessageCircle } from "lucide-react";
+import { Image, Lock, Globe, BarChart2, MessageCircle, Play } from "lucide-react";
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext";
+import { isVideo } from "../utils/media";
 
 function parseUTC(dateStr) {
   if (!dateStr) return new Date();
@@ -42,14 +43,31 @@ export default function RecentAlbumCard({ album, index }) {
       {/* Photo area (2/3) — same as AlbumCard */}
       <div className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark overflow-hidden rounded-t-3xl">
         {album.coverUrl ? (
-          <img
-            src={album.coverUrl}
-            alt=""
-            className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
-            loading="lazy"
-            onLoad={() => setImgLoaded(true)}
-            onError={() => setImgLoaded(true)}
-          />
+          isVideo({ url: album.coverUrl }) ? (
+            <div className="relative w-full h-full">
+              <video
+                src={album.coverUrl}
+                className="w-full h-full object-cover"
+                preload="metadata"
+                muted
+                playsInline
+              />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
+                  <Play size={18} className="text-white ml-0.5" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <img
+              src={album.coverUrl}
+              alt=""
+              className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
+              loading="lazy"
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgLoaded(true)}
+            />
+          )
         ) : (
           <div className="flex h-full items-center justify-center">
             <Image size={32} className="text-gray-300 dark:text-gray-600" />

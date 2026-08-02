@@ -19,11 +19,12 @@ import { useAuth } from "../contexts/AuthContext";
 import SwipeCard, { SwipeButtons } from "../components/SwipeCard";
 import ImageLightbox from "../components/ImageLightbox";
 import { VotePageSkeleton } from "../components/Skeleton";
-import { LogIn, MessageCircle, Check } from "lucide-react";
+import { LogIn, MessageCircle, Check, Play } from "lucide-react";
 import FilledHeart from "../components/FilledHeart";
 import BrokenHeart from "../components/BrokenHeart";
 import BottomSheet from "../components/BottomSheet";
 import { PhotoCommentsList, CommentInput } from "../components/PhotoComments";
+import { isVideo } from "../utils/media";
 
 const STACK_SIZE = 3;
 const DESC_LIMIT = 100;
@@ -413,7 +414,18 @@ export default function VotePage() {
                         : "opacity-70 hover:opacity-100 hover:scale-105"
                       }`}
                   >
-                    <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    {isVideo(photo) ? (
+                      <div className="relative w-full h-full">
+                        <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center">
+                            <Play size={12} className="text-white ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    )}
                     {hasVote && (
                       <div className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full
                                        flex items-center justify-center border-2 border-surface-light dark:border-surface-dark
@@ -494,6 +506,7 @@ export default function VotePage() {
         open={!!lightbox}
         src={lightbox?.url}
         alt={lightbox?.filename}
+        mediaType={lightbox?.media_type}
         onClose={() => setLightbox(null)}
       />
 

@@ -11,9 +11,10 @@
  */
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Copy, Check, Trash2, Image, Globe, Lock } from "lucide-react";
+import { Copy, Check, Trash2, Image, Globe, Lock, Play } from "lucide-react";
 import { useLang } from "../contexts/LangContext";
 import { albumsApi } from "../api";
+import { isVideo } from "../utils/media";
 import toast from "react-hot-toast";
 
 function parseUTC(dateStr) {
@@ -102,17 +103,34 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
         className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark
                    overflow-hidden rounded-t-3xl cursor-pointer">
         {firstPhoto ? (
-          <motion.img
-            src={firstPhoto.url}
-            alt=""
-            layoutId={`album-cover-${album.id}`}
-            className={`w-full h-full object-cover rounded-t-2xl pointer-events-none transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
-            style={{ pointerEvents: "none" }}
-            loading="lazy"
-            onLoad={() => setImgLoaded(true)}
-            onError={() => setImgLoaded(true)}
-            transition={{ type: "spring", stiffness: 340, damping: 32, mass: 0.9 }}
-          />
+          isVideo(firstPhoto) ? (
+            <div className="relative w-full h-full">
+              <video
+                src={firstPhoto.url}
+                className="w-full h-full object-cover rounded-t-2xl pointer-events-none"
+                preload="metadata"
+                muted
+                playsInline
+              />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
+                  <Play size={18} className="text-white ml-0.5" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <motion.img
+              src={firstPhoto.url}
+              alt=""
+              layoutId={`album-cover-${album.id}`}
+              className={`w-full h-full object-cover rounded-t-2xl pointer-events-none transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
+              style={{ pointerEvents: "none" }}
+              loading="lazy"
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgLoaded(true)}
+              transition={{ type: "spring", stiffness: 340, damping: 32, mass: 0.9 }}
+            />
+          )
         ) : (
           <div className="flex items-center justify-center h-full">
             <Image size={32} className="text-gray-300 dark:text-gray-600" />

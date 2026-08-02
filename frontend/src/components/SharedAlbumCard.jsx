@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Link }   from "react-router-dom";
 import { BarChart2, Image, Share2 } from "lucide-react";
 import { useLang } from "../contexts/LangContext";
+import { isVideo } from "../utils/media";
 
 export default function SharedAlbumCard({ album, index }) {
   const { t } = useLang();
@@ -34,7 +35,11 @@ export default function SharedAlbumCard({ album, index }) {
             {previewPhotos.map((photo, i) => (
               <div key={photo.id}
                 className={`h-full overflow-hidden ${i === 0 ? "flex-[2]" : "flex-1"}`}>
-                <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                {isVideo(photo) ? (
+                  <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                ) : (
+                  <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                )}
               </div>
             ))}
             {extra > 0 && (

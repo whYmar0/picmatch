@@ -101,6 +101,7 @@ class Photo(Base):
     album_id        = uuid_column(foreign_key="albums.id")
     filename        = Column(String(500), nullable=False)
     stored_filename = Column(String(500), nullable=False)
+    media_type      = Column(String(10), nullable=False, server_default=text("'image'"))
     order           = Column(Integer, default=0)
     created_at      = Column(DateTime(timezone=True), default=_now)
 
