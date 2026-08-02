@@ -10,7 +10,7 @@
  *    controls the 3:4 aspect ratio and maximum size
  *  - Font: uses inherited font (font-sans from the site theme) — no override
  */
-import { useRef, forwardRef, useImperativeHandle, useState } from "react";
+import { useRef, forwardRef, useImperativeHandle, useState, useEffect } from "react";
 import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
 import { ImageOff } from "lucide-react";
 import BrokenHeart from "./BrokenHeart";
@@ -19,9 +19,25 @@ import { isVideo } from "../utils/media";
 import VideoPlayer from "./VideoPlayer";
 
 const SWIPE_THRESHOLD = 64;
+const PINCH_MAX_SCALE = 4;
+const PINCH_RESET_MS = 280;
+
+function touchDistance(touches) {
+  return Math.hypot(
+    touches[1].clientX - touches[0].clientX,
+    touches[1].clientY - touches[0].clientY
+  );
+}
+
+function touchMidpoint(touches) {
+  return {
+    x: (touches[0].clientX + touches[1].clientX) / 2,
+    y: (touches[0].clientY + touches[1].clientY) / 2,
+  };
+}
 
 const SwipeCard = forwardRef(function SwipeCard(
-  { photo, isTop, stackIndex, onSwipe, onImageClick, videoScrubBottomRatio = 0.25, blurredVideoBackdrop = false },
+  { photo, isTop, stackIndex, onSwipe, onImageClick, enablePinchZoom = false, videoScrubBottomRatio = 0.25, blurredVideoBackdrop = false },
   ref
 ) {
   const controls = useAnimation();
@@ -29,6 +45,12 @@ const SwipeCard = forwardRef(function SwipeCard(
   const y = useMotionValue(0);
   const pointerDown = useRef(null);
   const hasDragged = useRef(false);
+  const pinchRef = useRef({ active: false });
+  const pinchResetTimerRef = useRef(null);
+  const pinchTransformRef = useRef({ scale: 1, x: 0, y: 0 });
+  const pinchImageRef = useRef(null);
+  const [pinchTransform, setPinchTransform] = useState({ scale: 1, x: 0, y: 0 });
+  const [pinchActive, setPinchActive] = useState(false);
   const [aspectRatio, setAspectRatio] = useState(null);
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -38,6 +60,78 @@ const SwipeCard = forwardRef(function SwipeCard(
 
   // All cards aligned perfectly (no scale difference)
   const stackScale = 1;
+  const pinchEnabled = enablePinchZoom && !isVideo(photo);
+
+  useEffect(() => () => {
+    window.clearTimeout(pinchResetTimerRef.current);
+  }, []);
+
+  const setPinchState = (next) => {
+    pinchTransformRef.current = next;
+    setPinchTransform(next);
+  };
+
+  const finishPinch = () => {
+    pinchRef.current = { active: false };
+    setPinchState({ scale: 1, x: 0, y: 0 });
+    window.clearTimeout(pinchResetTimerRef.current);
+    pinchResetTimerRef.current = window.setTimeout(() => {
+      setPinchActive(false);
+      pinchResetTimerRef.current = null;
+    }, PINCH_RESET_MS);
+  };
+
+  const handlePinchStartCapture = (event) => {
+    if (!pinchEnabled || event.touches.length !== 2) return;
+    event.preventDefault();
+    event.stopPropagation();
+    controls.stop();
+    x.set(0);
+    y.set(0);
+    pointerDown.current = null;
+    hasDragged.current = true;
+    const midpoint = touchMidpoint(event.touches);
+    const imageRect = pinchImageRef.current?.getBoundingClientRect();
+    const imageCenter = imageRect
+      ? { x: imageRect.left + imageRect.width / 2, y: imageRect.top + imageRect.height / 2 }
+      : midpoint;
+    const startTransform = pinchTransformRef.current;
+    const startScale = startTransform.scale || 1;
+    pinchRef.current = {
+      active: true,
+      startDistance: touchDistance(event.touches),
+      startMidpoint: midpoint,
+      startTransform,
+      startLocalPoint: {
+        x: (midpoint.x - imageCenter.x) / startScale,
+        y: (midpoint.y - imageCenter.y) / startScale,
+      },
+    };
+    window.clearTimeout(pinchResetTimerRef.current);
+    setPinchActive(true);
+  };
+
+  const handlePinchMoveCapture = (event) => {
+    if (!pinchEnabled || !pinchRef.current.active || event.touches.length !== 2) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const pinch = pinchRef.current;
+    const distanceRatio = touchDistance(event.touches) / pinch.startDistance;
+    const scale = Math.max(1, Math.min(PINCH_MAX_SCALE, pinch.startTransform.scale * distanceRatio));
+    const midpoint = touchMidpoint(event.touches);
+    const scaleCompensation = (pinch.startTransform.scale || 1) - scale;
+    setPinchState({
+      scale,
+      x: pinch.startTransform.x + midpoint.x - pinch.startMidpoint.x + pinch.startLocalPoint.x * scaleCompensation,
+      y: pinch.startTransform.y + midpoint.y - pinch.startMidpoint.y + pinch.startLocalPoint.y * scaleCompensation,
+    });
+  };
+
+  const handlePinchEndCapture = (event) => {
+    if (!pinchEnabled || !pinchRef.current.active) return;
+    event.stopPropagation();
+    if (event.touches.length < 2) finishPinch();
+  };
 
   useImperativeHandle(ref, () => ({
     swipeTo: async (isLike) => {
@@ -120,20 +214,21 @@ const SwipeCard = forwardRef(function SwipeCard(
         scale: stackScale,
         transition: { type: "spring", stiffness: 280, damping: 28 },
       }}
-      drag={isTop ? "x" : false}
+      drag={isTop && !pinchActive ? "x" : false}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.85}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
+      data-pinch-enabled={pinchEnabled ? "true" : undefined}
     >
       {/*
         Dark background so object-contain images look intentional.
         Only this card container is dark — page background stays themed.
         rounded-3xl for a refined card feel.
       */}
-      <div className="relative w-full h-full rounded-3xl overflow-hidden shadow-swipe bg-gray-950">
+      <div className={`relative w-full h-full rounded-3xl ${pinchActive ? "overflow-visible" : "overflow-hidden"} shadow-swipe bg-gray-950`}>
 
         {imageFailed ? (
           <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-gray-400">
@@ -155,17 +250,33 @@ const SwipeCard = forwardRef(function SwipeCard(
             />
           </div>
         ) : (
-          <img
-            src={photo.url}
-            alt="Фото альбома"
-            onLoad={onImageLoad}
-            onError={() => setImageFailed(true)}
-            className={`w-full h-full ${objectFit} select-none pointer-events-none`}
-            draggable={false}
-            loading={isTop ? "eager" : "lazy"}
-            decoding="async"
-            fetchPriority={isTop ? "high" : "low"}
-          />
+          <div
+            data-testid={pinchEnabled ? "vote-pinch-image" : undefined}
+            className={`relative w-full h-full flex items-center justify-center ${pinchActive ? "z-30" : ""}`}
+            onTouchStartCapture={handlePinchStartCapture}
+            onTouchMoveCapture={handlePinchMoveCapture}
+            onTouchEndCapture={handlePinchEndCapture}
+            onTouchCancelCapture={finishPinch}
+          >
+            <img
+              ref={pinchImageRef}
+              src={photo.url}
+              alt="Фото альбома"
+              onLoad={onImageLoad}
+              onError={() => setImageFailed(true)}
+              className={`w-full h-full ${objectFit} select-none pointer-events-none`}
+              draggable={false}
+              loading={isTop ? "eager" : "lazy"}
+              decoding="async"
+              fetchPriority={isTop ? "high" : "low"}
+              style={{
+                transform: `translate3d(${pinchTransform.x}px, ${pinchTransform.y}px, 0) scale(${pinchTransform.scale})`,
+                transformOrigin: "center center",
+                transition: pinchActive && !pinchRef.current.active ? `transform ${PINCH_RESET_MS}ms cubic-bezier(0.22, 1, 0.36, 1)` : "none",
+                willChange: pinchActive ? "transform" : "auto",
+              }}
+            />
+          </div>
         )}
 
         {/* LIKE / NOPE stamps — top card only */}
@@ -226,9 +337,9 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
         className="w-16 h-16 rounded-full flex items-center justify-center
                    bg-primary-400 hover:bg-primary-500 shadow-orange
                    disabled:opacity-40 disabled:cursor-not-allowed
-                   transition-colors duration-150 touch-manipulation"
-        aria-label="Like"
-      >              <FilledHeart size={28} className="text-white" />
+                   transition-colors duration-150 touch-manipulation"        aria-label="Like"
+      >
+        <FilledHeart size={28} className="text-white" />
       </motion.button>
 
     </div>

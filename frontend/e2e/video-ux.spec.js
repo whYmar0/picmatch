@@ -260,6 +260,65 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
   await expect(likeIcon).toHaveAttribute("width", "28");
 });
 
+test("voting photo pinch zoom follows two fingers and returns to the card", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.route(`${API}/api/albums/invite/photo-pinch-test`, async (route) => route.fulfill({ json: {
+    id: "photo-pinch-album",
+    title: "Photo Pinch Test",
+    description: null,
+    invite_code: "photo-pinch-test",
+    invite_url: `${FRONTEND}/vote/photo-pinch-test`,
+    is_active: true,
+    is_public: true,
+    photo_count: 1,
+    total_votes: 0,
+    created_at: "2026-01-01T00:00:00Z",
+    creator: USER,
+    photos: [{ id: "photo-pinch-1", filename: "pinch.jpg", url: `${FRONTEND}/photo-pinch.jpg`, media_type: "image", order: 0 }],
+  }}));
+  await page.route(`${API}/api/votes/session/photo-pinch-test`, async (route) => route.fulfill({ json: { voted_photo_ids: [] } }));
+  await page.route(`${API}/api/auth/me`, async (route) => route.fulfill({ json: USER }));
+  await page.route(`${API}/api/notifications/`, async (route) => route.fulfill({ json: [] }));
+  await page.route(`${API}/api/comments/photo/**`, async (route) => route.fulfill({ json: [] }));
+  await page.route("**/photo-pinch.jpg", async (route) => route.fulfill({ status: 200, contentType: "image/svg+xml", body: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#9966cc"/><circle cx="200" cy="150" r="90" fill="#fff"/></svg>` }));
+  await page.addInitScript(({ token, user }) => {
+    const raw = JSON.stringify(user);
+    localStorage.setItem("pickmatch_token", token);
+    localStorage.setItem("pickmatch_user", raw);
+    sessionStorage.setItem("pickmatch_token", token);
+    sessionStorage.setItem("pickmatch_user", raw);
+  }, { token: TOKEN, user: USER });
+  await page.goto(`${FRONTEND}/vote/photo-pinch-test`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByText("Photo Pinch Test")).toBeVisible();
+
+  const pinchImage = page.locator('[data-testid="vote-pinch-image"]');
+  await expect(pinchImage).toBeVisible();
+  await expect(page.locator('[data-testid="album-gallery"]')).toHaveCount(0);
+  const box = await pinchImage.boundingBox();
+  expect(box).not.toBeNull();
+  const makeTouch = (identifier, x, y) => ({ identifier, target: null, clientX: x, clientY: y, pageX: x, pageY: y, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 });
+  await pinchImage.evaluate((el, { box }) => {
+    const makeTouch = (identifier, x, y) => new Touch({ identifier, target: el, clientX: x, clientY: y, pageX: x, pageY: y, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 });
+    const first = makeTouch(1, box.x + 145, box.y + box.height / 2);
+    el.dispatchEvent(new TouchEvent("touchstart", { touches: [first], targetTouches: [first], changedTouches: [first], bubbles: true, cancelable: true }));
+    const t1 = makeTouch(1, box.x + 110, box.y + box.height / 2);
+    const t2 = makeTouch(2, box.x + 190, box.y + box.height / 2);
+    el.dispatchEvent(new TouchEvent("touchstart", { touches: [t1, t2], targetTouches: [t1, t2], changedTouches: [t2], bubbles: true, cancelable: true }));
+    const t1Move = makeTouch(1, box.x + 70, box.y + box.height / 2);
+    const t2Move = makeTouch(2, box.x + 230, box.y + box.height / 2);
+    el.dispatchEvent(new TouchEvent("touchmove", { touches: [t1Move, t2Move], targetTouches: [t1Move, t2Move], changedTouches: [t2Move], bubbles: true, cancelable: true }));
+  }, { box });
+  await expect.poll(() => pinchImage.locator("img").evaluate((node) => getComputedStyle(node).transform)).not.toBe("none");
+  await pinchImage.evaluate((el, { box }) => {
+    const t = new Touch({ identifier: 1, target: el, clientX: box.x + 70, clientY: box.y + box.height / 2, pageX: box.x + 70, pageY: box.y + box.height / 2, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 });
+    el.dispatchEvent(new TouchEvent("touchend", { touches: [], targetTouches: [], changedTouches: [t], bubbles: true, cancelable: true }));
+  }, { box });
+  await expect.poll(() => pinchImage.locator("img").evaluate((node) => {
+    const transform = getComputedStyle(node).transform;
+    return transform === "none" || transform === "matrix(1, 0, 0, 1, 0, 0)";
+  })).toBe(true);
+});
+
 test("vertical video swipe closes through the gallery callback", async ({ page }) => {
   await setup(page);
   const player = page.locator('[data-testid="gallery-shared-video"] [data-video-player="true"]').first();

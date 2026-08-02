@@ -17,7 +17,6 @@ import { albumsApi, votesApi } from "../api";
 import { useLang } from "../contexts/LangContext";
 import { useAuth } from "../contexts/AuthContext";
 import SwipeCard, { SwipeButtons } from "../components/SwipeCard";
-import ImageLightbox from "../components/ImageLightbox";
 import { VotePageSkeleton } from "../components/Skeleton";
 import { LogIn, MessageCircle, Check, Play } from "lucide-react";
 import FilledHeart from "../components/FilledHeart";
@@ -65,7 +64,6 @@ export default function VotePage() {
   const [voting, setVoting] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [titleExpanded, setTitleExpanded] = useState(false);
-  const [lightbox, setLightbox] = useState(null);
   const [albumError, setAlbumError] = useState(null);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [commentSheet, setCommentSheet] = useState(null); // null | photo object
@@ -444,7 +442,7 @@ export default function VotePage() {
         </div>
 
         {/* ─── Card stack ────────────────────────────────────────────────────── */}
-        <div className="flex-shrink-0 w-full max-w-full min-w-0 overflow-x-hidden flex items-center justify-center px-2 sm:px-6 py-2">
+        <div className="flex-shrink-0 w-full max-w-full min-w-0 overflow-visible flex items-center justify-center px-2 sm:px-6 py-2">
           <div
             className="relative w-full max-w-[430px] min-w-0 aspect-[3/4]"
           >
@@ -467,7 +465,7 @@ export default function VotePage() {
                       isTop={isTop}
                       stackIndex={stackIdx}
                       onSwipe={handleSwipe}
-                      onImageClick={(p) => setLightbox(p)}
+                      enablePinchZoom
                       videoScrubBottomRatio={0.2}
                       blurredVideoBackdrop
                     />
@@ -504,13 +502,6 @@ export default function VotePage() {
         </div>
       </div>
 
-      <ImageLightbox
-        open={!!lightbox}
-        src={lightbox?.url}
-        alt={lightbox?.filename}
-        mediaType={lightbox?.media_type}
-        onClose={() => setLightbox(null)}
-      />
 
       <BottomSheet
         open={!!commentSheet}
