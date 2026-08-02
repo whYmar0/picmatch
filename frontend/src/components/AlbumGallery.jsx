@@ -1142,16 +1142,32 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               return (
               <div
                 key={photo.id}
+                data-media-id={photo.id}
                 className="flex-shrink-0 w-full h-full flex items-center justify-center py-8"
               >
                 {photo?.url ? (
                   isSharedElement ? (
                     photoIsVideo ? (
-                      <VideoPlayer
-                        src={photo.url}
-                        className={photoClassName}
-                        preload="metadata"
-                      />
+                      <motion.div
+                        layoutId={`album-cover-${album.id}`}
+                        data-testid="gallery-shared-video"
+                        data-shared-media={`album-cover-${album.id}`}
+                        layout={false}
+                        className="relative flex max-w-full max-h-full items-center justify-center"
+                        initial={initialIdx === 0 ? { borderRadius: 16 } : false}
+                        animate={{ borderRadius: 0 }}
+                        transition={
+                          isExiting || !firstPhotoFitDone
+                            ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
+                            : { duration: 0 }
+                        }
+                      >
+                        <VideoPlayer
+                          src={photo.url}
+                          className={photoClassName}
+                          preload="metadata"
+                        />
+                      </motion.div>
                     ) : (
                       <motion.img
                         {...photoProps}

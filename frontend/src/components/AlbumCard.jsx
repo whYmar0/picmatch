@@ -104,7 +104,13 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
                    overflow-hidden rounded-t-3xl cursor-pointer">
         {firstPhoto ? (
           isVideo(firstPhoto) ? (
-            <div className="relative w-full h-full">
+            <motion.div
+              layoutId={`album-cover-${album.id}`}
+              data-shared-media={`album-cover-${album.id}`}
+              layout={false}
+              transition={{ type: "spring", stiffness: 340, damping: 32, mass: 0.9 }}
+              className="relative w-full h-full"
+            >
               <video
                 src={firstPhoto.url}
                 className="w-full h-full object-cover rounded-t-2xl pointer-events-none"
@@ -117,12 +123,13 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
                   <Play size={18} className="text-white ml-0.5" />
                 </div>
               </div>
-            </div>
+            </motion.div>
           ) : (
             <motion.img
               src={firstPhoto.url}
               alt=""
               layoutId={`album-cover-${album.id}`}
+              data-shared-media={`album-cover-${album.id}`}
               className={`w-full h-full object-cover rounded-t-2xl pointer-events-none transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
               style={{ pointerEvents: "none" }}
               loading="lazy"
