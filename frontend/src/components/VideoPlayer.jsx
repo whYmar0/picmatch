@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 
 const TAP_MOVEMENT_PX = 12;
+const HOLD_DELAY_MS = 120;
 const CONTROLS_HIDE_MS = 2500;
+const SCRUB_HIDE_MS = 800;
 
 function formatTime(value) {
   if (!Number.isFinite(value) || value < 0) return "0:00";
@@ -12,50 +14,144 @@ function formatTime(value) {
   return `${minutes}:${seconds}`;
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 /**
  * VideoPlayer — custom, touch-friendly video controls.
  *
- * The video itself is pointer-transparent. The overlay receives taps but lets
- * touch events bubble so AlbumGallery/ImageLightbox can keep their axis-lock
- * gestures (vertical dismiss and horizontal navigation).
+ * Vertical gestures are forwarded to the parent so AlbumGallery and
+ * ImageLightbox can keep ownership of their dismiss animations. A horizontal
+ * gesture that starts in the bottom 25% is consumed locally for scrubbing;
+ * upper-area horizontal gestures continue bubbling to the gallery carousel.
  */
 export default function VideoPlayer({
   src,
   className = "",
+  style,
   muted = false,
   preload = "metadata",
   autoPlay = false,
+  loop = false,
+  objectFit = "contain",
+  stableLayout = false,
+  onVerticalSwipe,
+  onVerticalSwipeMove,
 }) {
+  const containerRef = useRef(null);
   const videoRef = useRef(null);
-  const hideTimerRef = useRef(null);
+  const holdTimerRef = useRef(null);
+  const controlsTimerRef = useRef(null);
+  const scrubTimerRef = useRef(null);
   const touchStartRef = useRef(null);
+  const gestureAxisRef = useRef(null);
+  const isHoldingRef = useRef(false);
+  const isScrubbingRef = useRef(false);
   const touchHandledRef = useRef(false);
+  const isMutedRef = useRef(muted);
 
   const [aspectRatio, setAspectRatio] = useState(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(muted);
   const [controlsVisible, setControlsVisible] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
 
-  const clearHideTimer = () => {
-    if (hideTimerRef.current) {
-      window.clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current) {
+      window.clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+
+  const clearControlsTimer = () => {
+    if (controlsTimerRef.current) {
+      window.clearTimeout(controlsTimerRef.current);
+      controlsTimerRef.current = null;
+    }
+  };
+
+  const clearScrubTimer = () => {
+    if (scrubTimerRef.current) {
+      window.clearTimeout(scrubTimerRef.current);
+      scrubTimerRef.current = null;
     }
   };
 
   const showControls = (autoHide = true) => {
-    clearHideTimer();
+    clearControlsTimer();
     setControlsVisible(true);
     if (autoHide) {
-      hideTimerRef.current = window.setTimeout(() => {
+      controlsTimerRef.current = window.setTimeout(() => {
         setControlsVisible(false);
-        hideTimerRef.current = null;
+        controlsTimerRef.current = null;
       }, CONTROLS_HIDE_MS);
     }
   };
 
-  useEffect(() => () => clearHideTimer(), []);
+  const hideControls = () => {
+    clearControlsTimer();
+    setControlsVisible(false);
+  };
+
+  useEffect(() => () => {
+    clearHoldTimer();
+    clearControlsTimer();
+    clearScrubTimer();
+  }, []);
+
+  useEffect(() => {
+    isMutedRef.current = muted;
+    setIsMuted(muted);
+    if (videoRef.current) videoRef.current.muted = muted;
+  }, [muted]);
+
+  // The HTML autoPlay attribute is not enough when a carousel slide becomes
+  // active while it remains mounted. Explicitly start/stop the active player.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return undefined;
+
+    video.muted = isMutedRef.current;
+    if (!autoPlay) {
+      video.pause();
+      return undefined;
+    }
+
+    let cancelled = false;
+    const startPlayback = () => {
+      if (cancelled) return;
+      const promise = video.play();
+      if (promise?.catch) {
+        promise.catch(() => {
+          if (cancelled) return;
+          // Autoplay with sound is commonly blocked. Fall back to muted
+          // playback so opening the video still works, while the mute button
+          // lets the user enable sound after the gesture.
+          if (!video.muted) {
+            video.muted = true;
+            isMutedRef.current = true;
+            setIsMuted(true);
+            const mutedPromise = video.play();
+            mutedPromise?.catch?.(() => setIsPlaying(false));
+          } else {
+            setIsPlaying(false);
+          }
+        });
+      }
+    };
+
+    if (video.readyState >= 2) startPlayback();
+    else video.addEventListener("loadeddata", startPlayback, { once: true });
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener("loadeddata", startPlayback);
+      if (!autoPlay) video.pause();
+    };
+  }, [autoPlay, src]);
 
   const syncMetadata = (event) => {
     const video = event.currentTarget;
@@ -71,18 +167,22 @@ export default function VideoPlayer({
     if (Number.isFinite(video.duration)) setDuration(video.duration);
   };
 
-  const togglePlayback = () => {
+  const playVideo = () => {
     const video = videoRef.current;
     if (!video) return;
+    const promise = video.play();
+    if (promise?.catch) promise.catch(() => setIsPlaying(false));
+  };
 
-    if (video.paused || video.ended) {
-      const playPromise = video.play();
-      if (playPromise?.catch) playPromise.catch(() => setIsPlaying(false));
-      showControls(true);
+  const pauseVideo = () => videoRef.current?.pause();
+
+  const togglePlayback = () => {
+    if (!videoRef.current) return;
+    if (videoRef.current.paused || videoRef.current.ended) {
+      playVideo();
+      hideControls();
     } else {
-      video.pause();
-      // Keep the paused state visible briefly, then hide the overlay like
-      // YouTube-style players do after an interaction.
+      pauseVideo();
       showControls(true);
     }
   };
@@ -95,42 +195,173 @@ export default function VideoPlayer({
     showControls(true);
   };
 
+  const toggleMute = (event) => {
+    event.stopPropagation();
+    const nextMuted = !isMutedRef.current;
+    isMutedRef.current = nextMuted;
+    setIsMuted(nextMuted);
+    if (videoRef.current) videoRef.current.muted = nextMuted;
+    // Mute/unmute is intentionally independent from playback. In particular,
+    // changing audio state while paused must never call play().
+    showControls(true);
+  };
+
+  const isInBottomArea = (clientY) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    return !!rect && clientY >= rect.top + rect.height * 0.75;
+  };
+
+  const scrubToClientX = (clientX) => {
+    const video = videoRef.current;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!video || !rect || !Number.isFinite(duration) || duration <= 0) return;
+    const percentage = clamp((clientX - rect.left) / rect.width, 0, 1);
+    const nextTime = percentage * duration;
+    video.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  };
+
   const handleTouchStart = (event) => {
     const touch = event.touches?.[0];
     if (!touch) return;
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+
+    const startedOnButton = event.target?.closest?.("button");
     touchHandledRef.current = false;
+    gestureAxisRef.current = null;
+    isHoldingRef.current = false;
+    isScrubbingRef.current = false;
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now(),
+      bottomArea: isInBottomArea(touch.clientY),
+    };
+
+    clearHoldTimer();
+    if (!startedOnButton) {
+      holdTimerRef.current = window.setTimeout(() => {
+        isHoldingRef.current = true;
+        pauseVideo();
+        // Keep the controls visible for the whole hold and briefly after the
+        // finger is released, so the pause state is discoverable.
+        showControls(true);
+      }, HOLD_DELAY_MS);
+    }
+  };
+
+  const handleTouchMove = (event) => {
+    const touch = event.touches?.[0];
+    const start = touchStartRef.current;
+    if (!touch || !start) return;
+
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (!gestureAxisRef.current && (absDx > TAP_MOVEMENT_PX || absDy > TAP_MOVEMENT_PX)) {
+      gestureAxisRef.current = absDx > absDy ? "x" : "y";
+      clearHoldTimer();
+      isHoldingRef.current = false;
+    }
+
+    if (gestureAxisRef.current === "y") {
+      event.stopPropagation();
+      onVerticalSwipeMove?.(dy);
+      return;
+    }
+
+    if (gestureAxisRef.current === "x" && start.bottomArea) {
+      event.preventDefault();
+      event.stopPropagation();
+      isScrubbingRef.current = true;
+      setShowTimeline(true);
+      clearScrubTimer();
+      scrubToClientX(touch.clientX);
+    }
   };
 
   const handleTouchEnd = (event) => {
-    // The center control is a real button and handles its own click. Avoid
-    // toggling once here and again from the button's generated click event.
-    if (event.target?.closest?.("button")) {
-      touchStartRef.current = null;
-      return;
-    }
     const touch = event.changedTouches?.[0];
     const start = touchStartRef.current;
-    touchStartRef.current = null;
+    const endedOnButton = event.target?.closest?.("button");
+    clearHoldTimer();
     if (!touch || !start) return;
+    if (endedOnButton) {
+      touchStartRef.current = null;
+      gestureAxisRef.current = null;
+      isHoldingRef.current = false;
+      isScrubbingRef.current = false;
+      return;
+    }
 
-    const moved = Math.hypot(touch.clientX - start.x, touch.clientY - start.y);
-    if (moved < TAP_MOVEMENT_PX) {
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    const axis = gestureAxisRef.current;
+    const wasHolding = isHoldingRef.current;
+    const wasScrubbing = isScrubbingRef.current;
+
+    touchStartRef.current = null;
+    gestureAxisRef.current = null;
+    isHoldingRef.current = false;
+    isScrubbingRef.current = false;
+
+    if (axis === "y") {
+      event.stopPropagation();
+      onVerticalSwipe?.(dy);
+      return;
+    }
+
+    if (wasScrubbing) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearScrubTimer();
+      scrubTimerRef.current = window.setTimeout(() => {
+        setShowTimeline(false);
+        scrubTimerRef.current = null;
+      }, SCRUB_HIDE_MS);
+      return;
+    }
+
+    if (wasHolding) {
+      event.stopPropagation();
       touchHandledRef.current = true;
-      handleTap();
+      playVideo();
+      showControls(true);
+      window.setTimeout(() => { touchHandledRef.current = false; }, 400);
+      return;
+    }
+
+    if (Math.hypot(dx, dy) < TAP_MOVEMENT_PX) {
+      event.stopPropagation();
+      touchHandledRef.current = true;
+      const rect = containerRef.current?.getBoundingClientRect();
+      const relX = rect ? (start.x - rect.left) / rect.width : 0.5;
+      const relY = rect ? (start.y - rect.top) / rect.height : 0.5;
+      if (relX > 0.25 && relX < 0.75 && relY > 0.2 && relY < 0.8) {
+        togglePlayback();
+      } else {
+        showControls(true);
+      }
       window.setTimeout(() => { touchHandledRef.current = false; }, 400);
     }
   };
 
-  const handleTap = () => {
-    // Tapping the video surface only opens the controls. Playback is changed
-    // explicitly through the play/pause button, never by tapping the video.
-    showControls(true);
+  const handleTouchCancel = () => {
+    clearHoldTimer();
+    touchStartRef.current = null;
+    gestureAxisRef.current = null;
+    isHoldingRef.current = false;
+    isScrubbingRef.current = false;
   };
 
-  const handleClick = () => {
-    if (touchHandledRef.current) return;
-    handleTap();
+  const handleClick = (event) => {
+    if (touchHandledRef.current || event.target?.closest?.("button")) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    const relX = rect ? (event.clientX - rect.left) / rect.width : 0.5;
+    const relY = rect ? (event.clientY - rect.top) / rect.height : 0.5;
+    if (relX > 0.25 && relX < 0.75 && relY > 0.2 && relY < 0.8) togglePlayback();
+    else showControls(true);
   };
 
   const handleSeek = (event) => {
@@ -142,49 +373,62 @@ export default function VideoPlayer({
   };
 
   const stopSeekPropagation = (event) => {
-    // Scrubbing belongs to the range control, not the gallery carousel.
     event.stopPropagation();
   };
 
-
-  const videoStyle = {
-    aspectRatio: aspectRatio ? `${aspectRatio}` : undefined,
-    maxWidth: "100%",
-    maxHeight: "100%",
-    width: aspectRatio && aspectRatio < 1 ? "auto" : "100%",
-    height: aspectRatio && aspectRatio < 1 ? "100%" : "auto",
-    objectFit: "contain",
-  };
-
-  const wrapperStyle = aspectRatio
+  const videoStyle = stableLayout
     ? {
-        aspectRatio: `${aspectRatio}`,
+        width: "100%",
+        height: "100%",
         maxWidth: "100%",
         maxHeight: "100%",
-        width: aspectRatio < 1 ? "auto" : "100%",
-        height: aspectRatio < 1 ? "100%" : "auto",
+        objectFit,
       }
-    : undefined;
+    : {
+        aspectRatio: aspectRatio ? `${aspectRatio}` : undefined,
+        maxWidth: "100%",
+        maxHeight: "100%",
+        width: aspectRatio && aspectRatio < 1 ? "auto" : "100%",
+        height: aspectRatio && aspectRatio < 1 ? "100%" : "auto",
+        objectFit,
+      };
+
+  const wrapperStyle = stableLayout
+    ? style
+    : aspectRatio
+      ? {
+          aspectRatio: `${aspectRatio}`,
+          maxWidth: "100%",
+          maxHeight: "100%",
+          width: aspectRatio < 1 ? "auto" : "100%",
+          height: aspectRatio < 1 ? "100%" : "auto",
+          ...style,
+        }
+      : style;
 
   return (
     <div
-      className={`relative flex items-center justify-center max-w-full max-h-full ${className}`}
-      style={wrapperStyle}
+      ref={containerRef}
+      className={`relative flex items-center justify-center max-w-full max-h-full ${stableLayout ? "w-full h-full" : ""} ${className}`}
+      style={{ ...wrapperStyle, touchAction: "none" }}
       data-video-player="true"
       onClick={handleClick}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       role="group"
       aria-label={isPlaying ? "Playing video" : "Paused video"}
     >
       <video
         ref={videoRef}
         src={src}
-        muted={muted}
+        muted={isMuted}
         autoPlay={autoPlay}
+        loop={loop}
         playsInline
         preload={preload}
-        className="max-w-full max-h-full object-contain select-none pointer-events-none"
+        className="max-w-full max-h-full select-none pointer-events-none"
         style={videoStyle}
         onLoadedMetadata={syncMetadata}
         onDurationChange={syncMetadata}
@@ -196,32 +440,40 @@ export default function VideoPlayer({
       />
 
       <div
-        className={`absolute inset-0 flex flex-col justify-between bg-black/40 transition-opacity duration-150 ${
-          controlsVisible ? "opacity-100" : "opacity-0"
+        className={`absolute inset-0 flex flex-col justify-between transition-opacity duration-150 ${
+          controlsVisible || !isPlaying || showTimeline ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
-        data-video-player="true"
-        aria-hidden={!controlsVisible}
+        data-video-controls="true"
+        aria-hidden={!controlsVisible && isPlaying && !showTimeline}
       >
-        <div className="flex-1 flex items-center justify-center pointer-events-none">
-          {controlsVisible && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center">
             <button
               type="button"
-              className="pointer-events-auto w-14 h-14 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/90"
+              className="w-8 h-8 mb-3 rounded-full border-0 bg-black/50 backdrop-blur-sm text-white flex items-center justify-center hover:bg-black/70 transition-colors outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+              onClick={toggleMute}
+              aria-label={isMuted ? "Unmute video" : "Mute video"}
+            >
+              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+            <button
+              type="button"
+              className="w-14 h-14 rounded-full border-0 bg-black/50 backdrop-blur-sm text-white flex items-center justify-center hover:bg-black/70 transition-colors outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
               onClick={(event) => {
                 event.stopPropagation();
                 togglePlayback();
               }}
               aria-label={isPlaying ? "Pause video" : "Play video"}
             >
-              {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
+              {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-0.5" />}
             </button>
-          )}
+          </div>
         </div>
 
-        {controlsVisible && (
+        {showTimeline && (
           <div
             className="px-4 pb-3 pt-2 text-white"
-            onClick={(event) => event.stopPropagation()}
+            onClick={stopSeekPropagation}
             onTouchStart={stopSeekPropagation}
             onTouchMove={stopSeekPropagation}
             onTouchEnd={stopSeekPropagation}

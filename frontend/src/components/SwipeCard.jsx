@@ -144,7 +144,9 @@ const SwipeCard = forwardRef(function SwipeCard(
             <VideoPlayer
               src={photo.url}
               className="w-full h-full"
-              preload="metadata"
+              preload="auto"
+              autoPlay={isTop}
+              loop
             />
           </div>
         ) : (

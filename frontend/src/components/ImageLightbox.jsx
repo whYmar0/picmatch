@@ -9,7 +9,7 @@
  *   - Tap backdrop to close
  */
 import { useRef, useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { X, ZoomIn } from "lucide-react";
 import { isVideoUrl } from "../utils/media";
 import VideoPlayer from "./VideoPlayer";
@@ -87,6 +87,8 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
   const { scale, origin, onTouchStart, onTouchMove, onTouchEnd, reset } = usePinchZoom();
   const dragStartY = useRef(null);
   const imgRef     = useRef(null);
+  const videoDragY = useMotionValue(0);
+  const videoScale = useTransform(videoDragY, [0, 240], [1, 0.82]);
 
   const videoMedia = mediaType === "video" || isVideoUrl(src);
 
@@ -122,6 +124,22 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
     dragStartY.current = null;
   };
 
+  const handleVideoVerticalSwipeMove = (dy) => {
+    videoDragY.set(Math.max(0, dy));
+  };
+
+  const handleVideoVerticalSwipe = (dy) => {
+    if (dy > 80) {
+      onClose();
+      return;
+    }
+    animate(videoDragY, 0, {
+      type: "spring",
+      stiffness: 400,
+      damping: 30,
+    });
+  };
+
   return (
     <AnimatePresence>
       {open && (
@@ -132,20 +150,11 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
           className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
-          onPointerDown={handlePointerDown}
-          onPointerUp={handlePointerUp}
-          onTouchStart={(event) => {
-            if (event.target?.closest?.("[data-video-player]")) return;
-            onTouchStart(event);
-          }}
-          onTouchMove={(event) => {
-            if (event.target?.closest?.("[data-video-player]")) return;
-            onTouchMove(event);
-          }}
-          onTouchEnd={(event) => {
-            if (event.target?.closest?.("[data-video-player]")) return;
-            onTouchEnd(event);
-          }}
+          onPointerDown={videoMedia ? undefined : handlePointerDown}
+          onPointerUp={videoMedia ? undefined : handlePointerUp}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
           onClick={(e) => { if (e.target === e.currentTarget && scale <= 1.05) onClose(); }}
         >
           {/* Close button */}
@@ -180,14 +189,23 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
             exit={{ scale: 0.88,    opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
             className="w-full h-full flex items-center justify-center"
-            style={{ touchAction: "none" }}
+            style={{ touchAction: "none", y: videoMedia ? videoDragY : 0 }}
           >
             {videoMedia ? (
-              <VideoPlayer
-                src={src}
-                className="max-w-full max-h-full"
-                preload="metadata"
-              />
+              <motion.div
+                className="w-full h-full flex items-center justify-center"
+                style={{ scale: videoMedia ? videoScale : 1 }}
+              >
+                <VideoPlayer
+                  src={src}
+                  className="max-w-full max-h-full"
+                  preload="auto"
+                  autoPlay
+                  loop
+                  onVerticalSwipeMove={handleVideoVerticalSwipeMove}
+                  onVerticalSwipe={handleVideoVerticalSwipe}
+                />
+              </motion.div>
             ) : (
               <img
                 ref={imgRef}

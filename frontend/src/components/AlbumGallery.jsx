@@ -91,6 +91,7 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
 // ─── Thumbnail Strip — driven by the same offsetX as the main carousel ─────
 const THUMB_SIZE = 40;
 const THUMB_GAP = 8;
+const GALLERY_VIDEO_SCALE = 0.94;
 
 function ThumbItem({ photo, index, activeIdx, onSelect, isDraggingRef }) {
   const scale = useTransform(activeIdx, (v) => (Math.round(v) === index ? 1.15 : 1));
@@ -917,6 +918,52 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     gestureAxis.current = null;
   }, []);
 
+  // VideoPlayer owns the touch stream on video slides. These callbacks feed
+  // the same dragY/progress values and close threshold as the gallery wrapper,
+  // so video dismisses with the identical photo animation.
+  const onVideoVerticalSwipeMove = useCallback((dy) => {
+    if (isExitingRef.current) return;
+    const newDragY = Math.max(0, dy);
+    dragY.set(newDragY);
+    if (dragProgressMV) {
+      dragProgressMV.set(Math.max(0, Math.min(1, newDragY / (vh * 0.5))));
+    }
+  }, [dragY, dragProgressMV, vh]);
+
+  const onVideoVerticalSwipe = useCallback((dy) => {
+    if (isExitingRef.current) return;
+    if (dy > 100) {
+      isExitingRef.current = true;
+      snapAnimRef.current?.stop();
+      dragYAnimRef.current?.stop();
+      if (currentIdxRef.current !== 0) {
+        dragYAnimRef.current = animate(dragY, vh, {
+          type: "spring", stiffness: 350, damping: 32,
+        });
+      }
+      setSheetExpanded(false);
+      setSortOpen(false);
+      setFilterOpen(false);
+      setShareSheetOpen(false);
+      setIsExiting(true);
+      galleryRef.current?.setAttribute("inert", "");
+      onClose();
+      return;
+    }
+
+    dragYAnimRef.current = animate(dragY, 0, {
+      type: "spring", stiffness: 400, damping: 30,
+      onUpdate: (latest) => {
+        if (dragProgressMV) {
+          dragProgressMV.set(Math.max(0, Math.min(1, latest / (vh * 0.5))));
+        }
+      },
+      onComplete: () => {
+        if (dragProgressMV) dragProgressMV.set(0);
+      },
+    });
+  }, [dragY, dragProgressMV, vh, onClose]);
+
   // Called when the user taps a thumbnail. We reuse the main spring so the
   // photo and the thumbnail strip move in lockstep.
   const handleThumbSelect = useCallback((idx) => goTo(idx), [goTo]);
@@ -1143,7 +1190,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               <div
                 key={photo.id}
                 data-media-id={photo.id}
-                className="flex-shrink-0 w-full h-full flex items-center justify-center py-8"
+                className="relative flex-shrink-0 w-full h-full flex items-center justify-center py-8"
               >
                 {photo?.url ? (
                   isSharedElement ? (
@@ -1153,7 +1200,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                         data-testid="gallery-shared-video"
                         data-shared-media={`album-cover-${album.id}`}
                         layout={false}
-                        className="relative flex max-w-full max-h-full items-center justify-center"
+                        className="absolute inset-0 flex max-w-full max-h-full items-center justify-center"
                         initial={initialIdx === 0 ? { borderRadius: 16 } : false}
                         animate={{ borderRadius: 0 }}
                         transition={
@@ -1165,7 +1212,17 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                         <VideoPlayer
                           src={photo.url}
                           className={photoClassName}
-                          preload="metadata"
+                          preload="auto"
+                          muted
+                          autoPlay={i === currentIdx}
+                          stableLayout
+                          objectFit="contain"
+                          style={{
+                        transform: `scale(${GALLERY_VIDEO_SCALE})`,
+                        transformOrigin: "center center",
+                      }}
+                          onVerticalSwipeMove={onVideoVerticalSwipeMove}
+                          onVerticalSwipe={onVideoVerticalSwipe}
                         />
                       </motion.div>
                     ) : (
@@ -1188,7 +1245,15 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                     <VideoPlayer
                       src={photo.url}
                       className={photoClassName}
-                      preload="metadata"
+                      preload="auto"
+                      muted
+                      autoPlay={i === currentIdx}
+                      style={{
+                        transform: `scale(${GALLERY_VIDEO_SCALE})`,
+                        transformOrigin: "center center",
+                      }}
+                      onVerticalSwipeMove={onVideoVerticalSwipeMove}
+                      onVerticalSwipe={onVideoVerticalSwipe}
                     />
                   ) : (
                     <img {...photoProps} />
