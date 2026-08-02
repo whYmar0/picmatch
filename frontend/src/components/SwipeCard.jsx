@@ -12,9 +12,10 @@
  */
 import { useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
-import { Heart, ImageOff, Play } from "lucide-react";
+import { Heart, ImageOff } from "lucide-react";
 import BrokenHeart from "./BrokenHeart";
 import { isVideo } from "../utils/media";
+import VideoPlayer from "./VideoPlayer";
 
 const SWIPE_THRESHOLD = 64;
 
@@ -61,6 +62,10 @@ const SwipeCard = forwardRef(function SwipeCard(
 
   const handlePointerUp = (e) => {
     if (!isTop || !pointerDown.current) return;
+    if (e.target?.closest?.("[data-video-player]")) {
+      pointerDown.current = null;
+      return;
+    }
     const dx = Math.abs(e.clientX - pointerDown.current.x);
     const dy = Math.abs(e.clientY - pointerDown.current.y);
     if (dx < 8 && dy < 8 && !hasDragged.current && onImageClick) {
@@ -135,21 +140,12 @@ const SwipeCard = forwardRef(function SwipeCard(
             <span className="text-sm">Изображение недоступно</span>
           </div>
         ) : isVideo(photo) ? (
-          <div className="relative w-full h-full">
-            <video
+          <div className="relative w-full h-full flex items-center justify-center">
+            <VideoPlayer
               src={photo.url}
-              className="w-full h-full object-contain select-none pointer-events-none"
+              className="w-full h-full"
               preload="metadata"
-              controls
-              playsInline
-              muted
-              onLoadedMetadata={onImageLoad}
             />
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center">
-                <Play size={28} className="text-white ml-1" />
-              </div>
-            </div>
           </div>
         ) : (
           <img

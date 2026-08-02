@@ -22,6 +22,7 @@ import BottomSheet        from "./BottomSheet";
 import ImageLightbox      from "./ImageLightbox";
 import PhotoComments      from "./PhotoComments";
 import AnalyticsShareSheet from "./AnalyticsShareSheet";
+import VideoPlayer from "./VideoPlayer";
 import { UserAvatar }     from "./Navbar";
 
 function ReactionBadge({ isLike }) {
@@ -453,11 +454,10 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
           (reactionSheet && reactionSheet !== "voters") ? (
             <motion.div className="w-full flex justify-center px-4">
               {isVideo(reactionSheet) ? (
-                <video
+                <VideoPlayer
                   src={reactionSheet.url}
-                  className="max-h-[45dvh] w-auto h-auto rounded-2xl object-contain shadow-2xl border border-white/10"
-                  controls
-                  playsInline
+                  className="max-h-[45dvh] rounded-2xl shadow-2xl border border-white/10"
+                  preload="metadata"
                 />
               ) : (
                 <img

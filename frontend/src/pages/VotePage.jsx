@@ -416,7 +416,7 @@ export default function VotePage() {
                   >
                     {isVideo(photo) ? (
                       <div className="relative w-full h-full">
-                        <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                        <video src={photo.url} className="w-full h-full object-contain bg-gray-950" preload="metadata" muted playsInline />
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center">
                             <Play size={12} className="text-white ml-0.5" />

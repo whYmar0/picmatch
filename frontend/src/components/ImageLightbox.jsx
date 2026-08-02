@@ -12,6 +12,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ZoomIn } from "lucide-react";
 import { isVideoUrl } from "../utils/media";
+import VideoPlayer from "./VideoPlayer";
 
 // ─── Pinch-zoom hook ──────────────────────────────────────────────────────────
 function usePinchZoom({ minScale = 1, maxScale = 5 } = {}) {
@@ -86,7 +87,6 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
   const { scale, origin, onTouchStart, onTouchMove, onTouchEnd, reset } = usePinchZoom();
   const dragStartY = useRef(null);
   const imgRef     = useRef(null);
-  const touchStartedOnVideo = useRef(false);
 
   const videoMedia = mediaType === "video" || isVideoUrl(src);
 
@@ -109,18 +109,11 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
 
   // Swipe-down to close on the container
   const handlePointerDown = (e) => {
-    touchStartedOnVideo.current = Boolean(e.target?.closest?.("video"));
-    if (touchStartedOnVideo.current) return;
     if (e.pointerType === "mouse" || e.touches?.length === 1) {
       dragStartY.current = e.clientY ?? e.touches?.[0]?.clientY;
     }
   };
   const handlePointerUp = (e) => {
-    if (touchStartedOnVideo.current) {
-      touchStartedOnVideo.current = false;
-      dragStartY.current = null;
-      return;
-    }
     const endY = e.clientY ?? e.changedTouches?.[0]?.clientY;
     if (dragStartY.current !== null && scale <= 1.05) {
       const dy = endY - dragStartY.current;
@@ -141,17 +134,17 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
           className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
-          onTouchStart={(e) => {
-            if (e.target?.closest?.("video")) return;
-            onTouchStart(e);
+          onTouchStart={(event) => {
+            if (event.target?.closest?.("[data-video-player]")) return;
+            onTouchStart(event);
           }}
-          onTouchMove={(e) => {
-            if (e.target?.closest?.("video")) return;
-            onTouchMove(e);
+          onTouchMove={(event) => {
+            if (event.target?.closest?.("[data-video-player]")) return;
+            onTouchMove(event);
           }}
-          onTouchEnd={(e) => {
-            if (e.target?.closest?.("video")) return;
-            onTouchEnd(e);
+          onTouchEnd={(event) => {
+            if (event.target?.closest?.("[data-video-player]")) return;
+            onTouchEnd(event);
           }}
           onClick={(e) => { if (e.target === e.currentTarget && scale <= 1.05) onClose(); }}
         >
@@ -187,16 +180,13 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
             exit={{ scale: 0.88,    opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
             className="w-full h-full flex items-center justify-center"
-            style={{ touchAction: videoMedia ? "auto" : "none" }}
+            style={{ touchAction: "none" }}
           >
             {videoMedia ? (
-              <video
+              <VideoPlayer
                 src={src}
-                controls
-                playsInline
-                className="max-w-full max-h-full object-contain select-none"
+                className="max-w-full max-h-full"
                 preload="metadata"
-                style={{ touchAction: "auto" }}
               />
             ) : (
               <img

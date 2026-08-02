@@ -33,6 +33,7 @@ import { PhotoCommentsList, CommentInput } from "./PhotoComments";
 import AnalyticsShareSheet from "./AnalyticsShareSheet";
 import FilledHeart from "./FilledHeart";
 import BrokenHeart from "./BrokenHeart";
+import VideoPlayer from "./VideoPlayer";
 
 // ─── PillBar v8 — no border, larger monochrome icons, ChevronUp affordance ──
 function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp }) {
@@ -567,8 +568,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const touchStartOffsetX = useRef(0);
   const touchStartDragY = useRef(0);
   const gestureAxis = useRef(null);
-  // Native video controls must keep the touch gesture for play/pause/seek.
-  const touchStartedOnVideo = useRef(false);
 
   // ── Motion values ────────────────────────────────────────────────────────
   const defaultOffset = vh * 0.35;
@@ -751,11 +750,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   // ── Unified touch handlers (axis-lock: horizontal → offsetX, vertical → dragY) ──
   const onWrapperTouchStart = useCallback((e) => {
-    touchStartedOnVideo.current = Boolean(e.target?.closest?.("video"));
-    if (touchStartedOnVideo.current) {
-      gestureAxis.current = "video";
-      return;
-    }
     snapAnimRef.current?.stop();
     dragYAnimRef.current?.stop();
     const touch = e.touches[0];
@@ -777,7 +771,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   }, [offsetX]);
 
   const onWrapperTouchMove = useCallback((e) => {
-    if (touchStartedOnVideo.current) return;
     const touch = e.touches[0];
     const dx = touch.clientX - touchStart.current.x;
     const dy = touch.clientY - touchStart.current.y;
@@ -821,11 +814,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   }, [offsetX, dragY, photos.length]);
 
   const onWrapperTouchEnd = useCallback((e) => {
-    if (touchStartedOnVideo.current) {
-      touchStartedOnVideo.current = false;
-      gestureAxis.current = null;
-      return;
-    }
     const touch = e.changedTouches?.[0];
     if (!touch) { gestureAxis.current = null; return; }
 
@@ -926,7 +914,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   }, [offsetX, dragY, photos.length, onClose]);
 
   const onWrapperTouchCancel = useCallback(() => {
-    touchStartedOnVideo.current = false;
     gestureAxis.current = null;
   }, []);
 
@@ -1089,10 +1076,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       ref={galleryRef}
       data-testid="album-gallery"
       className="fixed inset-0 z-[90] flex flex-col overflow-hidden"
-      // Keep native video controls usable. Custom gallery gestures call
-      // preventDefault after axis-locking, while video touches are ignored by
-      // the gallery handlers below.
-      style={{ touchAction: "auto", overscrollBehavior: "contain", pointerEvents: isExiting ? "none" : "auto" }}
+      style={{ touchAction: "none", overscrollBehavior: "contain", pointerEvents: isExiting ? "none" : "auto" }}
       aria-hidden={isExiting ? "true" : undefined}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: 0.22 } }}
@@ -1145,8 +1129,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               const isSharedElement = i === 0;
               const isEager = isSharedElement || Math.abs(currentIdx - i) <= 1;
               const isFirstCover = isSharedElement && !firstPhotoFitDone;
-              // Images must not capture gallery gestures, but videos need pointer
-              // events so their native play/pause and seek controls are usable.
               const photoClassName = `max-w-full max-h-full select-none ${isFirstCover ? "object-cover" : "object-contain"}`;
               const photoIsVideo = isVideo(photo);
               const photoProps = {
@@ -1165,13 +1147,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                 {photo?.url ? (
                   isSharedElement ? (
                     photoIsVideo ? (
-                      <video
+                      <VideoPlayer
                         src={photo.url}
-                        className={`${photoClassName} pointer-events-auto`}
-                        controls
-                        playsInline
+                        className={photoClassName}
                         preload="metadata"
-                        style={{ touchAction: "auto" }}
                       />
                     ) : (
                       <motion.img
@@ -1190,13 +1169,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                       />
                     )
                   ) : photoIsVideo ? (
-                    <video
+                    <VideoPlayer
                       src={photo.url}
-                      className={`${photoClassName} pointer-events-auto`}
-                      controls
-                      playsInline
+                      className={photoClassName}
                       preload="metadata"
-                      style={{ touchAction: "auto" }}
                     />
                   ) : (
                     <img {...photoProps} />
