@@ -50,7 +50,7 @@ const T = {
     sharedAccess: "Shared access",
     noSharedAlbums: "No albums shared with you yet",
 
-    swipeHint: "Swipe right to like · left to skip",
+    swipeHint: "Swipe right to like · left to dislike",
     allDone: "You've rated all photos!",
     allDoneSubtitle: "Thanks for your votes",
     viewResults: "See results",
@@ -235,7 +235,7 @@ const T = {
     sharedAccess: "Общий доступ",
     noSharedAlbums: "C вами ещё не поделились альбомами",
 
-    swipeHint: "Вправо — нравится · влево — пропустить",
+    swipeHint: "Вправо — нравится · влево — не нравится",
     allDone: "Вы оценили все фото!",
     allDoneSubtitle: "Спасибо за ваши голоса",
     viewResults: "Посмотреть результаты",

@@ -12,8 +12,9 @@
  */
 import { useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
-import { Heart, ImageOff } from "lucide-react";
+import { ImageOff } from "lucide-react";
 import BrokenHeart from "./BrokenHeart";
+import FilledHeart from "./FilledHeart";
 import { isVideo } from "../utils/media";
 import VideoPlayer from "./VideoPlayer";
 
@@ -174,7 +175,7 @@ const SwipeCard = forwardRef(function SwipeCard(
               style={{ opacity: likeOpacity }}
               className="absolute top-6 left-5 border-[3px] border-green-400 text-green-400
                          font-sans font-bold text-xl tracking-widest rounded-xl
-                         px-3 py-1 -rotate-[20deg] select-none bg-black/20"
+                         px-3 py-1 -rotate-[20deg] select-none whitespace-nowrap bg-black/20"
             >
               НРАВИТСЯ
             </motion.div>
@@ -182,9 +183,9 @@ const SwipeCard = forwardRef(function SwipeCard(
               style={{ opacity: nopeOpacity }}
               className="absolute top-6 right-5 border-[3px] border-red-400 text-red-400
                          font-sans font-bold text-xl tracking-widest rounded-xl
-                         px-3 py-1 rotate-[20deg] select-none bg-black/20"
+                         px-3 py-1 rotate-[20deg] select-none whitespace-nowrap bg-black/20"
             >
-              ПРОПУСТИТЬ
+              НЕ НРАВИТСЯ
             </motion.div>
           </>
         )}
@@ -227,8 +228,7 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
                    disabled:opacity-40 disabled:cursor-not-allowed
                    transition-colors duration-150 touch-manipulation"
         aria-label="Like"
-      >
-        <Heart size={21} className="text-white" />
+      >              <FilledHeart size={28} className="text-white" />
       </motion.button>
 
     </div>

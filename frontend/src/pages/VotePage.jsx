@@ -334,7 +334,7 @@ export default function VotePage() {
   // ── Main render ──────────────────────────────────────────────────────────────
   return (
     <>
-      <div className="min-h-screen flex flex-col overflow-y-auto bg-surface-light dark:bg-surface-dark">
+      <div className="min-h-screen w-full max-w-full min-w-0 flex flex-col overflow-x-hidden overflow-y-auto bg-surface-light dark:bg-surface-dark">
 
         {/* ─── Header ──────────────────────────────────────────────────────────
             Layout (top to bottom):
@@ -385,14 +385,14 @@ export default function VotePage() {
         </div>
 
         {/* ─── Thumbnail strip ─────────────────────────────────────────────── */}
-        <div className="relative flex-shrink-0 w-full max-w-[360px] mx-auto">
-          {/* Edge gradients + light gaussian blur with refined boundaries */}
-          <div className="absolute -left-1 top-0 bottom-0 w-14 bg-gradient-to-r from-surface-light dark:from-surface-dark to-transparent z-10 pointer-events-none backdrop-blur-[2px] [mask-image:linear-gradient(to_right,black_35%,transparent)]" />
-          <div className="absolute -right-1 top-0 bottom-0 w-14 bg-gradient-to-l from-surface-light dark:from-surface-dark to-transparent z-10 pointer-events-none backdrop-blur-[2px] [mask-image:linear-gradient(to_left,black_35%,transparent)]" />
+        <div className="relative flex-shrink-0 w-full max-w-[360px] min-w-0 mx-auto">
+          {/* Soft edge fades keep the strip visually contained without blurring thumbnails. */}
+          <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-surface-light/80 dark:from-surface-dark/80 to-transparent z-10 pointer-events-none" />
+          <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-surface-light/80 dark:from-surface-dark/80 to-transparent z-10 pointer-events-none" />
 
           <div
             ref={thumbStripRef}
-            className="w-full py-2 px-4 flex justify-center overflow-x-auto"
+            className="w-full min-w-0 py-2 px-4 flex justify-start overflow-x-auto"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             <div className="flex gap-2 items-center min-w-max">
@@ -444,9 +444,9 @@ export default function VotePage() {
         </div>
 
         {/* ─── Card stack ────────────────────────────────────────────────────── */}
-        <div className="flex-shrink-0 w-full flex items-center justify-center px-2 sm:px-6 py-2">
+        <div className="flex-shrink-0 w-full max-w-full min-w-0 overflow-x-hidden flex items-center justify-center px-2 sm:px-6 py-2">
           <div
-            className="relative w-full max-w-[430px] aspect-[3/4]"
+            className="relative w-full max-w-[430px] min-w-0 aspect-[3/4]"
           >
             {/* n/m counter badge — now placed top-right on the cards */}
             <div className="absolute top-3 right-3 z-30 pointer-events-none">

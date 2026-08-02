@@ -174,6 +174,7 @@ test("bottom horizontal swipe reveals the timeline and seeks", async ({ page }) 
 });
 
 test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
   await page.route(`${API}/api/albums/invite/video-ux-test`, async (route) => route.fulfill({ json: {
     id: "vote-video-album",
     title: "Vote Video UX Test",
@@ -211,6 +212,15 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
   }, { token: TOKEN, user: USER });
   await page.goto(`${FRONTEND}/vote/video-ux-test`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText("Vote Video UX Test")).toBeVisible();
+  await expect(page.getByText("Вправо — нравится · влево — не нравится")).toBeVisible();
+  await expect(page.getByText("НЕ НРАВИТСЯ")).toHaveCount(1);
+  const viewportWidth = await page.evaluate(() => window.innerWidth);
+  const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(documentWidth).toBeLessThanOrEqual(viewportWidth);
+  await expect(page.locator('[data-testid="thumbnail-edge-fade"]')).toHaveCount(2);
+  const edgeFades = page.locator('[data-testid="thumbnail-edge-fade"]');
+  await expect(edgeFades.nth(0)).not.toHaveClass(/backdrop-blur/);
+  await expect(edgeFades.nth(1)).not.toHaveClass(/backdrop-blur/);
 
   const player = page.locator('[data-video-player="true"]').first();
   const video = player.locator('[data-video-main="true"]');
@@ -241,6 +251,13 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
 
   const card = page.locator('[data-video-player="true"]').locator("..", { has: video }).first();
   await expect(card).toBeVisible();
+
+  const dislikeButton = page.getByRole("button", { name: "Dislike", exact: true });
+  const likeButton = page.getByRole("button", { name: "Like", exact: true });
+  const dislikeIcon = dislikeButton.locator("svg").first();
+  const likeIcon = likeButton.locator("svg").first();
+  await expect(dislikeIcon).toHaveAttribute("width", "28");
+  await expect(likeIcon).toHaveAttribute("width", "28");
 });
 
 test("vertical video swipe closes through the gallery callback", async ({ page }) => {
