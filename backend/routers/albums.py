@@ -4,9 +4,15 @@ Updated: analytics endpoint allows shared users (can_view_stats=True) to view.
 Updated: video support and concurrent uploads.
 """
 import asyncio
+import base64
+import binascii
+import hashlib
+import hmac
+import json
 import logging
 import os, uuid, secrets, io
 from typing import List
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from PIL import Image
 
@@ -24,21 +30,21 @@ def compress_image(image_bytes: bytes, max_size: int = 1200, quality: int = 80) 
     except Exception:
         return image_bytes
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.orm import selectinload
 
 from database import get_db
 from middleware.rate_limit import _get_limit, limiter
-from models import User, Album, Photo, Vote, SharedAccess, Comment
+from models import User, Album, Photo, Vote, SharedAccess, Comment, PendingUpload
 from schemas import (
     AlbumOut, AlbumWithPhotos, AlbumAnalytics,
     PhotoStats, PhotoOut, MessageResponse,
     VoterReaction, VoterSummary,
 )
-from auth import get_current_user
+from auth import SECRET_KEY, get_current_user
 from cloudinary_utils import (
     is_cloudinary_configured as _cloudinary_enabled,
     upload_image as _cloudinary_upload,
@@ -151,6 +157,7 @@ ALLOWED_EXTENSIONS = {
     ".mov": {"video/quicktime"},
     ".avi": {"video/avi"},
 }
+VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".avi"}
 
 
 def _normalize_content_type(content_type: str | None) -> str | None:
@@ -197,7 +204,12 @@ async def _process_upload(f: UploadFile, idx: int) -> dict:
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, detail=f"'{f.filename}' exceeds 50 MB")
 
-    is_video = base_content_type.startswith("video/") if base_content_type else False
+    # Some browsers/devices report video as application/octet-stream. Fall
+    # back to the validated extension so those files never become image rows.
+    extension = _safe_extension(f.filename)
+    is_video = (
+        base_content_type.startswith("video/") if base_content_type else False
+    ) or extension in VIDEO_EXTENSIONS
     media_type = "video" if is_video else "image"
 
     if is_video:
@@ -227,6 +239,163 @@ async def _process_upload(f: UploadFile, idx: int) -> dict:
     }
 
 
+UPLOAD_TOKEN_TTL = timedelta(hours=2)
+
+
+def _encode_upload_token(user_id: str, row: dict, expires_at: datetime) -> str:
+    """Create a tamper-proof reference to one uploaded media object."""
+    payload = {
+        "uid": str(user_id),
+        "stored": row["stored"],
+        "filename": row["filename"],
+        "media_type": row["media_type"],
+        "exp": int(expires_at.timestamp()),
+    }
+    encoded = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii").rstrip("=")
+    signature = hmac.new(
+        SECRET_KEY.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256
+    ).hexdigest()
+    return f"{encoded}.{signature}"
+
+
+def _decode_upload_token(token: str, user_id: str) -> dict:
+    """Validate an upload reference and return its server-owned metadata."""
+    try:
+        encoded, signature = token.split(".", 1)
+        expected = hmac.new(
+            SECRET_KEY.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError("bad signature")
+        padded = encoded + ("=" * (-len(encoded) % 4))
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        if not isinstance(payload, dict) or payload.get("uid") != str(user_id):
+            raise ValueError("wrong owner")
+        if int(payload.get("exp", 0)) <= int(datetime.now(timezone.utc).timestamp()):
+            raise ValueError("expired reference")
+        if payload.get("media_type") not in {"image", "video"}:
+            raise ValueError("bad media type")
+        if not payload.get("stored") or not payload.get("filename"):
+            raise ValueError("incomplete reference")
+        return payload
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError, UnicodeDecodeError, binascii.Error):
+        raise HTTPException(400, detail="Invalid uploaded media reference")
+
+
+async def _delete_stored_media(row: dict) -> None:
+    if _cloudinary_enabled():
+        await asyncio.to_thread(
+            _cloudinary_delete,
+            row["stored"],
+            resource_type="video" if row["media_type"] == "video" else "image",
+        )
+        return
+
+    upload_root = UPLOAD_DIR.resolve()
+    candidate = (UPLOAD_DIR / row["stored"]).resolve()
+    if upload_root not in candidate.parents:
+        return
+    if candidate.exists():
+        await asyncio.to_thread(candidate.unlink)
+
+
+async def _cleanup_expired_pending_uploads(db: AsyncSession) -> None:
+    """Remove abandoned previews opportunistically without blocking uploads."""
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(PendingUpload).where(PendingUpload.claimed_at == None)  # noqa
+    )
+    pending_rows = result.scalars().all()
+    expired = []
+    for pending in pending_rows:
+        expires_at = pending.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at <= now:
+            expired.append(pending)
+    if not expired:
+        return
+    for pending in expired:
+        await _delete_stored_media({
+            "stored": pending.stored_filename,
+            "media_type": pending.media_type,
+        })
+        await db.delete(pending)
+    await db.commit()
+
+
+@router.post("/upload-media")
+@limiter.limit(_get_limit("RATE_LIMIT_MEDIA_UPLOAD", "60/hour"))
+async def upload_media(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload one media file and return a signed reference for album creation."""
+    await _cleanup_expired_pending_uploads(db)
+    row = await _process_upload(file, 0)
+    expires_at = datetime.now(timezone.utc) + UPLOAD_TOKEN_TTL
+    db.add(PendingUpload(
+        user_id=_s(current_user.id),
+        stored_filename=row["stored"],
+        original_filename=row["filename"],
+        media_type=row["media_type"],
+        expires_at=expires_at,
+    ))
+    await db.commit()
+    return {
+        "filename": row["filename"],
+        "media_type": row["media_type"],
+        "upload_token": _encode_upload_token(_s(current_user.id), row, expires_at),
+    }
+
+
+@router.delete("/upload-media")
+async def delete_uploaded_media(
+    upload_token: str = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an uploaded preview that has not yet been attached to an album."""
+    row = _decode_upload_token(upload_token, _s(current_user.id))
+    claim_time = datetime.now(timezone.utc)
+    claimed = await db.execute(
+        update(PendingUpload)
+        .where(
+            and_(
+                PendingUpload.user_id == _s(current_user.id),
+                PendingUpload.stored_filename == row["stored"],
+                PendingUpload.claimed_at == None,  # noqa
+                PendingUpload.expires_at > claim_time,
+            )
+        )
+        .values(claimed_at=claim_time)
+    )
+    if claimed.rowcount != 1:
+        await db.rollback()
+        raise HTTPException(409, detail="Media is already attached or unavailable")
+    pending_result = await db.execute(
+        select(PendingUpload).where(
+            and_(
+                PendingUpload.user_id == _s(current_user.id),
+                PendingUpload.stored_filename == row["stored"],
+                PendingUpload.claimed_at == claim_time,
+            )
+        )
+    )
+    pending = pending_result.scalar_one_or_none()
+    if not pending:
+        await db.rollback()
+        raise HTTPException(409, detail="Media is already attached or unavailable")
+    await _delete_stored_media(row)
+    await db.delete(pending)
+    await db.commit()
+    return {"success": True}
+
+
 @router.post("/", response_model=AlbumWithPhotos, status_code=status.HTTP_201_CREATED)
 @limiter.limit(_get_limit("RATE_LIMIT_ALBUM_CREATE", "10/hour"))
 async def create_album(
@@ -234,12 +403,75 @@ async def create_album(
     title: str = Form(...),
     description: str = Form(None),
     is_public: bool = Form(True),
-    photos: List[UploadFile] = File(...),
+    photos: List[UploadFile] | None = File(None),
+    uploaded_media: str | None = Form(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not photos:
+    uploaded_rows = []
+    if uploaded_media:
+        try:
+            references = json.loads(uploaded_media)
+            if not isinstance(references, list) or not references:
+                raise ValueError("expected a non-empty list")
+            uploaded_rows = [
+                _decode_upload_token(reference, _s(current_user.id))
+                for reference in references
+                if isinstance(reference, str)
+            ]
+            if len(uploaded_rows) != len(references):
+                raise ValueError("invalid reference")
+        except (json.JSONDecodeError, TypeError, ValueError):
+            raise HTTPException(400, detail="Invalid uploaded media list")
+
+    if photos and uploaded_rows:
+        raise HTTPException(400, detail="Choose either uploaded media or files")
+    if not photos and not uploaded_rows:
         raise HTTPException(400, detail="At least one photo or video is required")
+
+    # References are single-use DB records. Lock and claim all of them before
+    # creating the album so concurrent finalize/delete requests cannot share or
+    # remove the same object.
+    pending_rows = []
+    if uploaded_rows:
+        stored_names = [row["stored"] for row in uploaded_rows]
+        if len(set(stored_names)) != len(stored_names):
+            raise HTTPException(400, detail="Duplicate uploaded media reference")
+        claim_time = datetime.now(timezone.utc)
+        claimed = await db.execute(
+            update(PendingUpload)
+            .where(
+                and_(
+                    PendingUpload.user_id == _s(current_user.id),
+                    PendingUpload.stored_filename.in_(stored_names),
+                    PendingUpload.claimed_at == None,  # noqa
+                    PendingUpload.expires_at > claim_time,
+                )
+            )
+            .values(claimed_at=claim_time)
+        )
+        if claimed.rowcount != len(stored_names):
+            await db.rollback()
+            raise HTTPException(409, detail="One or more uploaded files are already attached or expired")
+        pending_result = await db.execute(
+            select(PendingUpload).where(
+                and_(
+                    PendingUpload.user_id == _s(current_user.id),
+                    PendingUpload.stored_filename.in_(stored_names),
+                    PendingUpload.claimed_at == claim_time,
+                )
+            )
+        )
+        pending_rows = pending_result.scalars().all()
+        pending_by_stored = {row.stored_filename: row for row in pending_rows}
+        if len(pending_rows) != len(stored_names):
+            await db.rollback()
+            raise HTTPException(409, detail="One or more uploaded files are already attached or expired")
+        for token_row in uploaded_rows:
+            pending = pending_by_stored[token_row["stored"]]
+            if pending.original_filename != token_row["filename"] or pending.media_type != token_row["media_type"]:
+                raise HTTPException(400, detail="Uploaded media reference does not match server state")
+            pending.claimed_at = datetime.now(timezone.utc)
 
     album = Album(title=title, description=description,
                   invite_code=secrets.token_urlsafe(16),
@@ -248,13 +480,27 @@ async def create_album(
     db.add(album)
     await db.flush()
 
-    # Process all uploads concurrently to reduce proxy timeout risk.
-    try:
-        results = await asyncio.gather(*[_process_upload(f, i) for i, f in enumerate(photos)])
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(500, detail=f"Upload failed: {exc}")
+    if uploaded_rows:
+        results = [
+            {
+                "idx": idx,
+                "filename": pending_by_stored[row["stored"]].original_filename,
+                "stored": pending_by_stored[row["stored"]].stored_filename,
+                "media_type": pending_by_stored[row["stored"]].media_type,
+            }
+            for idx, row in enumerate(uploaded_rows)
+        ]
+    else:
+        # Legacy clients can still submit a multipart album. New clients upload
+        # each file through /upload-media first, avoiding a huge final request.
+        try:
+            results = await asyncio.gather(*[
+                _process_upload(f, i) for i, f in enumerate(photos or [])
+            ])
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(500, detail=f"Upload failed: {exc}")
 
     results.sort(key=lambda r: r["idx"])
     for row in results:
@@ -265,6 +511,8 @@ async def create_album(
             media_type=row["media_type"],
             order=row["idx"],
         ))
+    for pending in pending_rows:
+        await db.delete(pending)
 
     await db.flush()
     await db.commit()

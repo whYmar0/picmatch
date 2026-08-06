@@ -1,6 +1,7 @@
 """
 main.py - FastAPI application entry point
 """
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -12,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from database import init_db
+from database import init_db, AsyncSessionLocal
 from middleware.rate_limit import limiter, custom_rate_limit_exceeded_handler
 from routers import albums, auth_router, comments, notifications, shared_access, share_links, votes
 from cloudinary_utils import setup_cloudinary, is_cloudinary_configured as cloudinary_enabled
@@ -33,10 +34,26 @@ def _parse_origins(raw: str | None) -> list[str]:
     return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
 
+async def _pending_upload_cleanup_loop():
+    """Periodically remove abandoned pre-uploaded media."""
+    from routers.albums import _cleanup_expired_pending_uploads
+
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                await _cleanup_expired_pending_uploads(db)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Pending upload cleanup failed")
+        await asyncio.sleep(15 * 60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     setup_cloudinary()
+    cleanup_task = asyncio.create_task(_pending_upload_cleanup_loop())
     if cloudinary_enabled():
         logger.info("Cloudinary configured — images will be uploaded to cloud storage.")
     elif os.getenv("ENVIRONMENT", "").lower() == "production":
@@ -45,7 +62,14 @@ async def lifespan(app: FastAPI):
             "and CLOUDINARY_API_SECRET for persistent image storage on Render."
         )
     logger.info("Database ready; uploads directory: %s", UPLOAD_DIR)
-    yield
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(

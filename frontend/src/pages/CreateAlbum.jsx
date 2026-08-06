@@ -1,25 +1,24 @@
 /**
- * pages/CreateAlbum.jsx — Страница создания альбома
- * Album creation with drag-and-drop photo upload and preview
- * v5.4: client-side image compression before upload (max 1200px, JPEG q=0.75)
+ * pages/CreateAlbum.jsx — album creation with immediate media uploads
  */
 
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDropzone } from "react-dropzone";
-import { Upload, X, GripVertical, Copy, Check, ArrowLeft } from "lucide-react";
+import { Upload, X, ArrowLeft, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { albumsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
 
 // ─── Client-side image compression ───────────────────────────────────────────
 async function compressImage(file) {
-  return new Promise((resolve, reject) => {
-    // Skip video files and already-small image files
-    if (file.type.startsWith("video/")) return resolve(file);
-    if (!file.type.startsWith("image/")) return resolve(file);
-    if (file.size < 200 * 1024) return resolve(file); // skip < 200KB
+  return new Promise((resolve) => {
+    // Videos and already-small images should be uploaded unchanged.
+    if (file.type.startsWith("video/") || !file.type.startsWith("image/") || file.size < 200 * 1024) {
+      resolve(file);
+      return;
+    }
 
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -39,20 +38,64 @@ async function compressImage(file) {
       ctx.drawImage(img, 0, 0, width, height);
       canvas.toBlob(
         (blob) => {
-          if (!blob) return resolve(file);
-          const compressed = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
             type: "image/jpeg",
             lastModified: Date.now(),
-          });
-          resolve(compressed);
+          }));
         },
         "image/jpeg",
         0.75
       );
     };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
     img.src = url;
   });
+}
+
+function createId() {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function CircularProgress({ progress, error }) {
+  const radius = 17;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (Math.max(0, Math.min(progress, 100)) / 100) * circumference;
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+      <div className={`relative flex items-center justify-center w-11 h-11 rounded-full ${error ? "bg-red-500" : "bg-black/55"}`}>
+        {!error && (
+          <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="20" cy="20" r={radius} fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="3" />
+            <circle
+              cx="20"
+              cy="20"
+              r={radius}
+              fill="none"
+              stroke="white"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              className="transition-[stroke-dashoffset] duration-150"
+            />
+          </svg>
+        )}
+        <span className="relative text-[10px] font-bold text-white">
+          {error ? "!" : `${Math.round(progress)}%`}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export default function CreateAlbum() {
@@ -63,22 +106,83 @@ export default function CreateAlbum() {
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [createdAlbum, setCreatedAlbum] = useState(null);
   const [isPublic, setIsPublic] = useState(true);
+  const uploadControllers = useRef(new Map());
 
-  // Dropzone setup / Настройка dropzone
-  const onDrop = useCallback(async (accepted) => {
-    const compressed = await Promise.all(
-      accepted.map((file) => compressImage(file))
-    );
-    const newFiles = compressed.map((file) =>
-      Object.assign(file, { preview: URL.createObjectURL(file) })
-    );
-    setFiles((prev) => [...prev, ...newFiles]);
+  const updateFile = useCallback((id, updater) => {
+    setFiles((previous) => previous.map((item) => (
+      item.id === id
+        ? (typeof updater === "function" ? updater(item) : { ...item, ...updater })
+        : item
+    )));
   }, []);
 
+  const uploadFile = useCallback(async (id, file) => {
+    const controller = new AbortController();
+    uploadControllers.current.set(id, controller);
+    updateFile(id, { status: "uploading", progress: 0, error: null });
+
+    try {
+      const prepared = await compressImage(file);
+      if (controller.signal.aborted) return;
+
+      updateFile(id, (item) => {
+        if (item.previewFile === file && prepared !== file) {
+          URL.revokeObjectURL(item.preview);
+          return { ...item, file: prepared, previewFile: prepared, preview: URL.createObjectURL(prepared) };
+        }
+        return { ...item, file: prepared };
+      });
+
+      const uploaded = await albumsApi.uploadMedia(
+        prepared,
+        (progressEvent) => {
+          const total = progressEvent.total || prepared.size;
+          updateFile(id, { progress: total ? (progressEvent.loaded / total) * 100 : 0 });
+        },
+        controller.signal
+      );
+      if (controller.signal.aborted) return;
+
+      updateFile(id, {
+        progress: 100,
+        status: "done",
+        uploadToken: uploaded.upload_token,
+        filename: uploaded.filename,
+        mediaType: uploaded.media_type,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      updateFile(id, { status: "error", progress: 0, error: error.message });
+      toast.error(error.message || t("uploadFailed"));
+    } finally {
+      uploadControllers.current.delete(id);
+    }
+  }, [t, updateFile]);
+
+  const addFiles = useCallback((accepted) => {
+    accepted.forEach((file) => {
+      const id = createId();
+      const preview = URL.createObjectURL(file);
+      setFiles((previous) => [
+        ...previous,
+        {
+          id,
+          file,
+          previewFile: file,
+          preview,
+          progress: 0,
+          status: "uploading",
+          uploadToken: null,
+          error: null,
+        },
+      ]);
+      void uploadFile(id, file);
+    });
+  }, [uploadFile]);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
+    onDrop: addFiles,
     accept: {
       "image/jpeg": [],
       "image/png": [],
@@ -90,45 +194,72 @@ export default function CreateAlbum() {
       "video/avi": [],
     },
     maxSize: 50 * 1024 * 1024,
-    onDropRejected: () => toast.error("Some files were rejected (too large or wrong format)"),
+    onDropRejected: () => toast.error(t("uploadRejected")),
   });
 
-  const removeFile = (idx) => {
-    setFiles((prev) => {
-      const updated = [...prev];
-      URL.revokeObjectURL(updated[idx].preview);
-      updated.splice(idx, 1);
-      return updated;
-    });
+  const removeFile = async (item) => {
+    uploadControllers.current.get(item.id)?.abort();
+    uploadControllers.current.delete(item.id);
+    if (item.uploadToken) {
+      try {
+        await albumsApi.deleteUploadedMedia(item.uploadToken);
+      } catch {
+        // The preview is still removed locally; orphan cleanup is best effort.
+      }
+    }
+    URL.revokeObjectURL(item.preview);
+    setFiles((previous) => previous.filter((candidate) => candidate.id !== item.id));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!title.trim()) { toast.error("Please enter a title"); return; }
-    if (files.length === 0) { toast.error("Please upload at least one photo"); return; }
+  const retryFile = (item) => {
+    void uploadFile(item.id, item.file);
+  };
+
+  const allUploadsComplete = files.length > 0 && files.every(
+    (item) => item.status === "done" && item.progress >= 100 && item.uploadToken
+  );
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!title.trim()) {
+      toast.error(t("enterAlbumTitle"));
+      return;
+    }
+    if (files.length === 0) {
+      toast.error(t("uploadAtLeastOne"));
+      return;
+    }
+    if (!allUploadsComplete) return;
 
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append("title", title);
-      if (description) formData.append("description", description);
-      files.forEach((f) => formData.append("photos", f));
-
-      formData.append("is_public", isPublic);
-      const album = await albumsApi.create(formData);
-      toast.success("Album created!");
-      navigate(`/dashboard`);
-    } catch (err) {
-      toast.error(err.message);
+      formData.append("title", title.trim());
+      if (description.trim()) formData.append("description", description.trim());
+      formData.append("is_public", String(isPublic));
+      formData.append("uploaded_media", JSON.stringify(files.map((item) => item.uploadToken)));
+      await albumsApi.create(formData);
+      toast.success(t("albumCreated"));
+      navigate("/dashboard");
+    } catch (error) {
+      toast.error(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Form ───────────────────────────────────────────────────────────────────
+  const filesRef = useRef(files);
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  useEffect(() => () => {
+    uploadControllers.current.forEach((controller) => controller.abort());
+    filesRef.current.forEach((item) => URL.revokeObjectURL(item.preview));
+  }, []);
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
         <button onClick={() => navigate("/dashboard")} className="btn-ghost mb-4 -ml-2 text-sm">
           <ArrowLeft size={16} /> {t("backToAlbums")}
@@ -137,7 +268,6 @@ export default function CreateAlbum() {
       </motion.div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Album info */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -152,8 +282,8 @@ export default function CreateAlbum() {
               type="text"
               required
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="My Summer Shoot 2024"
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={t("albumTitlePlaceholder")}
               className="input-field"
             />
           </div>
@@ -163,40 +293,34 @@ export default function CreateAlbum() {
             </label>
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(event) => setDescription(event.target.value)}
               rows={3}
-              placeholder="Tell voters what this album is about…"
+              placeholder={t("albumDescriptionPlaceholder")}
               className="input-field resize-none"
             />
           </div>
-          
+
           <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">Public access</p>
-              <p className="text-sm text-gray-500">Allow voters to see analytics</p>
+              <p className="font-medium text-gray-900 dark:text-white">{t("publicAccess")}</p>
+              <p className="text-sm text-gray-500">{t("publicAccessHint")}</p>
             </div>
             <button
               type="button"
-              onClick={() => setIsPublic(!isPublic)}
+              onClick={() => setIsPublic((current) => !current)}
+              aria-pressed={isPublic}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                isPublic ? 'bg-primary-500' : 'bg-gray-200 dark:bg-gray-700'
+                isPublic ? "bg-primary-500" : "bg-gray-200 dark:bg-gray-700"
               }`}
             >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  isPublic ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                isPublic ? "translate-x-6" : "translate-x-1"
+              }`} />
             </button>
           </div>
         </motion.div>
 
-        {/* Dropzone */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <label className="text-sm font-medium text-gray-600 dark:text-gray-400 block mb-1.5">
             {t("uploadPhotos")} * ({files.length})
           </label>
@@ -209,16 +333,12 @@ export default function CreateAlbum() {
             }`}
           >
             <input {...getInputProps()} />
-            <Upload
-              size={32}
-              className={`mx-auto mb-3 ${isDragActive ? "text-primary-400" : "text-gray-300"}`}
-            />
+            <Upload size={32} className={`mx-auto mb-3 ${isDragActive ? "text-primary-400" : "text-gray-300"}`} />
             <p className="text-sm text-gray-500 dark:text-gray-400">{t("uploadDrag")}</p>
-            <p className="text-xs text-gray-400 mt-1">{t("uploadHint")} · max 50 MB per file</p>
+            <p className="text-xs text-gray-400 mt-1">{t("uploadHint")} · {t("maxFileSize")}</p>
           </div>
         </motion.div>
 
-        {/* Photo previews */}
         <AnimatePresence>
           {files.length > 0 && (
             <motion.div
@@ -227,35 +347,50 @@ export default function CreateAlbum() {
               exit={{ opacity: 0, height: 0 }}
               className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"
             >
-              {files.map((file, idx) => (
+              {files.map((item, index) => (
                 <motion.div
-                  key={file.name + idx}
+                  key={item.id}
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ delay: idx * 0.03 }}
                   className="relative group aspect-square rounded-2xl overflow-hidden bg-border-light dark:bg-border-dark"
                 >
-                  {file.type.startsWith("video/") ? (
+                  {(item.mediaType === "video" || item.file.type.startsWith("video/") || /\.(mp4|webm|mov|avi)$/i.test(item.file.name)) ? (
                     <video
-                      src={file.preview}
+                      src={item.preview}
                       className="w-full h-full object-cover"
-                      preload="metadata"
+                      preload="auto"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
                     />
                   ) : (
                     <img
-                      src={file.preview}
-                      alt={`Фото ${idx + 1}`}
+                      src={item.preview}
+                      alt={`${t("uploadPhotos")} ${index + 1}`}
                       className="w-full h-full object-cover"
                       decoding="async"
                     />
                   )}
+
+                  {item.status !== "done" && (
+                    <CircularProgress progress={item.progress} error={item.status === "error"} />
+                  )}
+                  {item.status === "error" && (
+                    <button
+                      type="button"
+                      onClick={() => retryFile(item)}
+                      className="absolute bottom-1 left-1 right-1 flex items-center justify-center gap-1 rounded-lg bg-black/65 px-1 py-1 text-[10px] font-semibold text-white"
+                    >
+                      <RefreshCw size={11} /> {t("retryUpload")}
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => removeFile(idx)}
-                    className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-lg
-                               flex items-center justify-center text-white
-                               opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => void removeFile(item)}
+                    aria-label={t("removeUpload")}
+                    className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-lg flex items-center justify-center text-white opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                   >
                     <X size={12} />
                   </button>
@@ -265,12 +400,11 @@ export default function CreateAlbum() {
           )}
         </AnimatePresence>
 
-        {/* Submit */}
         <motion.button
           type="submit"
-          disabled={loading || files.length === 0}
+          disabled={loading || !allUploadsComplete}
           whileTap={{ scale: 0.98 }}
-          className="btn-primary w-full py-4 text-base"
+          className="btn-primary w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? (
             <>
@@ -279,12 +413,12 @@ export default function CreateAlbum() {
                 transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
                 className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
               />
-              Uploading…
+              {t("creatingAlbum")}
             </>
           ) : (
             <>
               <Upload size={18} />
-              {t("createAlbumBtn")} ({files.length} {t("photos")})
+              {t("createAlbumBtn")}
             </>
           )}
         </motion.button>

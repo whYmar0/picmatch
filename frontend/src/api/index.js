@@ -100,9 +100,22 @@ export const authApi = {
 };
 
 export const albumsApi = {
+  uploadMedia: (file, onUploadProgress, signal) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post("/albums/upload-media", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 120000,
+      signal,
+      onUploadProgress,
+    });
+  },
+  deleteUploadedMedia: (uploadToken) => api.delete("/albums/upload-media", {
+    params: { upload_token: uploadToken },
+  }),
   create:          (formData) => api.post("/albums/", formData, {
                      headers: { "Content-Type": "multipart/form-data" },
-                     timeout: 120000, // 2 minutes: large uploads / many files
+                     timeout: 15000,
                    }),
   getMyAlbums:     ()        => api.get("/albums/my"),
   getByInviteCode: (code)    => api.get(`/albums/invite/${code}`),

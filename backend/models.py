@@ -120,6 +120,19 @@ class Photo(Base):
         return round(self.like_count / self.total_votes * 100, 1) if self.total_votes else 0.0
 
 
+class PendingUpload(Base):
+    """A single uploaded media object waiting to be attached to an album."""
+    __tablename__ = "pending_uploads"
+
+    id              = uuid_column(primary_key=True)
+    user_id         = uuid_column(foreign_key="users.id")
+    stored_filename  = Column(String(500), nullable=False)
+    original_filename = Column(String(500), nullable=False)
+    media_type      = Column(String(10), nullable=False)
+    expires_at      = Column(DateTime(timezone=True), nullable=False)
+    claimed_at      = Column(DateTime(timezone=True), nullable=True)
+
+
 class Vote(Base):
     __tablename__ = "votes"
     id         = uuid_column(primary_key=True)
