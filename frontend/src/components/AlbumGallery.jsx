@@ -36,27 +36,69 @@ import BrokenHeart from "./BrokenHeart";
 import VideoPlayer from "./VideoPlayer";
 
 // ─── PillBar v8 — no border, larger monochrome icons, ChevronUp affordance ──
-function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp }) {
+function PillBar({
+  likeCount,
+  dislikeCount,
+  commentCount,
+  onExpand,
+  onSwipeStart,
+  onSwipeMove,
+  onSwipeEnd,
+  onSwipeCancel,
+}) {
   const dragStartY = useRef(0);
+  const didDrag = useRef(false);
+  const swipeStarted = useRef(false);
 
   const handlePointerDown = (e) => {
     dragStartY.current = e.clientY ?? e.touches?.[0]?.clientY;
+    didDrag.current = false;
+    swipeStarted.current = false;
     e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+
+  const handlePointerMove = (e) => {
+    const dy = (e.clientY ?? e.touches?.[0]?.clientY) - dragStartY.current;
+    if (dy >= -8) return;
+    didDrag.current = true;
+    if (!swipeStarted.current) {
+      swipeStarted.current = true;
+      onSwipeStart?.();
+    }
+    onSwipeMove?.(-dy);
   };
 
   const handlePointerUp = (e) => {
     const endY = e.clientY ?? e.changedTouches?.[0]?.clientY;
-    if (dragStartY.current - endY > 40) {
-      onSwipeUp?.();
+    const distance = Math.max(0, dragStartY.current - endY);
+    if (swipeStarted.current) {
+      onSwipeEnd?.(distance);
     }
+    swipeStarted.current = false;
+  };
+
+  const handlePointerCancel = () => {
+    if (swipeStarted.current) onSwipeCancel?.();
+    swipeStarted.current = false;
+  };
+
+  const handleClick = (e) => {
+    if (didDrag.current) {
+      e.preventDefault();
+      didDrag.current = false;
+      return;
+    }
+    onExpand?.();
   };
 
   return (
     <div className="flex flex-col items-center gap-1.5">
       <motion.button
-        onClick={onExpand}
+        onClick={handleClick}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         data-testid="gallery-pill-bar"
         aria-label="Open statistics"
         whileTap={{ scale: 0.96 }}
@@ -135,7 +177,18 @@ function ThumbItem({ photo, index, activeIdx, onSelect, isDraggingRef }) {
   );
 }
 
-function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, snapAnimRef, onSwipeUp }) {
+function ThumbStrip({
+  photos,
+  offsetX,
+  containerWidthRef,
+  onSelect,
+  onDragEnd,
+  snapAnimRef,
+  onSwipeStart,
+  onSwipeMove,
+  onSwipeEnd,
+  onSwipeCancel,
+}) {
   const containerRef = useRef(null);
   const isDragging = useRef(false);
   const touchStartX = useRef(0);
@@ -150,6 +203,7 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
   // current thumb-strip drag. When true, the release handler must not also
   // apply a velocity flick on top of the already-applied switch.
   const didSwitchDuringDrag = useRef(false);
+  const sheetSwipeActive = useRef(false);
   // Local offset of the thumbnail strip relative to the current photo. It is
   // only used while the user drags the strip; at rest it is always 0.
   const stripDragX = useMotionValue(0);
@@ -188,9 +242,13 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
     const touch = e.touches[0];
     const dx = touch.clientX - touchStartX.current;
     const dy = touch.clientY - touchStartY.current;
-    if (dy < -40 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+    if (dy < -8 && Math.abs(dy) > Math.abs(dx) * 1.2) {
       e.preventDefault();
-      onSwipeUp?.();
+      if (!sheetSwipeActive.current) {
+        sheetSwipeActive.current = true;
+        onSwipeStart?.();
+      }
+      onSwipeMove?.(-dy);
       isDragging.current = true;
       return;
     }
@@ -232,7 +290,21 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
     }
   };
 
+  const onThumbTouchCancel = () => {
+    if (sheetSwipeActive.current) onSwipeCancel?.();
+    sheetSwipeActive.current = false;
+    isDragging.current = false;
+  };
+
   const onThumbTouchEnd = (e) => {
+    if (sheetSwipeActive.current) {
+      const touch = e.changedTouches?.[0];
+      const distance = touch ? Math.max(0, touchStartY.current - touch.clientY) : 0;
+      onSwipeEnd?.(distance);
+      sheetSwipeActive.current = false;
+      isDragging.current = false;
+      return;
+    }
     // Taps are handled by the individual thumb buttons; only drag releases
     // need a snap and a state update here.
     if (!isDragging.current) return;
@@ -272,6 +344,7 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
         onTouchStart={onThumbTouchStart}
         onTouchMove={onThumbTouchMove}
         onTouchEnd={onThumbTouchEnd}
+        onTouchCancel={onThumbTouchCancel}
       >
         {photos.map((photo, i) => (
           <ThumbItem
@@ -306,42 +379,42 @@ function StatisticsTab({
 
   return (
     <div className="space-y-4">      <div className="flex flex-wrap items-center gap-2">
-        <button onClick={onOpenSort}
-          data-testid="stats-sort"
-          className="flex items-center gap-2 px-3 py-2.5 rounded-2xl font-medium text-sm
+      <button onClick={onOpenSort}
+        data-testid="stats-sort"
+        className="flex items-center gap-2 px-3 py-2.5 rounded-2xl font-medium text-sm
                      bg-border-light dark:bg-border-dark
                      hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
-          <SlidersHorizontal size={15} /> {t("sort")}
-        </button>
-        <button onClick={onOpenFilter}
-          data-testid="stats-filter"
-          className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl font-medium text-sm
+        <SlidersHorizontal size={15} /> {t("sort")}
+      </button>
+      <button onClick={onOpenFilter}
+        data-testid="stats-filter"
+        className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl font-medium text-sm
                       transition-colors
                       ${selectedVotersSize > 0
-              ? "bg-primary-400 text-white"
-              : "bg-border-light dark:bg-border-dark hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}>
-          <Filter size={15} /> {t("filterBy")}
-          {selectedVotersSize > 0 && (
-            <span className="bg-white/30 text-white text-xs font-bold px-1.5 rounded-md">
-              {selectedVotersSize}
-            </span>
-          )}
-        </button>
-        <button onClick={onShare}
-          data-testid="stats-share"
-          className="w-10 h-10 rounded-2xl flex items-center justify-center
+            ? "bg-primary-400 text-white"
+            : "bg-border-light dark:bg-border-dark hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}>
+        <Filter size={15} /> {t("filterBy")}
+        {selectedVotersSize > 0 && (
+          <span className="bg-white/30 text-white text-xs font-bold px-1.5 rounded-md">
+            {selectedVotersSize}
+          </span>
+        )}
+      </button>
+      <button onClick={onShare}
+        data-testid="stats-share"
+        className="w-10 h-10 rounded-2xl flex items-center justify-center
                      bg-border-light dark:bg-border-dark text-gray-400
                      hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
-          aria-label={t("share")}
-        >
-          {shareDone ? <Check size={15} /> : <Share2 size={15} />}
-        </button>
-        <div data-testid="stats-views" className="ml-auto flex items-center gap-2 text-sm font-semibold
+        aria-label={t("share")}
+      >
+        {shareDone ? <Check size={15} /> : <Share2 size={15} />}
+      </button>
+      <div data-testid="stats-views" className="ml-auto flex items-center gap-2 text-sm font-semibold
                         text-gray-600 dark:text-gray-300" aria-label={t("votes")}>
-          <BarChart2 size={16} />
-          <span className="tabular-nums">{analytics.total_votes}</span>
-        </div>
+        <BarChart2 size={16} />
+        <span className="tabular-nums">{analytics.total_votes}</span>
       </div>
+    </div>
 
       {/* "Statistics" title row removed — total votes count moved into the toolbar above, next to Share */}
 
@@ -349,18 +422,19 @@ function StatisticsTab({
         <p className="text-center text-gray-400 py-8 text-sm">{t("noVotes")}</p>
       )}
       {viewMode === "grid" ? (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-3">
           {photos.map((photo, i) => (
             <button
               key={photo.id}
               onClick={() => onJump(photo.id)}
               aria-label={`${t("photo") || "Photo"} ${i + 1}`}
               data-testid={`stats-photo-${i}`}
-              className={`relative aspect-square rounded-xl overflow-hidden
+              className={`relative aspect-square !rounded-3xl overflow-hidden
                          bg-border-light dark:bg-border-dark
+                         [&_img]:rounded-2xl [&_video]:rounded-2xl
                          ${String(photo.id) === String(currentPhotoId)
-                           ? "ring-2 ring-primary-400"
-                           : ""}`}
+                  ? "ring-2 ring-primary-400"
+                  : ""}`}
             >
               {isVideo(photo) ? (
                 <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
@@ -376,53 +450,53 @@ function StatisticsTab({
         </div>
       ) : (
         <div className="space-y-1">
-        {photos.map((photo, i) => (
-          <button
-            key={photo.id}
-            onClick={() => onJump(photo.id)}
-            aria-label={`${t("photo") || "Photo"} ${i + 1}`}
-            data-testid={`stats-photo-${i}`}
-            className={`w-full flex items-center gap-3 py-2 px-2 rounded-xl transition-colors
+          {photos.map((photo, i) => (
+            <button
+              key={photo.id}
+              onClick={() => onJump(photo.id)}
+              aria-label={`${t("photo") || "Photo"} ${i + 1}`}
+              data-testid={`stats-photo-${i}`}
+              className={`w-full flex items-center gap-3 py-2 px-2 rounded-xl transition-colors
                        ${String(photo.id) === String(currentPhotoId)
-                ? "bg-primary-50 dark:bg-primary-900/20"
-                : ""}`}
-          >
-            <span className="w-6 text-center text-sm font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 tabular-nums">
-              {i + 1}
-            </span>
-            <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0
+                  ? "bg-primary-50 dark:bg-primary-900/20"
+                  : ""}`}
+            >
+              <span className="w-6 text-center text-sm font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 tabular-nums">
+                {i + 1}
+              </span>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0
                             bg-border-light dark:bg-border-dark">
-              {isVideo(photo) ? (
-                <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
-              ) : (
-                <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0 text-left">
-              <div className="h-1.5 max-w-[95%] bg-border-light dark:bg-border-dark rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-primary-400 rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${photo.like_percentage || 0}%` }}
-                  transition={{ delay: i * 0.03 + 0.2, duration: 0.4 }}
-                />
+                {isVideo(photo) ? (
+                  <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                ) : (
+                  <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                )}
               </div>
-              <div className="flex items-center gap-3 mt-1.5 text-sm font-semibold tabular-nums
+              <div className="flex-1 min-w-0 text-left">
+                <div className="h-1.5 max-w-[95%] bg-border-light dark:bg-border-dark rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-primary-400 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${photo.like_percentage || 0}%` }}
+                    transition={{ delay: i * 0.03 + 0.2, duration: 0.4 }}
+                  />
+                </div>
+                <div className="flex items-center gap-3 mt-1.5 text-sm font-semibold tabular-nums
                               text-gray-600 dark:text-gray-300">
-                <span className="flex items-center gap-1.5">
-                  <FilledHeart size={14} /> {photo.like_count}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <BrokenHeart size={14} strokeWidth={2} /> {photo.dislike_count}
-                </span>
-                <span className="ml-auto mr-4 text-gray-500 dark:text-gray-400 font-normal">
-                  {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
-                </span>
+                  <span className="flex items-center gap-1.5">
+                    <FilledHeart size={14} /> {photo.like_count}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <BrokenHeart size={14} strokeWidth={2} /> {photo.dislike_count}
+                  </span>
+                  <span className="ml-auto mr-4 text-gray-500 dark:text-gray-400 font-normal">
+                    {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
+                  </span>
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
-      </div>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -564,6 +638,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const [analytics, setAnalytics] = useState(null);
   const [currentIdx, setCurrentIdx] = useState(initialIdx);
   const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [sheetGestureActive, setSheetGestureActive] = useState(false);
   const [sheetTab, setSheetTab] = useState("stats");
 
   const [sortOpen, setSortOpen] = useState(false);
@@ -572,10 +647,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const [viewMode, setViewMode] = useState("list");
   const [selectedVoters, setSelectedVoters] = useState(new Set());
   const [pendingVoters, setPendingVoters] = useState(new Set());
-  const [shareDone,      setShareDone]      = useState(false);
+  const [shareDone, setShareDone] = useState(false);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [commentsData, setCommentsData] = useState(null);
-  const [isExiting, setIsExiting]      = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
   // Keep the shared-element lifecycle separate from the stats photo fit; all
   // gallery photos use object-contain so the stats sheet cannot obscure them.
   const fetchedPhotoIdRef = useRef(null);
@@ -585,7 +660,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   // album cards, so the creator comparison is mostly defensive (in case the
   // wrapper is reused for shared-with-me albums in the future).
   const isOwner = !!user && !!album?.creator_id &&
-                  String(user.id) === String(album.creator_id);
+    String(user.id) === String(album.creator_id);
 
 
 
@@ -611,6 +686,9 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const defaultOffset = vh * 0.35;
   const dragY = useMotionValue(0);
   const dragYAnimRef = useRef(null);
+  // Separate motion value for the progressive swipe that mounts the sheet.
+  // It starts below the viewport and follows the finger upward until release.
+  const sheetGestureY = useMotionValue(vh);
 
   // Container width is the single source of truth for pixel-to-index math.
   // It is measured on mount and on resize so the carousel stays correct in
@@ -682,10 +760,67 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   const closePrimarySheet = useCallback(() => {
     sheetY.set(vh);
+    sheetGestureY.set(vh);
+    setSheetGestureActive(false);
     setSheetExpanded(false);
     setSortOpen(false);
     setFilterOpen(false);
-  }, [sheetY, vh]);
+  }, [sheetY, sheetGestureY, vh]);
+
+  const handleSheetSwipeStart = useCallback(() => {
+    if (sheetExpanded || sheetGestureActive) return;
+    snapAnimRef.current?.stop();
+    sheetGestureY.set(vh);
+    sheetY.set(vh);
+    setSheetGestureActive(true);
+    setSheetExpanded(true);
+  }, [sheetExpanded, sheetGestureActive, sheetGestureY, sheetY, vh]);
+
+  const handleSheetSwipeMove = useCallback((distance) => {
+    if (!sheetGestureActive) return;
+    const nextY = Math.max(0, vh - Math.max(0, distance));
+    sheetGestureY.set(nextY);
+    sheetY.set(nextY);
+  }, [sheetGestureActive, sheetGestureY, sheetY, vh]);
+
+  const handleSheetSwipeEnd = useCallback((distance) => {
+    if (!sheetGestureActive) return;
+    const normalizedDistance = Math.max(0, distance);
+    const openThreshold = Math.max(48, vh * 0.12);
+    const settle = (targetY, close = false) => {
+      animate(sheetGestureY, targetY, {
+        type: "spring", stiffness: 420, damping: 38,
+        onUpdate: (latest) => sheetY.set(latest),
+        onComplete: () => {
+          sheetY.set(targetY);
+          setSheetGestureActive(false);
+          if (close) setSheetExpanded(false);
+        },
+      });
+    };
+
+    if (normalizedDistance < openThreshold) {
+      settle(vh, true);
+      return;
+    }
+
+    // A normal open settles into the existing partial snap. A very long
+    // gesture may settle fully expanded, while still following the finger.
+    settle(normalizedDistance > vh * 0.62 ? 0 : defaultOffset);
+  }, [sheetGestureActive, sheetGestureY, sheetY, vh, defaultOffset]);
+
+  const handleSheetSwipeCancel = useCallback(() => {
+    if (!sheetGestureActive) return;
+    animate(sheetGestureY, vh, {
+      type: "spring", stiffness: 420, damping: 38,
+      onUpdate: (latest) => sheetY.set(latest),
+      onComplete: () => {
+        sheetY.set(vh);
+        setSheetGestureActive(false);
+        setSheetExpanded(false);
+      },
+    });
+  }, [sheetGestureActive, sheetGestureY, sheetY, vh]);
 
   // ── Data fetching ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -753,8 +888,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   useEffect(() => {
     dragYAnimRef.current?.stop();
     dragY.set(0);
-    sheetY.set(sheetExpanded ? defaultOffset : vh);
-  }, [sheetExpanded, sheetY, dragY, defaultOffset, vh]);
+    if (!sheetExpanded) {
+      sheetY.set(vh);
+      sheetGestureY.set(vh);
+    } else if (!sheetGestureActive) {
+      const settledY = sheetGestureY.get();
+      sheetY.set(settledY < vh - 1 ? settledY : defaultOffset);
+    }
+  }, [sheetExpanded, sheetGestureActive, sheetY, sheetGestureY, dragY, defaultOffset, vh]);
 
   // ── Sync ref when state changes from goTo ──────────────────────────────
   useEffect(() => {
@@ -825,9 +966,9 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     // to a possibly-stale currentIdxRef (e.g. after an spring was interrupted).
     currentIdxRef.current = photos.length > 0
       ? Math.max(0, Math.min(
-          Math.round(-offsetX.get() / containerWidthRef.current),
-          photos.length - 1
-        ))
+        Math.round(-offsetX.get() / containerWidthRef.current),
+        photos.length - 1
+      ))
       : 0;
     gestureAxis.current = null;
   }, [offsetX]);
@@ -1243,82 +1384,82 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                 decoding: "async",
               };
               return (
-              <div
-                key={photo.id}
-                data-media-id={photo.id}
-                data-active={i === currentIdx ? "true" : "false"}
-                className="relative flex-shrink-0 w-full h-full flex items-center justify-center py-8"
-              >
-                {photo?.url ? (
-                  isSharedElement ? (
-                    photoIsVideo ? (
-                      <motion.div
-                        layoutId={`album-cover-${album.id}`}
-                        data-testid="gallery-shared-video"
-                        data-shared-media={`album-cover-${album.id}`}
-                        layout={false}
-                        className="absolute inset-0 flex max-w-full max-h-full items-center justify-center"
-                        initial={initialIdx === 0 ? { borderRadius: 16 } : false}
-                        animate={{ borderRadius: 0 }}
-                        transition={
-                          isExiting
-                            ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
-                            : { duration: 0 }
-                        }
-                      >
-                        <VideoPlayer
-                          src={photo.url}
-                          className={photoClassName}
-                          preload="auto"
-                          muted
-                          autoPlay={i === currentIdx}
-                          stableLayout
-                          objectFit="contain"
-                          style={{
-                        transform: `scale(${GALLERY_VIDEO_SCALE})`,
-                        transformOrigin: "center center",
-                      }}
-                          onVerticalSwipeMove={onVideoVerticalSwipeMove}
-                          onVerticalSwipe={onVideoVerticalSwipe}
+                <div
+                  key={photo.id}
+                  data-media-id={photo.id}
+                  data-active={i === currentIdx ? "true" : "false"}
+                  className="relative flex-shrink-0 w-full h-full flex items-center justify-center py-8"
+                >
+                  {photo?.url ? (
+                    isSharedElement ? (
+                      photoIsVideo ? (
+                        <motion.div
+                          layoutId={`album-cover-${album.id}`}
+                          data-testid="gallery-shared-video"
+                          data-shared-media={`album-cover-${album.id}`}
+                          layout={false}
+                          className="absolute inset-0 flex max-w-full max-h-full items-center justify-center"
+                          initial={initialIdx === 0 ? { borderRadius: 16 } : false}
+                          animate={{ borderRadius: 0 }}
+                          transition={
+                            isExiting
+                              ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
+                              : { duration: 0 }
+                          }
+                        >
+                          <VideoPlayer
+                            src={photo.url}
+                            className={photoClassName}
+                            preload="auto"
+                            muted
+                            autoPlay={i === currentIdx}
+                            stableLayout
+                            objectFit="contain"
+                            style={{
+                              transform: `scale(${GALLERY_VIDEO_SCALE})`,
+                              transformOrigin: "center center",
+                            }}
+                            onVerticalSwipeMove={onVideoVerticalSwipeMove}
+                            onVerticalSwipe={onVideoVerticalSwipe}
+                          />
+                        </motion.div>
+                      ) : (
+                        <motion.img
+                          {...photoProps}
+                          layoutId={`album-cover-${album.id}`}
+                          layout={false}
+                          style={{ pointerEvents: "none" }}
+                          initial={initialIdx === 0 ? { borderRadius: 16 } : false}
+                          animate={{ borderRadius: 0 }}
+                          transition={
+                            isExiting
+                              ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
+                              : { duration: 0 }
+                          }
                         />
-                      </motion.div>
-                    ) : (
-                      <motion.img
-                        {...photoProps}
-                        layoutId={`album-cover-${album.id}`}
-                        layout={false}
-                        style={{ pointerEvents: "none" }}
-                        initial={initialIdx === 0 ? { borderRadius: 16 } : false}
-                        animate={{ borderRadius: 0 }}
-                        transition={
-                          isExiting
-                            ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
-                            : { duration: 0 }
-                        }
+                      )
+                    ) : photoIsVideo ? (
+                      <VideoPlayer
+                        src={photo.url}
+                        className={photoClassName}
+                        preload="auto"
+                        muted
+                        autoPlay={i === currentIdx}
+                        style={{
+                          transform: `scale(${GALLERY_VIDEO_SCALE})`,
+                          transformOrigin: "center center",
+                        }}
+                        onVerticalSwipeMove={onVideoVerticalSwipeMove}
+                        onVerticalSwipe={onVideoVerticalSwipe}
                       />
+                    ) : (
+                      <img {...photoProps} />
                     )
-                  ) : photoIsVideo ? (
-                    <VideoPlayer
-                      src={photo.url}
-                      className={photoClassName}
-                      preload="auto"
-                      muted
-                      autoPlay={i === currentIdx}
-                      style={{
-                        transform: `scale(${GALLERY_VIDEO_SCALE})`,
-                        transformOrigin: "center center",
-                      }}
-                      onVerticalSwipeMove={onVideoVerticalSwipeMove}
-                      onVerticalSwipe={onVideoVerticalSwipe}
-                    />
                   ) : (
-                    <img {...photoProps} />
-                  )
-                ) : (
-                  <div className="text-white/40 text-sm">No photo</div>
-                )}
-              </div>
-            );
+                    <div className="text-white/40 text-sm">No photo</div>
+                  )}
+                </div>
+              );
             })}
           </motion.div>
         </div>
@@ -1337,17 +1478,23 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             onSelect={handleThumbSelect}
             onDragEnd={handleThumbDragEnd}
             snapAnimRef={snapAnimRef}
-            onSwipeUp={() => setSheetExpanded(true)}
+            onSwipeStart={handleSheetSwipeStart}
+            onSwipeMove={handleSheetSwipeMove}
+            onSwipeEnd={handleSheetSwipeEnd}
+            onSwipeCancel={handleSheetSwipeCancel}
           />
         )}
 
-        {!sheetExpanded && (
+        {(!sheetExpanded || sheetGestureActive) && (
           <PillBar
             likeCount={likeCount}
             dislikeCount={dislikeCount}
             commentCount={commentsCount}
             onExpand={() => setSheetExpanded(true)}
-            onSwipeUp={() => setSheetExpanded(true)}
+            onSwipeStart={handleSheetSwipeStart}
+            onSwipeMove={handleSheetSwipeMove}
+            onSwipeEnd={handleSheetSwipeEnd}
+            onSwipeCancel={handleSheetSwipeCancel}
           />
         )}
       </motion.div>
@@ -1369,6 +1516,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         closeOnEscape={!secondaryOpen}
         testId="primary-stats-sheet"
         viewportHeight={vh}
+        gestureActive={sheetGestureActive}
+        gestureY={sheetGestureY}
         footer={sheetTab === "comments" ? renderCommentInput() : null}
         headerChildren={
           <div role="tablist" aria-label={t("statistics")} className="flex gap-2">
@@ -1434,7 +1583,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               dislikeCount={dislikeCount}
               commentCount={commentsCount}
               onExpand={() => setSheetExpanded(true)}
-              onSwipeUp={() => setSheetExpanded(true)}
+              onSwipeStart={handleSheetSwipeStart}
+              onSwipeMove={handleSheetSwipeMove}
+              onSwipeEnd={handleSheetSwipeEnd}
+              onSwipeCancel={handleSheetSwipeCancel}
             />
           </div>
         </motion.div>

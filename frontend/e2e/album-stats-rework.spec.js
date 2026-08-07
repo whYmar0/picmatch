@@ -110,6 +110,17 @@ async function swipeUp(page, locator) {
   // pointer capture for the synthetic drag.
 }
 
+async function progressiveSwipeUp(page, locator, distance = 72, release = true) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  const x = box.x + box.width / 2;
+  const startY = box.y + box.height * 0.75;
+  await page.mouse.move(x, startY);
+  await page.mouse.down();
+  await page.mouse.move(x, startY - distance, { steps: 6 });
+  if (release) await page.mouse.up();
+}
+
 async function horizontalSwipe(page, locator, direction = "left") {
   const box = await locator.boundingBox();
   expect(box).not.toBeNull();
@@ -133,7 +144,15 @@ test.describe("Extended album statistics BottomSheet", () => {
 
     await setup(page);
     const pill = page.getByTestId("gallery-pill-bar");
-    await swipeUp(page, pill);
+    const viewportHeight = page.viewportSize().height;
+    await progressiveSwipeUp(page, pill, 300, false);
+    const progressivePanel = page.getByTestId("primary-stats-sheet-panel");
+    await expect(progressivePanel).toBeVisible();
+    const progressiveBox = await progressivePanel.boundingBox();
+    expect(progressiveBox).not.toBeNull();
+    expect(progressiveBox.y).toBeGreaterThan(0);
+    expect(progressiveBox.y).toBeLessThan(viewportHeight);
+    await page.mouse.up();
 
     const sheet = page.getByTestId("primary-stats-sheet");
     const sheetPanel = page.getByTestId("primary-stats-sheet-panel");
@@ -167,7 +186,10 @@ test.describe("Extended album statistics BottomSheet", () => {
     const gridChoice = page.getByTestId("sort-grid");
     await expect(gridChoice).toBeVisible();
     await gridChoice.click();
-    await expect(sheet.getByTestId("stats-photo-0")).toHaveClass(/rounded-xl/);
+    const gridPhoto = sheet.getByTestId("stats-photo-0");
+    await expect(gridPhoto).toHaveClass(/!rounded-2xl/);
+    await expect(gridPhoto).not.toHaveClass(/rounded-full/);
+    await expect(gridPhoto).toHaveCSS("border-radius", "16px");
 
     const floatingPill = page.getByTestId("gallery-pill-bar");
     await expect(floatingPill).toBeVisible();
@@ -189,6 +211,9 @@ test.describe("Extended album statistics BottomSheet", () => {
     await page.mouse.up();
     await page.waitForTimeout(500);
     await expect(sheetPanel).toBeVisible();
+    const expandedPanelBox = await sheetPanel.boundingBox();
+    expect(expandedPanelBox).not.toBeNull();
+    expect(expandedPanelBox.y).toBeGreaterThanOrEqual(-1);
 
     const expandedHandleBox = await handle.boundingBox();
     expect(expandedHandleBox).not.toBeNull();

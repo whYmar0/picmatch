@@ -43,6 +43,8 @@ export default function BottomSheet({
   heightVh = 0.95,
   testId,
   viewportHeight,
+  gestureActive = false,
+  gestureY,
 }) {
   const sheetRef = useRef(null);
   const horizontalGestureRef = useRef({ x: 0, y: 0 });
@@ -112,14 +114,38 @@ export default function BottomSheet({
     if (viewportHeight != null) setVh(viewportHeight);
   }, [viewportHeight]);
 
-  // Close on Escape key
+  // Close on Escape key and initialize the sheet at the current progressive
+  // gesture position instead of waiting for the gesture to finish.
   useEffect(() => {
     if (!open) return;
-    controls.start({ y: defaultOffset, transition: { type: "spring", stiffness: 350, damping: 35 } });
+    if (gestureActive && gestureY) {
+      const current = gestureY.get();
+      y.set(current);
+      controls.set({ y: current });
+    } else {
+      const pendingGestureSnap = gestureY?.get();
+      const target = Number.isFinite(pendingGestureSnap) && pendingGestureSnap < vh - 1
+        ? pendingGestureSnap
+        : defaultOffset;
+      controls.start({ y: target, transition: { type: "spring", stiffness: 350, damping: 35 } });
+    }
     const handler = (e) => { if (e.key === "Escape" && closeOnEscape) handleClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, controls, defaultOffset, closeOnEscape]);
+  }, [open, controls, defaultOffset, closeOnEscape, gestureActive, gestureY, y, vh]);
+
+  // While the sheet is being opened from the bottom controls, follow the
+  // parent's gesture motion value directly. This keeps the panel under the
+  // finger instead of mounting it only after release.
+  useEffect(() => {
+    if (!gestureActive || !gestureY) return undefined;
+    const syncGesture = (latest) => {
+      y.set(latest);
+      controls.set({ y: latest });
+    };
+    syncGesture(gestureY.get());
+    return gestureY.on("change", syncGesture);
+  }, [gestureActive, gestureY, controls, y]);
 
   // Prevent body scroll (ref-counted across all BottomSheet instances)
   useEffect(() => {
@@ -216,7 +242,10 @@ export default function BottomSheet({
             }}
             drag="y"
             dragConstraints={{ top: 0, bottom: vh }}
-            dragElastic={0.1}
+            // Never allow the fully expanded sheet to stretch above the
+            // viewport. Bottom elasticity is retained for a natural dismiss
+            // gesture, while the top edge is a hard stop.
+            dragElastic={{ top: 0, bottom: 0.1 }}
             onDragEnd={onDragEnd}
             className="absolute bottom-0 w-full z-20
                        bg-card-light dark:bg-card-dark
