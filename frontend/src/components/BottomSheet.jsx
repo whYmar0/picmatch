@@ -34,24 +34,34 @@ export default function BottomSheet({
   children,
   footer,
   sharedY,
+  onHorizontalSwipe,
   zIndex = 50,
   hideHeader = false,
   closeOnEscape = true,
+  backdropBlur = true,
+  backdropDim = true,
+  heightVh = 0.95,
+  testId,
+  viewportHeight,
 }) {
   const sheetRef = useRef(null);
+  const horizontalGestureRef = useRef({ x: 0, y: 0 });
   const controls = useAnimation();
-  const y = useMotionValue(0);
   const [vh, setVh] = useState(
-    typeof window !== "undefined"
+    viewportHeight ?? (typeof window !== "undefined"
       ? (window.visualViewport?.height || window.innerHeight)
-      : 800
+      : 800)
   );
 
-  // Snap points: 
-  // - 0 means fully expanded (95vh height)
-  // - defaultOffset means 60vh visible (sheet is translated down by 35vh)
+  // Snap points:
+  // - 0 means fully expanded
+  // - defaultOffset means the partial/half state
   const defaultOffset = vh * 0.35;
   const dismissOffset = vh * 0.8;
+  const partialOffset = defaultOffset;
+  // Start at the same partial point used by AlbumGallery's shared motion
+  // value, preventing a one-frame photo/sheet overlap on open.
+  const y = useMotionValue(defaultOffset);
 
   // Scale top content as we drag. 
   // It stops shrinking once the sheet takes 60% space (y reaches defaultOffset).
@@ -61,10 +71,31 @@ export default function BottomSheet({
   // Footer fades out when sheet is dragged toward dismiss
   const footerOpacity = useTransform(y, [defaultOffset, defaultOffset + 100], [1, 0]);
 
+  const handleSheetPointerDown = (event) => {
+    horizontalGestureRef.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleSheetPointerUp = (event) => {
+    if (!onHorizontalSwipe) return;
+    const { x, y: startY } = horizontalGestureRef.current;
+    const dx = event.clientX - x;
+    const dy = event.clientY - startY;
+    if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+      onHorizontalSwipe(dx < 0 ? "next" : "previous");
+    }
+    horizontalGestureRef.current = { x: 0, y: 0 };
+  };
+
+  const handleSheetPointerCancel = () => {
+    horizontalGestureRef.current = { x: 0, y: 0 };
+  };
+
   useEffect(() => {
     const viewport = window.visualViewport;
     const updateViewport = () => {
-      setVh(Math.round(viewport?.height || window.innerHeight));
+      if (viewportHeight == null) {
+        setVh(Math.round(viewport?.height || window.innerHeight));
+      }
     };
     updateViewport();
     viewport?.addEventListener("resize", updateViewport);
@@ -75,7 +106,11 @@ export default function BottomSheet({
       viewport?.removeEventListener("scroll", updateViewport);
       window.removeEventListener("orientationchange", updateViewport);
     };
-  }, []);
+  }, [viewportHeight]);
+
+  useEffect(() => {
+    if (viewportHeight != null) setVh(viewportHeight);
+  }, [viewportHeight]);
 
   // Close on Escape key
   useEffect(() => {
@@ -95,6 +130,7 @@ export default function BottomSheet({
   // Report y position to parent for photo shrink
   useEffect(() => {
     if (!sharedY) return;
+    sharedY.set(y.get());
     const unsub = y.on("change", (latest) => {
       sharedY.set(latest);
     });
@@ -110,18 +146,14 @@ export default function BottomSheet({
     const velocity = info.velocity.y;
     const currentY = y.get();
 
-    // If swiped down fast, close
-    if (velocity > 500) {
+    // A fast/large downward gesture closes; a smaller downward gesture from
+    // the expanded state returns to the partial snap point.
+    if (velocity > 700 || currentY > defaultOffset + vh * 0.25) {
       handleClose();
-    } else if (currentY > defaultOffset + 100) {
-      // Dragged down past threshold, close
-      handleClose();
-    } else if (currentY < defaultOffset - 80 || velocity < -500) {
-      // Dragged up or swiped up, expand fully
-      controls.start({ y: 0, transition: { type: "spring", stiffness: 350, damping: 35 } });
+    } else if (currentY > 35 || velocity > 160) {
+      controls.start({ y: partialOffset, transition: { type: "spring", stiffness: 350, damping: 35 } });
     } else {
-      // Snap back to default
-      controls.start({ y: defaultOffset, transition: { type: "spring", stiffness: 350, damping: 35 } });
+      controls.start({ y: 0, transition: { type: "spring", stiffness: 350, damping: 35 } });
     }
   };
 
@@ -131,6 +163,7 @@ export default function BottomSheet({
         <div
           className="fixed inset-0 flex flex-col items-center justify-end overflow-hidden"
           style={{ zIndex }}
+          data-testid={testId}
         >
           {/* Backdrop (Blur + Dimming) */}
           <motion.div
@@ -139,7 +172,9 @@ export default function BottomSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.28 }}
-            className="fixed inset-[-50vh] -inset-x-0 bg-black/60 backdrop-blur-xl"
+            data-testid={testId ? `${testId}-backdrop` : undefined}
+            data-dim={backdropDim ? "true" : "false"}
+            className={`fixed inset-[-50vh] -inset-x-0 ${backdropDim ? "bg-black/60" : "bg-transparent"} ${backdropBlur ? "backdrop-blur-xl" : ""}`}
             onClick={onClose}
           />
 
@@ -162,10 +197,23 @@ export default function BottomSheet({
           <motion.div
             key="sheet"
             ref={sheetRef}
+            data-testid={testId ? `${testId}-panel` : undefined}
             initial={{ y: vh }}
             animate={controls}
             exit={{ y: vh }}
-            style={{ y, height: Math.max(320, vh * 0.95), marginTop: "auto" }}
+            style={{
+              y,
+              height: Math.max(320, vh * heightVh),
+              marginTop: "auto",
+              touchAction: "pan-y",
+              willChange: "transform",
+            }}
+            onPointerDown={handleSheetPointerDown}
+            onPointerUp={handleSheetPointerUp}
+            onPointerCancel={handleSheetPointerCancel}
+            onUpdate={(latest) => {
+              if (sharedY && Number.isFinite(latest.y)) sharedY.set(latest.y);
+            }}
             drag="y"
             dragConstraints={{ top: 0, bottom: vh }}
             dragElastic={0.1}
@@ -176,7 +224,10 @@ export default function BottomSheet({
                        flex flex-col"
           >
             {/* Drag handle */}
-            <div className="flex-shrink-0 pt-4 pb-2 flex justify-center">
+            <div
+              data-testid={testId ? `${testId}-handle` : undefined}
+              className="flex-shrink-0 pt-4 pb-2 flex justify-center"
+            >
               <div className="w-12 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700" />
             </div>
 
@@ -202,7 +253,10 @@ export default function BottomSheet({
             </div>
 
             {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <div
+              className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+4rem)]"
+              data-testid={testId ? `${testId}-content` : undefined}
+            >
               {children}
             </div>
           </motion.div>

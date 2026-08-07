@@ -41,6 +41,7 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
 
   const handlePointerDown = (e) => {
     dragStartY.current = e.clientY ?? e.touches?.[0]?.clientY;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
   };
 
   const handlePointerUp = (e) => {
@@ -56,6 +57,8 @@ function PillBar({ likeCount, dislikeCount, commentCount, onExpand, onSwipeUp })
         onClick={onExpand}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
+        data-testid="gallery-pill-bar"
+        aria-label="Open statistics"
         whileTap={{ scale: 0.96 }}
         className="flex items-center gap-8 px-8 py-4 rounded-full
                    bg-gray-900
@@ -132,12 +135,13 @@ function ThumbItem({ photo, index, activeIdx, onSelect, isDraggingRef }) {
   );
 }
 
-function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, snapAnimRef }) {
+function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, snapAnimRef, onSwipeUp }) {
   const containerRef = useRef(null);
   const isDragging = useRef(false);
   const touchStartX = useRef(0);
   const touchStartDragX = useRef(0);
   const touchStartTime = useRef(0);
+  const touchStartY = useRef(0);
   // Snapshot of the main photo index at the start of a thumb-strip drag.
   // Clamping the strip against this value keeps the scroll feel identical
   // to the pre-instant-switch version.
@@ -171,6 +175,7 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
     snapAnimRef.current?.stop();
     const touch = e.touches[0];
     touchStartX.current = touch.clientX;
+    touchStartY.current = touch.clientY;
     touchStartDragX.current = stripDragX.get();
     touchStartTime.current = Date.now();
     const W = containerWidthRef.current;
@@ -182,6 +187,13 @@ function ThumbStrip({ photos, offsetX, containerWidthRef, onSelect, onDragEnd, s
   const onThumbTouchMove = (e) => {
     const touch = e.touches[0];
     const dx = touch.clientX - touchStartX.current;
+    const dy = touch.clientY - touchStartY.current;
+    if (dy < -40 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+      e.preventDefault();
+      onSwipeUp?.();
+      isDragging.current = true;
+      return;
+    }
     if (Math.abs(dx) > 5) isDragging.current = true;
     e.preventDefault();
 
@@ -293,16 +305,17 @@ function StatisticsTab({
   if (!analytics) return <p className="text-center text-gray-400 py-8 text-sm">Loading stats...</p>;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
+    <div className="space-y-4">      <div className="flex flex-wrap items-center gap-2">
         <button onClick={onOpenSort}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm
+          data-testid="stats-sort"
+          className="flex items-center gap-2 px-3 py-2.5 rounded-2xl font-medium text-sm
                      bg-border-light dark:bg-border-dark
                      hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
           <SlidersHorizontal size={15} /> {t("sort")}
         </button>
         <button onClick={onOpenFilter}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm
+          data-testid="stats-filter"
+          className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl font-medium text-sm
                       transition-colors
                       ${selectedVotersSize > 0
               ? "bg-primary-400 text-white"
@@ -314,17 +327,20 @@ function StatisticsTab({
             </span>
           )}
         </button>
-        <div className="ml-auto flex items-center gap-2 text-sm font-semibold
-                        text-gray-600 dark:text-gray-300">
+        <button onClick={onShare}
+          data-testid="stats-share"
+          className="w-10 h-10 rounded-2xl flex items-center justify-center
+                     bg-border-light dark:bg-border-dark text-gray-400
+                     hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+          aria-label={t("share")}
+        >
+          {shareDone ? <Check size={15} /> : <Share2 size={15} />}
+        </button>
+        <div data-testid="stats-views" className="ml-auto flex items-center gap-2 text-sm font-semibold
+                        text-gray-600 dark:text-gray-300" aria-label={t("votes")}>
           <BarChart2 size={16} />
           <span className="tabular-nums">{analytics.total_votes}</span>
         </div>
-        <button onClick={onShare}
-          className="w-10 h-10 rounded-2xl flex items-center justify-center
-                     bg-border-light dark:bg-border-dark text-gray-400
-                     hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
-          {shareDone ? <Check size={15} /> : <Share2 size={15} />}
-        </button>
       </div>
 
       {/* "Statistics" title row removed — total votes count moved into the toolbar above, next to Share */}
@@ -338,6 +354,8 @@ function StatisticsTab({
             <button
               key={photo.id}
               onClick={() => onJump(photo.id)}
+              aria-label={`${t("photo") || "Photo"} ${i + 1}`}
+              data-testid={`stats-photo-${i}`}
               className={`relative aspect-square rounded-xl overflow-hidden
                          bg-border-light dark:bg-border-dark
                          ${String(photo.id) === String(currentPhotoId)
@@ -350,7 +368,7 @@ function StatisticsTab({
                 <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
               )}
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 text-white text-[10px] font-semibold flex justify-between">
-                <span>#{i + 1}</span>
+                <span>{i + 1}</span>
                 <span>{photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}</span>
               </div>
             </button>
@@ -362,13 +380,15 @@ function StatisticsTab({
           <button
             key={photo.id}
             onClick={() => onJump(photo.id)}
+            aria-label={`${t("photo") || "Photo"} ${i + 1}`}
+            data-testid={`stats-photo-${i}`}
             className={`w-full flex items-center gap-3 py-2 px-2 rounded-xl transition-colors
                        ${String(photo.id) === String(currentPhotoId)
                 ? "bg-primary-50 dark:bg-primary-900/20"
                 : ""}`}
           >
             <span className="w-6 text-center text-sm font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 tabular-nums">
-              #{i + 1}
+              {i + 1}
             </span>
             <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0
                             bg-border-light dark:bg-border-dark">
@@ -421,6 +441,7 @@ function GallerySortSheet({ open, onClose, sortKey, setSortKey, viewMode, setVie
         ].map(({ key, icon, label }) => (
           <button
             key={key}
+            data-testid={key === "grid" ? "sort-grid" : "sort-list"}
             onClick={() => { setViewMode(key); onClose(); }}
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl
                         font-medium text-sm transition-colors
@@ -511,7 +532,25 @@ function GalleryFilterSheet({
 export default function AlbumGallery({ album, onClose, startPhotoId, dragProgressMV }) {
   const { t } = useLang();
   const { user } = useAuth();
-  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const [vh, setVh] = useState(
+    typeof window !== "undefined"
+      ? (window.visualViewport?.height || window.innerHeight)
+      : 800,
+  );
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const updateViewport = () => setVh(Math.round(viewport?.height || window.innerHeight));
+    updateViewport();
+    viewport?.addEventListener("resize", updateViewport);
+    viewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    return () => {
+      viewport?.removeEventListener("resize", updateViewport);
+      viewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+    };
+  }, []);
 
   // ── State ────────────────────────────────────────────────────────────────
   const initialIdx = (() => {
@@ -537,10 +576,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [commentsData, setCommentsData] = useState(null);
   const [isExiting, setIsExiting]      = useState(false);
-  // The first photo starts as object-cover for the shared-element transition
-  // from the album card, then switches to object-contain like the others so
-  // gallery navigation looks consistent.
-  const [firstPhotoFitDone, setFirstPhotoFitDone] = useState(initialIdx !== 0);
+  // Keep the shared-element lifecycle separate from the stats photo fit; all
+  // gallery photos use object-contain so the stats sheet cannot obscure them.
   const fetchedPhotoIdRef = useRef(null);
   const fetchedAlbumIdRef = useRef(null);
 
@@ -605,9 +642,18 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   }, [offsetX]);
 
   // BottomSheet shared drag position
-  const sheetY = useMotionValue(defaultOffset);
-  const photoScale = useTransform(sheetY, [0, defaultOffset], [0.5, 1]);
-  const photoTranslateY = useTransform(sheetY, [0, defaultOffset], [-vh * 0.3, 0]);
+  const sheetY = useMotionValue(vh);
+  // The sheet occupies `heightVh` of the viewport. Binding the photo stage to
+  // the space left above that sheet prevents the sheet from ever covering the
+  // image while keeping the resize on the compositor path.
+  const photoStageHeight = useTransform(
+    sheetY,
+    [0, defaultOffset, vh],
+    [vh * 0.25, vh * 0.60, vh],
+    { clamp: true },
+  );
+  const photoScale = useTransform(sheetY, [0, defaultOffset], [1, 1]);
+  const photoTranslateY = useTransform(sheetY, [0, defaultOffset], [0, 0]);
 
   const combinedTranslateY = useTransform(
     [photoTranslateY, dragY],
@@ -632,6 +678,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   );
 
   const carouselPointerEvents = sheetExpanded ? "none" : "auto";
+  const floatingPillY = useTransform(sheetY, (value) => value);
+
+  const closePrimarySheet = useCallback(() => {
+    sheetY.set(vh);
+    setSheetExpanded(false);
+    setSortOpen(false);
+    setFilterOpen(false);
+  }, [sheetY, vh]);
 
   // ── Data fetching ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -697,12 +751,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   // Sync sheetY on open
   useEffect(() => {
-    if (sheetExpanded) {
-      dragYAnimRef.current?.stop();
-      dragY.set(0);
-      sheetY.set(0);
-    }
-  }, [sheetExpanded, sheetY, dragY]);
+    dragYAnimRef.current?.stop();
+    dragY.set(0);
+    sheetY.set(sheetExpanded ? defaultOffset : vh);
+  }, [sheetExpanded, sheetY, dragY, defaultOffset, vh]);
 
   // ── Sync ref when state changes from goTo ──────────────────────────────
   useEffect(() => {
@@ -710,16 +762,23 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   }, [currentIdx]);
 
   // ── Programmatic navigation ──────────────────────────────────────────────
-  const goTo = useCallback((idx) => {
+  const goTo = useCallback((idx, immediate = false) => {
     if (idx < 0 || idx >= photos.length) return;
     snapAnimRef.current?.stop();
     dragYAnimRef.current?.stop();
     const W = containerWidthRef.current;
     const targetOffset = -(idx * W);
     currentIdxRef.current = idx;
+    setCurrentIdx(idx);
     // Reset dismiss gesture
     dragY.set(0);
     if (dragProgressMV) dragProgressMV.set(0);
+    if (immediate) {
+      // A selection made from the open statistics sheet must be visible in
+      // the same event, not after a carousel spring finishes.
+      offsetX.set(targetOffset);
+      return;
+    }
     snapAnimRef.current = animate(offsetX, targetOffset, {
       type: "spring", stiffness: 500, damping: 38, mass: 0.6,
       onComplete: () => {
@@ -731,8 +790,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   const jumpToPhoto = useCallback((photoId) => {
     const idx = photos.findIndex((p) => String(p.id) === String(photoId));
-    if (idx >= 0) goTo(idx);
-  }, [photos, goTo]);
+    if (idx >= 0) {
+      goTo(idx, sheetExpanded);
+    }
+  }, [photos, goTo, sheetExpanded]);
 
   // ── Keyboard navigation ──────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
@@ -844,9 +905,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             damping: 32,
           });
         }
-        setSheetExpanded(false);
-        setSortOpen(false);
-        setFilterOpen(false);
+        closePrimarySheet();
         setShareSheetOpen(false);
         // Disable the whole gallery subtree from receiving input during the
         // exit fade. The root motion element stays in the DOM for ~220 ms while
@@ -912,7 +971,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     }
 
     gestureAxis.current = null;
-  }, [offsetX, dragY, photos.length, onClose]);
+  }, [offsetX, dragY, photos.length, onClose, closePrimarySheet]);
 
   const onWrapperTouchCancel = useCallback(() => {
     gestureAxis.current = null;
@@ -993,15 +1052,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       dragYAnimRef.current?.stop();
     };
   }, []);
-
-  // After the shared-element open transition settles, the first photo should
-  // use object-contain like every other photo so carousel navigation is
-  // visually consistent and layout animations do not interfere with dragging.
-  useEffect(() => {
-    if (initialIdx !== 0) return;
-    const timer = setTimeout(() => setFirstPhotoFitDone(true), 500);
-    return () => clearTimeout(timer);
-  }, [initialIdx]);
 
   // ── Share handler ────────────────────────────────────────────────────────
   // Owners get the AnalyticsShareSheet flow (token-protected URL that grants
@@ -1149,8 +1199,13 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       {/* Photo wrapper — handles all touch gestures (axis-locked) */}
       <motion.div
         data-testid="gallery-touch-layer"
-        className="flex-1 relative"
-        style={{ scale: combinedScale, translateY: combinedTranslateY }}
+        className="absolute top-0 left-0 right-0 overflow-hidden"
+        style={{
+          height: photoStageHeight,
+          scale: combinedScale,
+          translateY: combinedTranslateY,
+          willChange: "height, transform",
+        }}
         onTouchStart={onWrapperTouchStart}
         onTouchMove={onWrapperTouchMove}
         onTouchEnd={onWrapperTouchEnd}
@@ -1175,8 +1230,9 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               // the off-screen shared element does not fly in from the card.
               const isSharedElement = i === 0;
               const isEager = isSharedElement || Math.abs(currentIdx - i) <= 1;
-              const isFirstCover = isSharedElement && !firstPhotoFitDone;
-              const photoClassName = `max-w-full max-h-full select-none ${isFirstCover ? "object-cover" : "object-contain"}`;
+              // Statistics mode must preserve the complete photo from the first
+              // frame; the sheet geometry, not object-cover, controls the stage.
+              const photoClassName = "max-w-full max-h-full select-none object-contain";
               const photoIsVideo = isVideo(photo);
               const photoProps = {
                 src: photo.url,
@@ -1190,6 +1246,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               <div
                 key={photo.id}
                 data-media-id={photo.id}
+                data-active={i === currentIdx ? "true" : "false"}
                 className="relative flex-shrink-0 w-full h-full flex items-center justify-center py-8"
               >
                 {photo?.url ? (
@@ -1204,7 +1261,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                         initial={initialIdx === 0 ? { borderRadius: 16 } : false}
                         animate={{ borderRadius: 0 }}
                         transition={
-                          isExiting || !firstPhotoFitDone
+                          isExiting
                             ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
                             : { duration: 0 }
                         }
@@ -1230,12 +1287,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                         {...photoProps}
                         layoutId={`album-cover-${album.id}`}
                         layout={false}
-                        onLayoutAnimationComplete={() => setFirstPhotoFitDone(true)}
                         style={{ pointerEvents: "none" }}
                         initial={initialIdx === 0 ? { borderRadius: 16 } : false}
                         animate={{ borderRadius: 0 }}
                         transition={
-                          isExiting || !firstPhotoFitDone
+                          isExiting
                             ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
                             : { duration: 0 }
                         }
@@ -1270,7 +1326,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
       {/* Bottom controls (ThumbStrip + PillBar) */}
       <motion.div
-        className="flex flex-col items-center gap-3 pb-6 flex-shrink-0 z-10"
+        className="absolute bottom-0 left-0 right-0 flex flex-col items-center gap-3 pb-6 z-10"
         style={{ opacity: controlsOpacity, pointerEvents: controlsPointerEvents }}
       >
         {photos.length > 1 && (
@@ -1281,6 +1337,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             onSelect={handleThumbSelect}
             onDragEnd={handleThumbDragEnd}
             snapAnimRef={snapAnimRef}
+            onSwipeUp={() => setSheetExpanded(true)}
           />
         )}
 
@@ -1298,14 +1355,26 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       {/* PRIMARY BottomSheet */}
       <BottomSheet
         open={sheetExpanded}
-        onClose={() => setSheetExpanded(false)}
+        onClose={closePrimarySheet}
         sharedY={sheetY}
+        onHorizontalSwipe={(direction) => setSheetTab((tab) =>
+          direction === "next"
+            ? (tab === "stats" ? "comments" : "stats")
+            : (tab === "comments" ? "stats" : "comments")
+        )}
+        backdropBlur={false}
+        backdropDim={false}
+        heightVh={0.75}
         hideHeader={true}
         closeOnEscape={!secondaryOpen}
+        testId="primary-stats-sheet"
+        viewportHeight={vh}
         footer={sheetTab === "comments" ? renderCommentInput() : null}
         headerChildren={
-          <div className="flex gap-2">
+          <div role="tablist" aria-label={t("statistics")} className="flex gap-2">
             <button
+              role="tab"
+              aria-selected={sheetTab === "stats"}
               onClick={() => setSheetTab("stats")}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "stats"
                 ? "bg-primary-400 text-white"
@@ -1316,6 +1385,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               {t("statistics")}
             </button>
             <button
+              role="tab"
+              aria-selected={sheetTab === "comments"}
               onClick={() => setSheetTab("comments")}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "comments"
                 ? "bg-primary-400 text-white"
@@ -1328,21 +1399,46 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
           </div>
         }
       >
-        {sheetTab === "stats" ? (
-          <StatisticsTab
-            analytics={analytics}
-            photos={filtered}
-            currentPhotoId={currentPhoto?.id}
-            onJump={jumpToPhoto}
-            selectedVotersSize={selectedVoters.size}
-            onOpenSort={() => setSortOpen(true)}
-            onOpenFilter={openFilterSheet}
-            onShare={handleShare}
-            shareDone={shareDone}
-            viewMode={viewMode}
-          />
-        ) : renderComments()}
+        <motion.div
+          key={sheetTab}
+          initial={{ opacity: 0, x: sheetTab === "stats" ? -18 : 18 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="min-h-full"
+        >
+          {sheetTab === "stats" ? (
+            <StatisticsTab
+              analytics={analytics}
+              photos={filtered}
+              currentPhotoId={currentPhoto?.id}
+              onJump={jumpToPhoto}
+              selectedVotersSize={selectedVoters.size}
+              onOpenSort={() => setSortOpen(true)}
+              onOpenFilter={openFilterSheet}
+              onShare={handleShare}
+              shareDone={shareDone}
+              viewMode={viewMode}
+            />
+          ) : renderComments()}
+        </motion.div>
       </BottomSheet>
+
+      {sheetExpanded && viewMode === "grid" && (
+        <motion.div
+          className="fixed left-0 right-0 bottom-[75vh] z-[55] flex justify-center pointer-events-none"
+          style={{ y: floatingPillY, willChange: "transform" }}
+        >
+          <div className="pointer-events-auto">
+            <PillBar
+              likeCount={likeCount}
+              dislikeCount={dislikeCount}
+              commentCount={commentsCount}
+              onExpand={() => setSheetExpanded(true)}
+              onSwipeUp={() => setSheetExpanded(true)}
+            />
+          </div>
+        </motion.div>
+      )}
 
       {/* SECONDARY SortSheet */}
       <GallerySortSheet
