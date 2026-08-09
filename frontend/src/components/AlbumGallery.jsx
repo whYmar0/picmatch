@@ -68,6 +68,13 @@ function PillBar({
     onSwipeMove?.(-dy);
   };
 
+  const releasePointer = (e) => {
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+      e.currentTarget.releasePointerCapture?.(e.pointerId);
+    }
+    dragStartY.current = 0;
+  };
+
   const handlePointerUp = (e) => {
     const endY = e.clientY ?? e.changedTouches?.[0]?.clientY;
     const distance = Math.max(0, dragStartY.current - endY);
@@ -75,11 +82,14 @@ function PillBar({
       onSwipeEnd?.(distance);
     }
     swipeStarted.current = false;
+    releasePointer(e);
   };
 
-  const handlePointerCancel = () => {
+  const handlePointerCancel = (e) => {
     if (swipeStarted.current) onSwipeCancel?.();
     swipeStarted.current = false;
+    didDrag.current = false;
+    releasePointer(e);
   };
 
   const handleClick = (e) => {
@@ -290,10 +300,17 @@ function ThumbStrip({
     }
   };
 
-  const onThumbTouchCancel = () => {
+  const resetThumbGesture = () => {
+    stripDragX.stop?.();
+    stripDragX.set(0);
     if (sheetSwipeActive.current) onSwipeCancel?.();
     sheetSwipeActive.current = false;
     isDragging.current = false;
+    didSwitchDuringDrag.current = false;
+  };
+
+  const onThumbTouchCancel = () => {
+    resetThumbGesture();
   };
 
   const onThumbTouchEnd = (e) => {
@@ -301,8 +318,7 @@ function ThumbStrip({
       const touch = e.changedTouches?.[0];
       const distance = touch ? Math.max(0, touchStartY.current - touch.clientY) : 0;
       onSwipeEnd?.(distance);
-      sheetSwipeActive.current = false;
-      isDragging.current = false;
+      resetThumbGesture();
       return;
     }
     // Taps are handled by the individual thumb buttons; only drag releases
@@ -640,6 +656,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [sheetGestureActive, setSheetGestureActive] = useState(false);
   const [sheetTab, setSheetTab] = useState("stats");
+  const tabTrackX = useMotionValue(0);
+  const tabAnimationRef = useRef(null);
+  const tabViewportRef = useRef(null);
+  const tabWidthRef = useRef(0);
+  const galleryHistoryRef = useRef(false);  const galleryCloseStartedRef = useRef(false);
 
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -683,7 +704,9 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const gestureAxis = useRef(null);
 
   // ── Motion values ────────────────────────────────────────────────────────
-  const defaultOffset = vh * 0.35;
+  // The partial primary sheet leaves exactly half of the visible viewport
+  // above its top edge (the panel itself is 75vh tall).
+  const defaultOffset = vh * 0.25;
   const dragY = useMotionValue(0);
   const dragYAnimRef = useRef(null);
   // Separate motion value for the progressive swipe that mounts the sheet.
@@ -721,13 +744,31 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   // BottomSheet shared drag position
   const sheetY = useMotionValue(vh);
+
+  useEffect(() => {
+    const measure = () => {
+      tabWidthRef.current = tabViewportRef.current?.clientWidth || 0;
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  useEffect(() => {
+    if (galleryHistoryRef.current) return undefined;
+    window.history.pushState({ ...(window.history.state || {}), albumGallery: true }, "", window.location.href);
+    galleryHistoryRef.current = true;
+    return undefined;
+  }, []);
+
+
   // The sheet occupies `heightVh` of the viewport. Binding the photo stage to
   // the space left above that sheet prevents the sheet from ever covering the
   // image while keeping the resize on the compositor path.
   const photoStageHeight = useTransform(
     sheetY,
     [0, defaultOffset, vh],
-    [vh * 0.25, vh * 0.60, vh],
+    [vh * 0.25, vh * 0.50, vh],
     { clamp: true },
   );
   const photoScale = useTransform(sheetY, [0, defaultOffset], [1, 1]);
@@ -758,6 +799,43 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const carouselPointerEvents = sheetExpanded ? "none" : "auto";
   const floatingPillY = useTransform(sheetY, (value) => value);
 
+  const closeGallery = useCallback((fromHistory = false) => {
+    // Back, a close button, and a swipe can arrive in the same frame. Only
+    // allow one owner to perform the close/unmount sequence.
+    if (galleryCloseStartedRef.current) return;
+    galleryCloseStartedRef.current = true;
+    tabAnimationRef.current?.stop();
+    snapAnimRef.current?.stop();
+    gestureAxis.current = null;
+    touchStartOffsetX.current = 0;
+    touchStartDragY.current = 0;
+    const shouldTraverseGalleryEntry = !fromHistory && galleryHistoryRef.current;
+    galleryHistoryRef.current = false;
+    setSheetGestureActive(false);
+    setSheetExpanded(false);
+    setSortOpen(false);
+    setFilterOpen(false);
+    setShareSheetOpen(false);
+    if (!isExitingRef.current) {
+      dragYAnimRef.current?.stop();
+      dragY.set(0);
+      if (dragProgressMV) dragProgressMV.set(0);
+      sheetY.set(vh);
+      sheetGestureY.set(vh);
+    }
+    if (shouldTraverseGalleryEntry) window.history.back();
+    onClose();
+  }, [onClose, sheetY, sheetGestureY, dragY, dragProgressMV, vh]);
+
+  const closeShareSheet = useCallback(() => {
+    setShareSheetOpen(false);
+  }, []);
+
+  const closeSecondarySheet = useCallback(() => {
+    setSortOpen(false);
+    setFilterOpen(false);
+  }, []);
+
   const closePrimarySheet = useCallback(() => {
     sheetY.set(vh);
     sheetGestureY.set(vh);
@@ -766,6 +844,121 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     setSortOpen(false);
     setFilterOpen(false);
   }, [sheetY, sheetGestureY, vh]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      // There is deliberately one gallery history entry. If Back is pressed
+      // while a nested layer is open, restore that entry and close only the
+      // topmost layer. No second history.back/go call is needed.
+      if (shareSheetOpen) {
+        setShareSheetOpen(false);
+        window.history.pushState({ ...(window.history.state || {}), albumGallery: true }, "", window.location.href);
+        galleryHistoryRef.current = true;
+        return;
+      }
+      if (sortOpen || filterOpen) {
+        setSortOpen(false);
+        setFilterOpen(false);
+        window.history.pushState({ ...(window.history.state || {}), albumGallery: true }, "", window.location.href);
+        galleryHistoryRef.current = true;
+        return;
+      }
+      if (sheetExpanded) {
+        closePrimarySheet();
+        window.history.pushState({ ...(window.history.state || {}), albumGallery: true }, "", window.location.href);
+        galleryHistoryRef.current = true;
+        return;
+      }
+      if (galleryHistoryRef.current) closeGallery(true);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [closePrimarySheet, closeGallery, shareSheetOpen, sortOpen, filterOpen, sheetExpanded]);
+
+  const tabCommittedRef = useRef("stats");
+
+  const animateToTab = useCallback((nextTab, fromCurrent = false) => {
+    const width = tabViewportRef.current?.clientWidth || tabWidthRef.current;
+    tabCommittedRef.current = nextTab;
+    setSheetTab(nextTab);
+    tabAnimationRef.current?.stop();
+    if (!width) return;
+    const target = nextTab === "comments" ? -width : 0;
+    // Animate from the current progressive position; never pre-set the target.
+    tabAnimationRef.current = animate(tabTrackX, target, {
+      type: "spring", stiffness: 420, damping: 38,
+      onComplete: () => { tabAnimationRef.current = null; },
+    });
+  }, [tabTrackX]);
+
+  const handleTabSwipeStart = useCallback(() => {
+    tabWidthRef.current = tabViewportRef.current?.clientWidth
+      || tabWidthRef.current
+      || (typeof window !== "undefined" ? window.innerWidth : 400);
+    // The BottomSheet recognizer calls this before the first progressive move.
+    // Stop the gallery-owned spring here as well; otherwise a reverse swipe
+    // can continue animating the track while a new full-panel gesture starts.
+    tabAnimationRef.current?.stop();
+    tabAnimationRef.current = null;
+  }, []);
+
+  const handleTabSwipeMove = useCallback((dx) => {
+    const width = tabWidthRef.current
+      || tabViewportRef.current?.clientWidth
+      || (typeof window !== "undefined" ? window.innerWidth : 400);
+    tabWidthRef.current = width;
+    if (!width) return;
+    // A new finger position always takes precedence over the previous settle
+    // spring, including after an early threshold commit.
+    tabAnimationRef.current?.stop();
+    const base = tabCommittedRef.current === "comments" ? -width : 0;
+    tabTrackX.set(Math.max(-width, Math.min(0, base + dx)));
+  }, [tabTrackX]);
+
+  const handleTabSwipeEnd = useCallback((dx) => {
+    const width = tabWidthRef.current
+      || tabViewportRef.current?.clientWidth
+      || (typeof window !== "undefined" ? window.innerWidth : 400);
+    if (!width) return false;
+    const currentTab = tabCommittedRef.current;
+    // Match BottomSheet's early mobile commit threshold. Some scrollable
+    // children emit pointercancel shortly after the first decisive move, so
+    // waiting for 12% of the viewport would revert a valid full-panel swipe.
+    const shouldSwitch = Math.abs(dx) >= Math.max(32, width * 0.08);
+    const nextTab = shouldSwitch
+      ? (dx < 0 ? "comments" : "stats")
+      : currentTab;
+    // Commit before the spring starts. This prevents the render/effect cycle
+    // from restoring the old tab while the progressive track is settling.
+    tabCommittedRef.current = nextTab;
+    setSheetTab(nextTab);
+    const target = nextTab === "comments" ? -width : 0;
+    tabAnimationRef.current?.stop();
+    tabAnimationRef.current = animate(tabTrackX, target, {
+      type: "spring", stiffness: 420, damping: 38,
+      onComplete: () => { tabAnimationRef.current = null; },
+    });
+    return true;
+  }, [tabTrackX]);
+
+  const handleTabSwipeCancel = useCallback(() => {
+    const width = tabWidthRef.current
+      || tabViewportRef.current?.clientWidth
+      || (typeof window !== "undefined" ? window.innerWidth : 400);
+    if (!width) return;
+    tabAnimationRef.current?.stop();
+    tabAnimationRef.current = animate(tabTrackX, tabCommittedRef.current === "comments" ? -width : 0, {
+      type: "spring", stiffness: 420, damping: 38,
+      onComplete: () => { tabAnimationRef.current = null; },
+    });
+  }, [tabTrackX]);
+
+  useEffect(() => {
+    const width = tabViewportRef.current?.clientWidth || tabWidthRef.current;
+    if (width && !tabAnimationRef.current) {
+      tabTrackX.set(tabCommittedRef.current === "comments" ? -width : 0);
+    }
+  }, [sheetTab, tabTrackX]);
 
   const handleSheetSwipeStart = useCallback(() => {
     if (sheetExpanded || sheetGestureActive) return;
@@ -806,7 +999,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
     // A normal open settles into the existing partial snap. A very long
     // gesture may settle fully expanded, while still following the finger.
-    settle(normalizedDistance > vh * 0.62 ? 0 : defaultOffset);
+    settle(normalizedDistance > vh * 0.42 ? 0 : defaultOffset);
   }, [sheetGestureActive, sheetGestureY, sheetY, vh, defaultOffset]);
 
   const handleSheetSwipeCancel = useCallback(() => {
@@ -892,8 +1085,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       sheetY.set(vh);
       sheetGestureY.set(vh);
     } else if (!sheetGestureActive) {
+      // BottomSheet owns the open animation on the shared value. Do not set
+      // the partial offset here first, otherwise the animation starts and ends
+      // at the same position and the first frame can desync from the photo.
       const settledY = sheetGestureY.get();
-      sheetY.set(settledY < vh - 1 ? settledY : defaultOffset);
+      if (settledY < vh - 1) sheetY.set(settledY);
     }
   }, [sheetExpanded, sheetGestureActive, sheetY, sheetGestureY, dragY, defaultOffset, vh]);
 
@@ -1046,8 +1242,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             damping: 32,
           });
         }
-        closePrimarySheet();
-        setShareSheetOpen(false);
         // Disable the whole gallery subtree from receiving input during the
         // exit fade. The root motion element stays in the DOM for ~220 ms while
         // AnimatePresence finishes; `inert` ensures it does not block clicks or
@@ -1056,7 +1250,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // for assistive tech.
         setIsExiting(true);
         galleryRef.current?.setAttribute("inert", "");
-        onClose();      // dragProgressMV progress to 1 is owned by handleGalleryClose
+        closeGallery();      // dragProgressMV progress to 1 is owned by handleGalleryClose
         gestureAxis.current = null;
         return;
       }
@@ -1112,11 +1306,28 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     }
 
     gestureAxis.current = null;
-  }, [offsetX, dragY, photos.length, onClose, closePrimarySheet]);
+  }, [offsetX, dragY, photos.length, closeGallery]);
 
   const onWrapperTouchCancel = useCallback(() => {
+    snapAnimRef.current?.stop();
+    dragYAnimRef.current?.stop();
+    tabAnimationRef.current?.stop();
     gestureAxis.current = null;
-  }, []);
+    touchStart.current = { x: 0, y: 0, time: 0 };
+    touchStartOffsetX.current = 0;
+    touchStartDragY.current = 0;
+    dragY.set(0);
+    if (dragProgressMV) dragProgressMV.set(0);
+    const width = containerWidthRef.current;
+    const safeIdx = Math.max(0, Math.min(
+      Math.round(-offsetX.get() / width),
+      Math.max(0, photos.length - 1),
+    ));
+    snapAnimRef.current = animate(offsetX, -(safeIdx * width), {
+      type: "spring", stiffness: 500, damping: 38,
+      onComplete: () => { snapAnimRef.current = null; },
+    });
+  }, [dragY, dragProgressMV, offsetX, photos.length]);
 
   // VideoPlayer owns the touch stream on video slides. These callbacks feed
   // the same dragY/progress values and close threshold as the gallery wrapper,
@@ -1147,7 +1358,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       setShareSheetOpen(false);
       setIsExiting(true);
       galleryRef.current?.setAttribute("inert", "");
-      onClose();
+      closeGallery();
       return;
     }
 
@@ -1162,7 +1373,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         if (dragProgressMV) dragProgressMV.set(0);
       },
     });
-  }, [dragY, dragProgressMV, vh, onClose]);
+  }, [dragY, dragProgressMV, vh, closeGallery]);
 
   // Called when the user taps a thumbnail. We reuse the main spring so the
   // photo and the thumbnail strip move in lockstep.
@@ -1188,9 +1399,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   // a new gallery opens, so the next open sequence starts cleanly with
   // pageScaleMV = baseScaleMV = 0.94.
   useEffect(() => {
+    // Reset once per gallery mount, not on every render. Resetting during
+    // render re-enabled duplicate close callbacks during the exit transition.
+    galleryCloseStartedRef.current = false;
     return () => {
       snapAnimRef.current?.stop();
       dragYAnimRef.current?.stop();
+      tabAnimationRef.current?.stop();
+      gestureAxis.current = null;
     };
   }, []);
 
@@ -1504,11 +1720,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         open={sheetExpanded}
         onClose={closePrimarySheet}
         sharedY={sheetY}
-        onHorizontalSwipe={(direction) => setSheetTab((tab) =>
-          direction === "next"
-            ? (tab === "stats" ? "comments" : "stats")
-            : (tab === "comments" ? "stats" : "comments")
-        )}
+        onHorizontalSwipeStart={handleTabSwipeStart}
+        onHorizontalSwipeMove={handleTabSwipeMove}
+        onHorizontalSwipeEnd={handleTabSwipeEnd}
+        onHorizontalSwipeCancel={handleTabSwipeCancel}
+        partialOffsetVh={0.25}
         backdropBlur={false}
         backdropDim={false}
         heightVh={0.75}
@@ -1524,7 +1740,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             <button
               role="tab"
               aria-selected={sheetTab === "stats"}
-              onClick={() => setSheetTab("stats")}
+              onClick={() => animateToTab("stats")}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "stats"
                 ? "bg-primary-400 text-white"
                 : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
@@ -1536,7 +1752,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             <button
               role="tab"
               aria-selected={sheetTab === "comments"}
-              onClick={() => setSheetTab("comments")}
+              onClick={() => animateToTab("comments")}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "comments"
                 ? "bg-primary-400 text-white"
                 : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
@@ -1548,28 +1764,31 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
           </div>
         }
       >
-        <motion.div
-          key={sheetTab}
-          initial={{ opacity: 0, x: sheetTab === "stats" ? -18 : 18 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          className="min-h-full"
-        >
-          {sheetTab === "stats" ? (
-            <StatisticsTab
-              analytics={analytics}
-              photos={filtered}
-              currentPhotoId={currentPhoto?.id}
-              onJump={jumpToPhoto}
-              selectedVotersSize={selectedVoters.size}
-              onOpenSort={() => setSortOpen(true)}
-              onOpenFilter={openFilterSheet}
-              onShare={handleShare}
-              shareDone={shareDone}
-              viewMode={viewMode}
-            />
-          ) : renderComments()}
-        </motion.div>
+        <div ref={tabViewportRef} className="overflow-hidden w-full min-h-full">
+          <motion.div
+            data-testid="stats-comments-tab-track"
+            className="flex w-[200%] min-h-full"
+            style={{ x: tabTrackX }}
+          >
+            <div className="w-1/2 flex-shrink-0 min-h-full">
+              <StatisticsTab
+                analytics={analytics}
+                photos={filtered}
+                currentPhotoId={currentPhoto?.id}
+                onJump={jumpToPhoto}
+                selectedVotersSize={selectedVoters.size}
+                onOpenSort={() => setSortOpen(true)}
+                onOpenFilter={openFilterSheet}
+                onShare={handleShare}
+                shareDone={shareDone}
+                viewMode={viewMode}
+              />
+            </div>
+            <div className="w-1/2 flex-shrink-0 min-h-full">
+              {renderComments()}
+            </div>
+          </motion.div>
+        </div>
       </BottomSheet>
 
       {sheetExpanded && viewMode === "grid" && (
@@ -1595,7 +1814,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       {/* SECONDARY SortSheet */}
       <GallerySortSheet
         open={sortOpen}
-        onClose={() => setSortOpen(false)}
+        onClose={closeSecondarySheet}
         sortKey={sortKey}
         setSortKey={setSortKey}
         viewMode={viewMode}
@@ -1605,7 +1824,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       {/* SECONDARY FilterSheet */}
       <GalleryFilterSheet
         open={filterOpen}
-        onClose={() => setFilterOpen(false)}
+        onClose={closeSecondarySheet}
         voter_summaries={voter_summaries}
         pendingVoters={pendingVoters}
         togglePending={togglePending}
@@ -1619,7 +1838,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
           open on top. */}
       <AnalyticsShareSheet
         open={shareSheetOpen}
-        onClose={() => setShareSheetOpen(false)}
+        onClose={closeShareSheet}
         albumId={String(album?.id || "")}
         zIndex={70}
       />
