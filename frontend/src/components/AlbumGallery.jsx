@@ -1740,7 +1740,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                           layout={false}
                           className="absolute inset-0 flex max-w-full max-h-full items-center justify-center"
                           initial={initialIdx === 0 ? { borderRadius: 16 } : false}
-                          animate={{ borderRadius: 0 }}        transition={isExiting ? { duration: 0.22, ease: [0.32, 0.72, 0, 1] } : { duration: 0 }}
+                          animate={{ borderRadius: 0 }}        transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
                         >
                           <VideoPlayer
                             src={photo.url}
@@ -1765,7 +1765,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                           layout={false}
                           style={{ pointerEvents: "none" }}
                           initial={initialIdx === 0 ? { borderRadius: 16 } : false}
-                          animate={{ borderRadius: 0 }}        transition={isExiting ? { duration: 0.22, ease: [0.32, 0.72, 0, 1] } : { duration: 0 }}
+                          animate={{ borderRadius: 0 }}        transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
                         />
                       )
                     ) : photoIsVideo ? (
