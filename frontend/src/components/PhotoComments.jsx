@@ -146,7 +146,7 @@ export function CommentInput({ photoId, replyTarget, onCancelReply, onCommentCre
   };
 
   return (
-    <div>
+    <div data-bottom-sheet-no-horizontal-swipe="true">
       {replyTarget && (
         <div className="flex items-center gap-2 mb-2 text-xs text-gray-500 dark:text-gray-400
                         bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-xl">

@@ -11,6 +11,8 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { X } from "lucide-react";
 
+const CLOSE_EASE_OUT = [0.22, 1, 0.36, 1];
+
 // ─── Ref-counted body scroll lock ─────────────────────────────────────────────
 // Multiple BottomSheets can stack (e.g. primary + secondary). Per-instance
 // locking causes races: the secondary closing unlocks the body even though
@@ -59,6 +61,8 @@ export default function BottomSheet({
   viewportHeight,
   gestureActive = false,
   gestureY,
+  linearMotion = false,
+  animateOnClose = true,
 }) {
   const sheetRef = useRef(null);
   const horizontalGestureRef = useRef({ x: 0, y: 0, sheetY: 0 });
@@ -152,7 +156,19 @@ export default function BottomSheet({
     if (!panel) return undefined;
 
     const onPointerDown = (event) => {
-      if (panel.contains(event.target)) handleSheetPointerDown(event);
+      // Interactive footer controls such as the comment input own their
+      // pointer stream. They must remain editable/clickable and must not
+      // accidentally start the sheet's horizontal tab swipe.
+      if (event.target.closest?.("[data-bottom-sheet-no-horizontal-swipe]")) {
+        return;
+      }
+      // The footer is a sibling of the animated panel. Use the shared marker
+      // instead of `panel.contains` so every other part of the sheet
+      // participates in the horizontal tab gesture without including the
+      // backdrop.
+      if (event.target.closest?.("[data-bottom-sheet-surface]")) {
+        handleSheetPointerDown(event);
+      }
     };
     const ownsPointer = (event) => {
       const gesture = horizontalGestureRef.current;
@@ -367,7 +383,16 @@ export default function BottomSheet({
   // Close on Escape key and initialize the sheet at the current progressive
   // gesture position instead of waiting for the gesture to finish.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      animationRef.current?.stop();
+      horizontalSwipeActiveRef.current = false;
+      horizontalLastDxRef.current = 0;
+      horizontalLastDyRef.current = 0;
+      horizontalEndHandledRef.current = false;
+      gestureAxisRef.current = null;
+      suppressClickRef.current = false;
+      return;
+    }
     if (gestureActive && gestureY) {
       const current = gestureY.get();
       animationRef.current?.stop();
@@ -377,12 +402,17 @@ export default function BottomSheet({
       const target = Number.isFinite(pendingGestureSnap) && pendingGestureSnap < vh - 1
         ? pendingGestureSnap
         : defaultOffset;
-      startYAnimation(target, { type: "spring", stiffness: 350, damping: 35 });
+      startYAnimation(
+        target,
+        linearMotion
+          ? { duration: 0.25, ease: CLOSE_EASE_OUT }
+          : { type: "spring", stiffness: 350, damping: 35 }
+      );
     }
     const handler = (e) => { if (e.key === "Escape" && closeOnEscape) handleClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, defaultOffset, closeOnEscape, gestureActive, gestureY, y, vh]);
+  }, [open, defaultOffset, closeOnEscape, gestureActive, gestureY, y, vh, linearMotion]);
 
   // While the sheet is being opened from the bottom controls, follow the
   // parent's gesture motion value directly. This keeps the panel under the
@@ -424,7 +454,9 @@ export default function BottomSheet({
     // MotionValue completion callback. Pointer-driven animations can be
     // cancelled by the browser before Framer Motion invokes onComplete;
     // closing synchronously keeps Back/drag interactions from freezing.
-    startYAnimation(vh, { duration: 0.25 });
+    if (animateOnClose) {
+      startYAnimation(vh, linearMotion ? { duration: 0.25, ease: CLOSE_EASE_OUT } : { duration: 0.25 });
+    }
     if (!closeNotifiedRef.current) {
       closeNotifiedRef.current = true;
       onClose();
@@ -471,7 +503,7 @@ export default function BottomSheet({
             data-testid={testId ? `${testId}-backdrop` : undefined}
             data-dim={backdropDim ? "true" : "false"}
             className={`fixed inset-[-50vh] -inset-x-0 ${backdropDim ? "bg-black/60" : "bg-transparent"} ${backdropBlur ? "backdrop-blur-xl" : ""}`}
-            onClick={onClose}
+            onClick={handleClose}
           />
 
           {/* Optional: Top content (e.g. image) */}
@@ -494,7 +526,10 @@ export default function BottomSheet({
             key="sheet"
             ref={sheetRef}
             data-testid={testId ? `${testId}-panel` : undefined}
-            exit={{ y: vh }}
+            data-bottom-sheet-surface="true"
+            exit={linearMotion
+              ? { opacity: 0, transition: { duration: 0.25, ease: CLOSE_EASE_OUT } }
+              : { y: vh }}
             style={{
               y,
               height: Math.max(320, vh * heightVh),
@@ -504,6 +539,7 @@ export default function BottomSheet({
               // preventDefault and holds the sheet at its original Y.
               touchAction: "pan-y",
               willChange: "transform",
+              overscrollBehavior: "contain",
             }}
             onClickCapture={handleSheetClickCapture}
             onDrag={handleVerticalDrag}
@@ -517,7 +553,7 @@ export default function BottomSheet({
             // gesture, while the top edge is a hard stop.
             dragElastic={{ top: 0, bottom: 0.1 }}
             onDragEnd={handleSheetDragEnd}
-            className="absolute bottom-0 w-full z-20
+            className="absolute bottom-0 w-full z-20 min-h-0
                        bg-card-light dark:bg-card-dark
                        rounded-t-[2.5rem] shadow-[0_-8px_40px_-8px_rgba(0,0,0,0.32)]
                        flex flex-col"
@@ -554,7 +590,8 @@ export default function BottomSheet({
 
             {/* Scrollable content */}
             <div
-              className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+4rem)]"
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+4rem)]"
+              style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
               data-testid={testId ? `${testId}-content` : undefined}
             >
               {children}
@@ -569,6 +606,7 @@ export default function BottomSheet({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               style={{ opacity: footerOpacity }}
+              data-bottom-sheet-surface="true"
               className="absolute bottom-0 left-0 right-0 z-20
                          bg-card-light dark:bg-card-dark
                          px-4 sm:px-6 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]

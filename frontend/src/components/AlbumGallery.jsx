@@ -663,7 +663,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const tabSwipeStartTabRef = useRef("stats");
   const tabGestureActiveRef = useRef(false);
   const galleryHistoryRef = useRef(false);
-  const historyRestoreRef = useRef(false);
+  const historyLayersRef = useRef({ sheet: false, sort: false, filter: false, share: false });
+  const galleryHistoryKeyRef = useRef(null);
+  const historyStackRef = useRef([]);
+  const pendingHistoryBackRef = useRef(null);
+  const sheetCloseAnimRef = useRef(null);
   const galleryCloseStartedRef = useRef(false);
 
   const [sortOpen, setSortOpen] = useState(false);
@@ -746,7 +750,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     return () => window.removeEventListener("resize", measure);
   }, [offsetX]);
 
-  // BottomSheet shared drag position
+  // BottomSheet shared drag position. The photo stage intentionally reads this
+  // value directly so it follows the sheet continuously in both directions.
   const sheetY = useMotionValue(vh);
 
   useEffect(() => {
@@ -760,7 +765,14 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   useEffect(() => {
     if (galleryHistoryRef.current) return undefined;
-    window.history.pushState({ ...(window.history.state || {}), albumGallery: true }, "", window.location.href);
+    const key = `gallery-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    galleryHistoryKeyRef.current = key;
+    historyStackRef.current = [{ key, layer: "gallery" }];
+    window.history.pushState(
+      { ...(window.history.state || {}), albumGallery: true, albumHistoryKey: key },
+      "",
+      window.location.href,
+    );
     galleryHistoryRef.current = true;
     return undefined;
   }, []);
@@ -810,9 +822,15 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     galleryCloseStartedRef.current = true;
     tabAnimationRef.current?.stop();
     snapAnimRef.current?.stop();
+    sheetCloseAnimRef.current?.stop();
+    sheetCloseAnimRef.current = null;
     gestureAxis.current = null;
     touchStartOffsetX.current = 0;
     touchStartDragY.current = 0;
+    // Use the actual pushed-entry stack, not boolean layer flags. The stack is
+    // authoritative after rapid Back/programmatic closes and avoids traversing
+    // too far when the sheet was already consumed by popstate.
+    const historyEntriesAboveGallery = Math.max(0, historyStackRef.current.length - 1);
     const shouldTraverseGalleryEntry = !fromHistory && galleryHistoryRef.current;
     galleryHistoryRef.current = false;
     setSheetGestureActive(false);
@@ -820,6 +838,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     setSortOpen(false);
     setFilterOpen(false);
     setShareSheetOpen(false);
+    historyLayersRef.current = { sheet: false, sort: false, filter: false, share: false };
+    pendingHistoryBackRef.current = null;
     if (!isExitingRef.current) {
       dragYAnimRef.current?.stop();
       dragY.set(0);
@@ -827,72 +847,135 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       sheetY.set(vh);
       sheetGestureY.set(vh);
     }
-    if (shouldTraverseGalleryEntry) window.history.back();
+    if (shouldTraverseGalleryEntry) {
+      // Skip any still-open sheet layer entries in one atomic traversal. A
+      // single back() here can strand the browser on an invisible layer after
+      // a rapid close/back sequence. Clear the local stack before traversal so
+      // a queued popstate cannot calculate another traversal from stale data.
+      historyStackRef.current = [];
+      window.history.go(-(historyEntriesAboveGallery + 1));
+    }
     onClose();
   }, [onClose, sheetY, sheetGestureY, dragY, dragProgressMV, vh]);
 
-  const closeShareSheet = useCallback(() => {
-    setShareSheetOpen(false);
+  const pushHistoryLayer = useCallback((layer) => {
+    if (historyLayersRef.current[layer]) return;
+    const key = `layer-${layer}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    historyLayersRef.current[layer] = true;
+    historyStackRef.current.push({ key, layer });
+    window.history.pushState(
+      { ...(window.history.state || {}), albumGallery: true, albumLayer: layer, albumHistoryKey: key },
+      "",
+      window.location.href,
+    );
   }, []);
 
-  const closeSecondarySheet = useCallback(() => {
+  const closeHistoryLayer = useCallback((layer) => {
+    if (!historyLayersRef.current[layer]) return;
+    historyLayersRef.current[layer] = false;
+    const stack = historyStackRef.current;
+    const top = stack[stack.length - 1];
+    if (top?.layer === layer) {
+      stack.pop();
+    }
+    pendingHistoryBackRef.current = {
+      expectedKey: stack[stack.length - 1]?.key || galleryHistoryKeyRef.current,
+    };
+    window.history.back();
+  }, []);
+
+  const closeShareSheet = useCallback((fromHistory = false) => {
+    if (!fromHistory) closeHistoryLayer("share");
+    historyLayersRef.current.share = false;
+    setShareSheetOpen(false);
+  }, [closeHistoryLayer]);
+
+  const closeSecondarySheet = useCallback((fromHistory = false) => {
+    const activeLayer = historyLayersRef.current.sort ? "sort"
+      : historyLayersRef.current.filter ? "filter" : null;
+    if (!fromHistory && activeLayer) closeHistoryLayer(activeLayer);
+    historyLayersRef.current.sort = false;
+    historyLayersRef.current.filter = false;
     setSortOpen(false);
     setFilterOpen(false);
-  }, []);
+  }, [closeHistoryLayer]);
 
-  const closePrimarySheet = useCallback(() => {
-    sheetY.set(vh);
-    sheetGestureY.set(vh);
+  const closePrimarySheet = useCallback((fromHistory = false) => {
+    const hadLayer = historyLayersRef.current.sheet;
+    // The primary BottomSheet delegates here so the panel and image follow
+    // exactly the same light ease-out motion. Keep one cancellable owner so a
+    // second Back can safely hand off to gallery close.
+    sheetCloseAnimRef.current?.stop();
+    sheetY.stop?.();
+    sheetCloseAnimRef.current = animate(sheetY, vh, {
+      duration: 0.25,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (latest) => sheetGestureY.set(latest),
+      onComplete: () => {
+        sheetY.set(vh);
+        sheetGestureY.set(vh);
+        sheetCloseAnimRef.current = null;
+      },
+    });
+    if (!fromHistory && hadLayer) {
+      closeHistoryLayer("sheet");
+    }
+    historyLayersRef.current.sheet = false;
+    historyLayersRef.current.sort = false;
+    historyLayersRef.current.filter = false;
     setSheetGestureActive(false);
     setSheetExpanded(false);
     setSortOpen(false);
     setFilterOpen(false);
-  }, [sheetY, sheetGestureY, vh]);
+  }, [sheetY, sheetGestureY, vh, closeHistoryLayer]);
 
-  const restoreGalleryHistory = useCallback(() => {
-    // Back moves from the gallery entry to the dashboard entry. Move forward
-    // to the existing gallery entry instead of pushState-ing a duplicate;
-    // duplicate entries were the reason repeated mobile Back could escape the
-    // SPA after closing nested layers.
-    if (!galleryHistoryRef.current || historyRestoreRef.current) return;
-    historyRestoreRef.current = true;
-    window.history.forward();
-    // If the browser does not emit the expected popstate (for example during
-    // a rapid repeated Back gesture), do not leave the guard armed forever.
-    window.setTimeout(() => {
-      historyRestoreRef.current = false;
-    }, 500);
-  }, []);
+  const openPrimarySheet = useCallback(() => {
+    sheetCloseAnimRef.current?.stop();
+    sheetCloseAnimRef.current = null;
+    sheetY.stop?.();
+    pushHistoryLayer("sheet");
+    setSheetExpanded(true);
+  }, [sheetY, pushHistoryLayer]);
+
+  const openSortSheet = useCallback(() => {
+    pushHistoryLayer("sort");
+    setSortOpen(true);
+  }, [pushHistoryLayer]);
 
   useEffect(() => {
-    const handlePopState = () => {
-      if (historyRestoreRef.current) {
-        historyRestoreRef.current = false;
+    const handlePopState = (event) => {
+      const pending = pendingHistoryBackRef.current;
+      if (pending) {
+        pendingHistoryBackRef.current = null;
+        // Ignore only the exact pop generated by a programmatic close. A
+        // newer user Back with another state must still be handled below.
+        if (event.state?.albumHistoryKey === pending.expectedKey) return;
+      }
+      // Each layer has its own history entry. Back therefore consumes exactly
+      // the topmost active layer and never needs a forward/push race.
+      if (historyLayersRef.current.share) {
+        historyStackRef.current.pop();
+        closeShareSheet(true);
         return;
       }
-      // There is one gallery history entry. Back closes only the topmost layer
-      // and restores that same entry without adding another history record.
-      if (shareSheetOpen) {
-        setShareSheetOpen(false);
-        restoreGalleryHistory();
+      if (historyLayersRef.current.sort || historyLayersRef.current.filter) {
+        historyStackRef.current.pop();
+        closeSecondarySheet(true);
         return;
       }
-      if (sortOpen || filterOpen) {
-        setSortOpen(false);
-        setFilterOpen(false);
-        restoreGalleryHistory();
+      if (historyLayersRef.current.sheet) {
+        historyStackRef.current.pop();
+        closePrimarySheet(true);
         return;
       }
-      if (sheetExpanded) {
-        closePrimarySheet();
-        restoreGalleryHistory();
-        return;
+      if (galleryHistoryRef.current) {
+        historyStackRef.current = [];
+        closeGallery(true);
       }
-      if (galleryHistoryRef.current) closeGallery(true);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [closePrimarySheet, closeGallery, restoreGalleryHistory, shareSheetOpen, sortOpen, filterOpen, sheetExpanded]);
+  }, [closePrimarySheet, closeSecondarySheet, closeShareSheet, closeGallery]);
 
   const tabCommittedRef = useRef("stats");
 
@@ -989,12 +1072,16 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
   const handleSheetSwipeStart = useCallback(() => {
     if (sheetExpanded || sheetGestureActive) return;
+    sheetCloseAnimRef.current?.stop();
+    sheetCloseAnimRef.current = null;
+    sheetY.stop?.();
+    pushHistoryLayer("sheet");
     snapAnimRef.current?.stop();
     sheetGestureY.set(vh);
     sheetY.set(vh);
     setSheetGestureActive(true);
     setSheetExpanded(true);
-  }, [sheetExpanded, sheetGestureActive, sheetGestureY, sheetY, vh]);
+  }, [sheetExpanded, sheetGestureActive, sheetGestureY, sheetY, vh, pushHistoryLayer]);
 
   const handleSheetSwipeMove = useCallback((distance) => {
     if (!sheetGestureActive) return;
@@ -1009,38 +1096,45 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     const openThreshold = Math.max(48, vh * 0.12);
     const settle = (targetY, close = false) => {
       animate(sheetGestureY, targetY, {
-        type: "spring", stiffness: 420, damping: 38,
+        duration: 0.25,
+        ease: [0.22, 1, 0.36, 1],
         onUpdate: (latest) => sheetY.set(latest),
         onComplete: () => {
           sheetY.set(targetY);
           setSheetGestureActive(false);
-          if (close) setSheetExpanded(false);
+          if (close) {
+            historyLayersRef.current.sheet = false;
+            setSheetExpanded(false);
+          }
         },
       });
     };
 
     if (normalizedDistance < openThreshold) {
       settle(vh, true);
+      closeHistoryLayer("sheet");
       return;
     }
 
     // A normal open settles into the existing partial snap. A very long
     // gesture may settle fully expanded, while still following the finger.
     settle(normalizedDistance > vh * 0.42 ? 0 : defaultOffset);
-  }, [sheetGestureActive, sheetGestureY, sheetY, vh, defaultOffset]);
+  }, [sheetGestureActive, sheetGestureY, sheetY, vh, defaultOffset, closeHistoryLayer]);
 
   const handleSheetSwipeCancel = useCallback(() => {
     if (!sheetGestureActive) return;
     animate(sheetGestureY, vh, {
-      type: "spring", stiffness: 420, damping: 38,
+      duration: 0.25,
+      ease: [0.22, 1, 0.36, 1],
       onUpdate: (latest) => sheetY.set(latest),
       onComplete: () => {
         sheetY.set(vh);
         setSheetGestureActive(false);
         setSheetExpanded(false);
+        closeHistoryLayer("sheet");
       },
     });
-  }, [sheetGestureActive, sheetGestureY, sheetY, vh]);
+  }, [sheetGestureActive, sheetGestureY, sheetY, vh, closeHistoryLayer]);
 
   // ── Data fetching ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1109,7 +1203,6 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     dragYAnimRef.current?.stop();
     dragY.set(0);
     if (!sheetExpanded) {
-      sheetY.set(vh);
       sheetGestureY.set(vh);
     } else if (!sheetGestureActive) {
       // BottomSheet owns the open animation on the shared value. Do not set
@@ -1433,6 +1526,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       snapAnimRef.current?.stop();
       dragYAnimRef.current?.stop();
       tabAnimationRef.current?.stop();
+      sheetCloseAnimRef.current?.stop();
+      sheetCloseAnimRef.current = null;
       gestureAxis.current = null;
     };
   }, []);
@@ -1445,6 +1540,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   // reported as a placeholder that gave recipients a dead URL. Removed.
   const handleShare = async () => {
     if (isOwner) {
+      pushHistoryLayer("share");
       setShareSheetOpen(true);
       return;
     }
@@ -1471,18 +1567,19 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   };
 
   // ── Sort/Filter handlers ─────────────────────────────────────────────────
-  const openFilterSheet = () => {
+  const openFilterSheet = () => {    pushHistoryLayer("filter");
     setPendingVoters(new Set(selectedVoters));
+
     setFilterOpen(true);
   };
   const applyFilter = () => {
     setSelectedVoters(new Set(pendingVoters));
-    setFilterOpen(false);
+    closeSecondarySheet();
   };
   const clearFilter = () => {
     setPendingVoters(new Set());
     setSelectedVoters(new Set());
-    setFilterOpen(false);
+    closeSecondarySheet();
   };
   const togglePending = (id) => setPendingVoters((prev) => {
     const n = new Set(prev);
@@ -1723,7 +1820,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
             likeCount={likeCount}
             dislikeCount={dislikeCount}
             commentCount={commentsCount}
-            onExpand={() => setSheetExpanded(true)}
+            onExpand={openPrimarySheet}
             onSwipeStart={handleSheetSwipeStart}
             onSwipeMove={handleSheetSwipeMove}
             onSwipeEnd={handleSheetSwipeEnd}
@@ -1751,6 +1848,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         viewportHeight={vh}
         gestureActive={sheetGestureActive}
         gestureY={sheetGestureY}
+        linearMotion
+        animateOnClose={false}
         footer={sheetTab === "comments" ? renderCommentInput() : null}
         headerChildren={
           <div role="tablist" aria-label={t("statistics")} className="flex gap-2">
@@ -1794,7 +1893,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                 currentPhotoId={currentPhoto?.id}
                 onJump={jumpToPhoto}
                 selectedVotersSize={selectedVoters.size}
-                onOpenSort={() => setSortOpen(true)}
+                onOpenSort={openSortSheet}
                 onOpenFilter={openFilterSheet}
                 onShare={handleShare}
                 shareDone={shareDone}
@@ -1818,7 +1917,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
               likeCount={likeCount}
               dislikeCount={dislikeCount}
               commentCount={commentsCount}
-              onExpand={() => setSheetExpanded(true)}
+              onExpand={openPrimarySheet}
               onSwipeStart={handleSheetSwipeStart}
               onSwipeMove={handleSheetSwipeMove}
               onSwipeEnd={handleSheetSwipeEnd}
