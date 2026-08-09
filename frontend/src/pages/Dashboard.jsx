@@ -161,9 +161,8 @@ export default function Dashboard() {
   const handleGalleryClose = useCallback(() => {
     closeProgressAnimRef.current?.stop();
     closeProgressAnimRef.current = animate(dragProgressMV, 1, {
-      type: "spring",
-      stiffness: 350,
-      damping: 32,
+      duration: 0.22,
+      ease: [0.32, 0.72, 0, 1],
       onComplete: () => {
         closeProgressAnimRef.current = null;
         dragProgressMV.set(0);

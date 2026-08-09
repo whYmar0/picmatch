@@ -660,7 +660,11 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const tabAnimationRef = useRef(null);
   const tabViewportRef = useRef(null);
   const tabWidthRef = useRef(0);
-  const galleryHistoryRef = useRef(false);  const galleryCloseStartedRef = useRef(false);
+  const tabSwipeStartTabRef = useRef("stats");
+  const tabGestureActiveRef = useRef(false);
+  const galleryHistoryRef = useRef(false);
+  const historyRestoreRef = useRef(false);
+  const galleryCloseStartedRef = useRef(false);
 
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -845,39 +849,54 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     setFilterOpen(false);
   }, [sheetY, sheetGestureY, vh]);
 
+  const restoreGalleryHistory = useCallback(() => {
+    // Back moves from the gallery entry to the dashboard entry. Move forward
+    // to the existing gallery entry instead of pushState-ing a duplicate;
+    // duplicate entries were the reason repeated mobile Back could escape the
+    // SPA after closing nested layers.
+    if (!galleryHistoryRef.current || historyRestoreRef.current) return;
+    historyRestoreRef.current = true;
+    window.history.forward();
+    // If the browser does not emit the expected popstate (for example during
+    // a rapid repeated Back gesture), do not leave the guard armed forever.
+    window.setTimeout(() => {
+      historyRestoreRef.current = false;
+    }, 500);
+  }, []);
+
   useEffect(() => {
     const handlePopState = () => {
-      // There is deliberately one gallery history entry. If Back is pressed
-      // while a nested layer is open, restore that entry and close only the
-      // topmost layer. No second history.back/go call is needed.
+      if (historyRestoreRef.current) {
+        historyRestoreRef.current = false;
+        return;
+      }
+      // There is one gallery history entry. Back closes only the topmost layer
+      // and restores that same entry without adding another history record.
       if (shareSheetOpen) {
         setShareSheetOpen(false);
-        window.history.pushState({ ...(window.history.state || {}), albumGallery: true }, "", window.location.href);
-        galleryHistoryRef.current = true;
+        restoreGalleryHistory();
         return;
       }
       if (sortOpen || filterOpen) {
         setSortOpen(false);
         setFilterOpen(false);
-        window.history.pushState({ ...(window.history.state || {}), albumGallery: true }, "", window.location.href);
-        galleryHistoryRef.current = true;
+        restoreGalleryHistory();
         return;
       }
       if (sheetExpanded) {
         closePrimarySheet();
-        window.history.pushState({ ...(window.history.state || {}), albumGallery: true }, "", window.location.href);
-        galleryHistoryRef.current = true;
+        restoreGalleryHistory();
         return;
       }
       if (galleryHistoryRef.current) closeGallery(true);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [closePrimarySheet, closeGallery, shareSheetOpen, sortOpen, filterOpen, sheetExpanded]);
+  }, [closePrimarySheet, closeGallery, restoreGalleryHistory, shareSheetOpen, sortOpen, filterOpen, sheetExpanded]);
 
   const tabCommittedRef = useRef("stats");
 
-  const animateToTab = useCallback((nextTab, fromCurrent = false) => {
+  const animateToTab = useCallback((nextTab) => {
     const width = tabViewportRef.current?.clientWidth || tabWidthRef.current;
     tabCommittedRef.current = nextTab;
     setSheetTab(nextTab);
@@ -886,7 +905,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     const target = nextTab === "comments" ? -width : 0;
     // Animate from the current progressive position; never pre-set the target.
     tabAnimationRef.current = animate(tabTrackX, target, {
-      type: "spring", stiffness: 420, damping: 38,
+      duration: 0.22,
+      ease: [0.32, 0.72, 0, 1],
       onComplete: () => { tabAnimationRef.current = null; },
     });
   }, [tabTrackX]);
@@ -898,6 +918,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     // The BottomSheet recognizer calls this before the first progressive move.
     // Stop the gallery-owned spring here as well; otherwise a reverse swipe
     // can continue animating the track while a new full-panel gesture starts.
+    tabSwipeStartTabRef.current = tabCommittedRef.current;
+    tabGestureActiveRef.current = true;
     tabAnimationRef.current?.stop();
     tabAnimationRef.current = null;
   }, []);
@@ -911,7 +933,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     // A new finger position always takes precedence over the previous settle
     // spring, including after an early threshold commit.
     tabAnimationRef.current?.stop();
-    const base = tabCommittedRef.current === "comments" ? -width : 0;
+    tabAnimationRef.current = null;
+    const base = tabSwipeStartTabRef.current === "comments" ? -width : 0;
     tabTrackX.set(Math.max(-width, Math.min(0, base + dx)));
   }, [tabTrackX]);
 
@@ -921,43 +944,47 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       || (typeof window !== "undefined" ? window.innerWidth : 400);
     if (!width) return false;
     const currentTab = tabCommittedRef.current;
-    // Match BottomSheet's early mobile commit threshold. Some scrollable
-    // children emit pointercancel shortly after the first decisive move, so
-    // waiting for 12% of the viewport would revert a valid full-panel swipe.
+    // Commit only on release/cancel. The track has followed the finger for
+    // the entire gesture, so this threshold decides only the final destination.
     const shouldSwitch = Math.abs(dx) >= Math.max(32, width * 0.08);
     const nextTab = shouldSwitch
       ? (dx < 0 ? "comments" : "stats")
       : currentTab;
-    // Commit before the spring starts. This prevents the render/effect cycle
-    // from restoring the old tab while the progressive track is settling.
     tabCommittedRef.current = nextTab;
+    tabGestureActiveRef.current = false;
     setSheetTab(nextTab);
     const target = nextTab === "comments" ? -width : 0;
     tabAnimationRef.current?.stop();
+    tabAnimationRef.current = null;
+    // The finger-follow phase is progressive; once released, commit the
+    // visual track and React tab state atomically so they cannot diverge.
     tabAnimationRef.current = animate(tabTrackX, target, {
-      type: "spring", stiffness: 420, damping: 38,
+      duration: 0.2,
+      ease: [0.32, 0.72, 0, 1],
       onComplete: () => { tabAnimationRef.current = null; },
     });
     return true;
   }, [tabTrackX]);
 
   const handleTabSwipeCancel = useCallback(() => {
+    tabGestureActiveRef.current = false;
     const width = tabWidthRef.current
       || tabViewportRef.current?.clientWidth
       || (typeof window !== "undefined" ? window.innerWidth : 400);
     if (!width) return;
     tabAnimationRef.current?.stop();
-    tabAnimationRef.current = animate(tabTrackX, tabCommittedRef.current === "comments" ? -width : 0, {
-      type: "spring", stiffness: 420, damping: 38,
-      onComplete: () => { tabAnimationRef.current = null; },
-    });
+    tabAnimationRef.current = null;
+    tabTrackX.set(tabCommittedRef.current === "comments" ? -width : 0);
   }, [tabTrackX]);
 
   useEffect(() => {
     const width = tabViewportRef.current?.clientWidth || tabWidthRef.current;
-    if (width && !tabAnimationRef.current) {
-      tabTrackX.set(tabCommittedRef.current === "comments" ? -width : 0);
-    }
+    if (!width || tabGestureActiveRef.current) return;
+    // React tab state and the compositor track must never diverge after a
+    // click or completed gesture. During a release animation the animation
+    // callback is authoritative; do not cancel it from this effect.
+    if (tabAnimationRef.current) return;
+    tabTrackX.set(tabCommittedRef.current === "comments" ? -width : 0);
   }, [sheetTab, tabTrackX]);
 
   const handleSheetSwipeStart = useCallback(() => {
@@ -1237,9 +1264,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // into the card.
         if (currentIdxRef.current !== 0) {
           dragYAnimRef.current = animate(dragY, vh, {
-            type: "spring",
-            stiffness: 350,
-            damping: 32,
+            duration: 0.22,
+            ease: [0.32, 0.72, 0, 1],
           });
         }
         // Disable the whole gallery subtree from receiving input during the
@@ -1349,7 +1375,8 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       dragYAnimRef.current?.stop();
       if (currentIdxRef.current !== 0) {
         dragYAnimRef.current = animate(dragY, vh, {
-          type: "spring", stiffness: 350, damping: 32,
+          duration: 0.22,
+          ease: [0.32, 0.72, 0, 1],
         });
       }
       setSheetExpanded(false);
@@ -1616,12 +1643,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                           layout={false}
                           className="absolute inset-0 flex max-w-full max-h-full items-center justify-center"
                           initial={initialIdx === 0 ? { borderRadius: 16 } : false}
-                          animate={{ borderRadius: 0 }}
-                          transition={
-                            isExiting
-                              ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
-                              : { duration: 0 }
-                          }
+                          animate={{ borderRadius: 0 }}        transition={isExiting ? { duration: 0.22, ease: [0.32, 0.72, 0, 1] } : { duration: 0 }}
                         >
                           <VideoPlayer
                             src={photo.url}
@@ -1646,12 +1668,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                           layout={false}
                           style={{ pointerEvents: "none" }}
                           initial={initialIdx === 0 ? { borderRadius: 16 } : false}
-                          animate={{ borderRadius: 0 }}
-                          transition={
-                            isExiting
-                              ? { type: "spring", stiffness: 280, damping: 32, mass: 0.95 }
-                              : { duration: 0 }
-                          }
+                          animate={{ borderRadius: 0 }}        transition={isExiting ? { duration: 0.22, ease: [0.32, 0.72, 0, 1] } : { duration: 0 }}
                         />
                       )
                     ) : photoIsVideo ? (

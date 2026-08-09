@@ -63,7 +63,9 @@ export default function BottomSheet({
   const sheetRef = useRef(null);
   const horizontalGestureRef = useRef({ x: 0, y: 0, sheetY: 0 });
   const horizontalSwipeActiveRef = useRef(false);
-  const horizontalSwipeCommittedRef = useRef(false);
+  const horizontalLastDxRef = useRef(0);
+  const horizontalLastDyRef = useRef(0);
+  const horizontalEndHandledRef = useRef(false);
   const gestureAxisRef = useRef(null);
   const suppressClickRef = useRef(false);
   const horizontalStartYRef = useRef(0);
@@ -110,9 +112,9 @@ export default function BottomSheet({
   // tabs accidentally.
   const horizontalActivationDistance = 14;
   const horizontalDominanceRatio = 1.2;
-  // Commit before a mobile scroll container can cancel the pointer stream.
-  // 32px remains deliberate at the 390px viewport while the 1.2 dominance
-  // ratio prevents diagonal taps from switching tabs.
+  // A short but deliberate horizontal travel should still be visible under
+  // the finger, but only a 32px release commits a tab change. The threshold
+  // prevents taps/diagonal drags from switching tabs accidentally.
   const horizontalCommitDistance = 32;
 
   const handleSheetPointerDown = (event) => {
@@ -134,7 +136,9 @@ export default function BottomSheet({
     );
     gestureAxisRef.current = null;
     horizontalSwipeActiveRef.current = false;
-    horizontalSwipeCommittedRef.current = false;
+    horizontalLastDxRef.current = 0;
+    horizontalLastDyRef.current = 0;
+    horizontalEndHandledRef.current = false;
     suppressClickRef.current = false;
   };
 
@@ -180,6 +184,8 @@ export default function BottomSheet({
     const { x, y: startY, sheetY: startSheetY } = horizontalGestureRef.current;
     const dx = event.clientX - x;
     const dy = event.clientY - startY;
+    horizontalLastDxRef.current = dx;
+    horizontalLastDyRef.current = dy;
     const absDx = Math.abs(dx);
     const absDy = Math.abs(dy);
 
@@ -212,20 +218,10 @@ export default function BottomSheet({
       event.preventDefault();
       event.stopPropagation();
 
-      // Once committed, the spring owns the track. Do not let later pointer
-      // moves fight that spring while the browser is finishing/cancelling the
-      // pointer stream.
-      if (horizontalSwipeCommittedRef.current) return;
+      // This is the only per-frame consumer update. No tab state, logical
+      // commit, or snap is performed while the pointer is moving: the track
+      // remains exactly under the finger until release/cancel.
       onHorizontalSwipeMove?.(dx);
-
-      // Commit as soon as the deliberate horizontal threshold is crossed.
-      // This makes the gesture resilient to a child/native-scroll layer
-      // swallowing the final pointerup, while the axis lock and distance
-      // threshold still prevent accidental tab changes.
-      if (!horizontalSwipeCommittedRef.current && Math.abs(dx) >= horizontalCommitDistance) {
-        horizontalSwipeCommittedRef.current = true;
-        onHorizontalSwipeEnd?.(dx);
-      }
       return;
     }
 
@@ -244,44 +240,65 @@ export default function BottomSheet({
     const { x, y: startY, axis } = horizontalGestureRef.current;
     const dx = event.clientX - x;
     const dy = event.clientY - startY;
+    const wasHorizontal = horizontalSwipeActiveRef.current && axis === "x";
+
     if (axis === "y" && hasHorizontalSwipe) {
       const elapsed = Math.max(1, Date.now() - (horizontalGestureRef.current.time || Date.now()));
       const velocityY = (dy / elapsed) * 1000;
       if (verticalDragAllowedRef.current) onDragEnd?.(event, { velocity: { y: velocityY } });
       horizontalSwipeActiveRef.current = false;
-      horizontalSwipeCommittedRef.current = false;
+      horizontalLastDxRef.current = 0;
+      horizontalLastDyRef.current = 0;
       horizontalGestureRef.current = { x: 0, y: 0, sheetY: 0, axis: null, pointerId: null, time: 0 };
       gestureAxisRef.current = null;
       suppressClickRef.current = false;
       return;
     }
 
-    const horizontalRelease = hasHorizontalSwipe
-      && axis !== "y"
-      && Math.abs(dx) >= horizontalCommitDistance
-      && Math.abs(dx) > Math.abs(dy) * horizontalDominanceRatio;
-    if (horizontalRelease && !horizontalSwipeCommittedRef.current) {
-      // A progressive consumer owns the release so the track can settle from
-      // its actual finger position. Keep the legacy discrete callback only for
-      // sheets that do not provide progressive end handling.
-      if (onHorizontalSwipeEnd) {
-        onHorizontalSwipeEnd(dx);
-      } else {
-        onHorizontalSwipe?.(dx < 0 ? "next" : "previous");
+    if (wasHorizontal) {
+      const horizontalRelease = Math.abs(dx) >= horizontalCommitDistance
+        && Math.abs(dx) > Math.abs(dy) * horizontalDominanceRatio;
+      // Release is the only point at which the tab may commit. A short drag
+      // always returns to the active tab instead of leaving a partial track.
+      if (horizontalRelease && !horizontalEndHandledRef.current) {
+        horizontalEndHandledRef.current = true;
+        if (onHorizontalSwipeEnd) onHorizontalSwipeEnd(dx);
+        else onHorizontalSwipe?.(dx < 0 ? "next" : "previous");
+      } else if (!horizontalRelease) {
+        onHorizontalSwipeCancel?.();
       }
     }
+
     horizontalSwipeActiveRef.current = false;
-    horizontalSwipeCommittedRef.current = false;
+    horizontalLastDxRef.current = 0;
+    horizontalLastDyRef.current = 0;
+    horizontalEndHandledRef.current = false;
     horizontalGestureRef.current = { x: 0, y: 0, sheetY: 0, axis: null, pointerId: null, time: 0 };
     gestureAxisRef.current = null;
     verticalDragAllowedRef.current = false;
+    // Keep this armed for the synthetic click generated after a drag. A new
+    // pointerdown clears it when no click is generated by the browser.
+    if (!wasHorizontal) suppressClickRef.current = false;
   };
 
   const handleSheetPointerCancel = (event) => {
-    const axis = horizontalGestureRef.current.axis;
-    if (horizontalSwipeActiveRef.current && !horizontalSwipeCommittedRef.current) onHorizontalSwipeCancel?.();
+    const { axis } = horizontalGestureRef.current;
+    const dx = horizontalLastDxRef.current;
+    const dy = horizontalLastDyRef.current;
+    if (horizontalSwipeActiveRef.current && axis === "x") {
+      const horizontalRelease = Math.abs(dx) >= horizontalCommitDistance
+        && Math.abs(dx) > Math.abs(dy) * horizontalDominanceRatio;
+      if (horizontalRelease && !horizontalEndHandledRef.current) {
+        horizontalEndHandledRef.current = true;
+        onHorizontalSwipeEnd?.(dx);
+      } else if (!horizontalRelease) {
+        onHorizontalSwipeCancel?.();
+      }
+    }
     horizontalSwipeActiveRef.current = false;
-    horizontalSwipeCommittedRef.current = false;
+    horizontalLastDxRef.current = 0;
+    horizontalLastDyRef.current = 0;
+    horizontalEndHandledRef.current = false;
     horizontalGestureRef.current = { x: 0, y: 0, sheetY: 0, axis: null, pointerId: null, time: 0 };
     gestureAxisRef.current = null;
     // A native scroll can cancel the pointer stream before release. Restore a
