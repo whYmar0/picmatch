@@ -106,12 +106,84 @@ test("video opens muted and autoplaying, then pauses/resumes from custom control
   await expect(video).toHaveJSProperty("muted", true);
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
 
-  await player.click({ position: { x: 20, y: 20 } });
-  await expect(player.getByRole("button", { name: "Pause video" })).toBeVisible();
-  await player.getByRole("button", { name: "Pause video" }).click();
+  const playerBox = await player.boundingBox();
+  expect(playerBox).not.toBeNull();
+  const centerX = playerBox.x + playerBox.width / 2;
+  const centerY = playerBox.y + playerBox.height / 2;
+  await touch(player, "touchstart", centerX, centerY);
+  await touch(player, "touchend", centerX, centerY);
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(true);
-  await expect(player.getByRole("button", { name: "Play video" })).toBeVisible();
-  await player.getByRole("button", { name: "Play video" }).click();
+  const playButton = player.getByRole("button", { name: "Play video" });
+  await expect(playButton).toBeVisible();
+  await expect(player.getByRole("button", { name: "Unmute video" })).toBeVisible();
+  const layerStyles = await player.evaluate((root) => {
+    const controls = root.querySelector('[data-video-controls="true"]');
+    const button = [...root.querySelectorAll("button")].find((item) => item.getAttribute("aria-label") === "Play video");
+    const fill = button?.querySelector('[aria-hidden="true"]');
+    const controlsStyle = getComputedStyle(controls);
+    const fillStyle = getComputedStyle(fill);
+    return {
+      controlsOpacity: controlsStyle.opacity,
+      controlsBackground: controlsStyle.backgroundColor,
+      fillBackground: fillStyle.backgroundColor,
+      fillBackdrop: fillStyle.backdropFilter,
+    };
+  });
+  expect(layerStyles).toEqual({
+    controlsOpacity: "1",
+    controlsBackground: "rgba(0, 0, 0, 0)",
+    fillBackground: "rgba(0, 0, 0, 0.5)",
+    fillBackdrop: "blur(4px)",
+  });
+
+  // Compare rendered pixels outside the two control circles with the layer
+  // visible and hidden. The paused frame is identical, so any difference here
+  // would prove that the controls layer is dimming the video globally.
+  await page.waitForTimeout(200);
+  const withControls = await player.screenshot();
+  await player.locator('[data-video-controls="true"]').evaluate((element) => {
+    element.style.visibility = "hidden";
+  });
+  const withoutControls = await player.screenshot();
+  await player.locator('[data-video-controls="true"]').evaluate((element) => {
+    element.style.visibility = "";
+  });
+  const renderedSamples = await page.evaluate(async ({ withControlsBase64, withoutControlsBase64 }) => {
+    const decode = async (base64) => {
+      const response = await fetch(`data:image/png;base64,${base64}`);
+      const bitmap = await createImageBitmap(await response.blob());
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d");
+      context.drawImage(bitmap, 0, 0);
+      return { width: bitmap.width, height: bitmap.height, data: context.getImageData(0, 0, bitmap.width, bitmap.height).data };
+    };
+    const first = await decode(withControlsBase64);
+    const second = await decode(withoutControlsBase64);
+    const points = [
+      [5, 5], [Math.floor(first.width * 0.08), Math.floor(first.height * 0.2)],
+      [Math.floor(first.width * 0.92), Math.floor(first.height * 0.2)],
+      [Math.floor(first.width * 0.08), Math.floor(first.height * 0.8)],
+      [Math.floor(first.width * 0.92), Math.floor(first.height * 0.8)],
+    ];
+    return points.map(([x, y]) => {
+      const offset = (y * first.width + x) * 4;
+      return {
+        point: [x, y],
+        withControls: [...first.data.slice(offset, offset + 4)],
+        withoutControls: [...second.data.slice(offset, offset + 4)],
+      };
+    });
+  }, {
+    withControlsBase64: withControls.toString("base64"),
+    withoutControlsBase64: withoutControls.toString("base64"),
+  });
+  console.log("RENDERED_VIDEO_SAMPLES", JSON.stringify(renderedSamples));
+  expect(renderedSamples.every(({ withControls: first, withoutControls: second }) =>
+    first.every((channel, index) => channel === second[index])
+  )).toBe(true);
+  await playButton.click();
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
 });
 
@@ -119,16 +191,22 @@ test("mute control changes audio state without pausing video", async ({ page }) 
   await setup(page);
   const player = page.locator('[data-testid="gallery-shared-video"] [data-video-player="true"]').first();
   const video = player.locator("video");
+  // Pause to reveal the controls, then resume through the playback button.
   await player.click({ position: { x: 20, y: 20 } });
-  const muteButton = player.getByRole("button", { name: "Unmute video" });
-  await expect(muteButton).toBeVisible();
-  await muteButton.click();
+  await expect.poll(() => video.evaluate((node) => node.paused)).toBe(true);
+  await player.getByRole("button", { name: "Play video" }).click();
+  await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
+
+  // The mute button must not affect playback while the video is playing.
+  const muteButton = player.locator('button[aria-label="Unmute video"]');
+  await expect(muteButton).toHaveCount(1);
+  await muteButton.dispatchEvent("click");
   await expect(video).toHaveJSProperty("muted", false);
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
-  await player.getByRole("button", { name: "Mute video" }).click();
+  await player.locator('button[aria-label="Mute video"]').dispatchEvent("click");
   await expect(video).toHaveJSProperty("muted", true);
 
-  await player.getByRole("button", { name: "Pause video" }).click();
+  await player.locator('button[aria-label="Pause video"]').dispatchEvent("click");
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(true);
   await player.getByRole("button", { name: "Unmute video" }).click();
   await expect(video).toHaveJSProperty("muted", false);
@@ -147,9 +225,9 @@ test("hold pauses the video and release resumes playback", async ({ page }) => {
   await page.waitForTimeout(220);
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(true);
   const playButton = player.getByRole("button", { name: "Play video" });
-  await expect(playButton).toBeVisible();
-  await expect(playButton).toHaveClass(/border-0/);
-  await expect(playButton).toHaveClass(/ring-0/);
+  // Long-press pauses silently; controls must stay hidden until release.
+  await expect(playButton).toBeHidden();
+  await expect(player.getByRole("button", { name: "Unmute video" })).toBeHidden();
   await touch(player, "touchend", x, y);
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
 });

@@ -108,7 +108,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
               layoutId={`album-cover-${album.id}`}
               data-shared-media={`album-cover-${album.id}`}
               layout={false}
-              transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
               className="relative w-full h-full"
             >
               <video
@@ -135,7 +135,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
               loading="lazy"
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgLoaded(true)}
-              transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
             />
           )
         ) : (

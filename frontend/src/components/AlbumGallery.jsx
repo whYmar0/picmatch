@@ -147,6 +147,7 @@ function PillBar({
 const THUMB_SIZE = 40;
 const THUMB_GAP = 8;
 const GALLERY_VIDEO_SCALE = 0.94;
+const VIDEO_CONTROLS_INSET = 152;
 
 function ThumbItem({ photo, index, activeIdx, onSelect, isDraggingRef }) {
   const scale = useTransform(activeIdx, (v) => (Math.round(v) === index ? 1.15 : 1));
@@ -908,7 +909,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     sheetCloseAnimRef.current?.stop();
     sheetY.stop?.();
     sheetCloseAnimRef.current = animate(sheetY, vh, {
-      duration: 0.25,
+      duration: 0.3,
       ease: [0.22, 1, 0.36, 1],
       onUpdate: (latest) => sheetGestureY.set(latest),
       onComplete: () => {
@@ -988,7 +989,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     const target = nextTab === "comments" ? -width : 0;
     // Animate from the current progressive position; never pre-set the target.
     tabAnimationRef.current = animate(tabTrackX, target, {
-      duration: 0.22,
+      duration: 0.3,
       ease: [0.32, 0.72, 0, 1],
       onComplete: () => { tabAnimationRef.current = null; },
     });
@@ -1042,7 +1043,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     // The finger-follow phase is progressive; once released, commit the
     // visual track and React tab state atomically so they cannot diverge.
     tabAnimationRef.current = animate(tabTrackX, target, {
-      duration: 0.2,
+      duration: 0.26,
       ease: [0.32, 0.72, 0, 1],
       onComplete: () => { tabAnimationRef.current = null; },
     });
@@ -1096,7 +1097,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     const openThreshold = Math.max(48, vh * 0.12);
     const settle = (targetY, close = false) => {
       animate(sheetGestureY, targetY, {
-        duration: 0.25,
+        duration: 0.3,
         ease: [0.22, 1, 0.36, 1],
         onUpdate: (latest) => sheetY.set(latest),
         onComplete: () => {
@@ -1124,7 +1125,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const handleSheetSwipeCancel = useCallback(() => {
     if (!sheetGestureActive) return;
     animate(sheetGestureY, vh, {
-      duration: 0.25,
+      duration: 0.3,
       ease: [0.22, 1, 0.36, 1],
       onUpdate: (latest) => sheetY.set(latest),
       onComplete: () => {
@@ -1357,7 +1358,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         // into the card.
         if (currentIdxRef.current !== 0) {
           dragYAnimRef.current = animate(dragY, vh, {
-            duration: 0.22,
+            duration: 0.3,
             ease: [0.32, 0.72, 0, 1],
           });
         }
@@ -1468,7 +1469,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       dragYAnimRef.current?.stop();
       if (currentIdxRef.current !== 0) {
         dragYAnimRef.current = animate(dragY, vh, {
-          duration: 0.22,
+          duration: 0.3,
           ease: [0.32, 0.72, 0, 1],
         });
       }
@@ -1632,7 +1633,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   const secondaryOpen = sortOpen || filterOpen;
 
   // The wrapper has `initial`/`animate`/`exit` for opacity. AnimatePresence
-  // detects the exit and fades the wrapper out over 0.22s rather than
+  // detects the exit and fades the wrapper out over 0.3s rather than
   // unmounting it instantly. During this fade, the motion.img with layoutId
   // is FLIP-extracted to the shared-element layer at the root — it does
   // NOT inherit the wrapper's fading opacity — and Motion animates it from
@@ -1654,22 +1655,27 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       ref={galleryRef}
       data-testid="album-gallery"
       className="fixed inset-0 z-[90] flex flex-col overflow-hidden"
-      style={{ touchAction: "none", overscrollBehavior: "contain", pointerEvents: isExiting ? "none" : "auto" }}
+      style={{
+        touchAction: "none",
+        overscrollBehavior: "contain",
+        pointerEvents: isExiting ? "none" : "auto",
+        isolation: "isolate",
+      }}
       aria-hidden={isExiting ? "true" : undefined}
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1, transition: { duration: 0.22 } }}
-      exit={{ opacity: 0, transition: { duration: 0.22 } }}
+      animate={{ opacity: 1, transition: { duration: 0.3 } }}
+      exit={{ opacity: 0, transition: { duration: 0.3 } }}
     >
       {/* Background overlay — outer tween handles the enter fade; the
-          wrapper itself has an exit (opacity → 0 over 0.22s) that covers
+          wrapper itself has an exit (opacity → 0 over 0.3s) that covers
           the backdrop's disappear. Inner bg-black layer is style-bound
           to dragY so it is already partially faded at the moment the
           user releases a dismiss drag — so during the exit it finishes
           fading to 0 cleanly without any visual snap. */}
       <motion.div
-        className="absolute inset-0"
+        className="absolute inset-0 z-0 pointer-events-none"
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1, transition: { duration: 0.22 } }}
+        animate={{ opacity: 1, transition: { duration: 0.3 } }}
       >
         <motion.div
           className="absolute inset-0 bg-black"
@@ -1680,7 +1686,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       {/* Photo wrapper — handles all touch gestures (axis-locked) */}
       <motion.div
         data-testid="gallery-touch-layer"
-        className="absolute top-0 left-0 right-0 overflow-hidden"
+        className="absolute top-0 left-0 right-0 z-10 overflow-hidden"
         style={{
           height: photoStageHeight,
           scale: combinedScale,
@@ -1740,7 +1746,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                           layout={false}
                           className="absolute inset-0 flex max-w-full max-h-full items-center justify-center"
                           initial={initialIdx === 0 ? { borderRadius: 16 } : false}
-                          animate={{ borderRadius: 0 }}        transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+                          animate={{ borderRadius: 0 }}        transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
                         >
                           <VideoPlayer
                             src={photo.url}
@@ -1750,6 +1756,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                             autoPlay={i === currentIdx}
                             stableLayout
                             objectFit="contain"
+                            bottomInset={sheetExpanded ? 0 : VIDEO_CONTROLS_INSET}
                             style={{
                               transform: `scale(${GALLERY_VIDEO_SCALE})`,
                               transformOrigin: "center center",
@@ -1765,7 +1772,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                           layout={false}
                           style={{ pointerEvents: "none" }}
                           initial={initialIdx === 0 ? { borderRadius: 16 } : false}
-                          animate={{ borderRadius: 0 }}        transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+                          animate={{ borderRadius: 0 }}        transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
                         />
                       )
                     ) : photoIsVideo ? (
@@ -1775,6 +1782,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
                         preload="auto"
                         muted
                         autoPlay={i === currentIdx}
+                        bottomInset={sheetExpanded ? 0 : VIDEO_CONTROLS_INSET}
                         style={{
                           transform: `scale(${GALLERY_VIDEO_SCALE})`,
                           transformOrigin: "center center",

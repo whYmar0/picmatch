@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 
 const TAP_MOVEMENT_PX = 12;
-const HOLD_DELAY_MS = 120;
+// Leave enough time for a normal tap to complete before treating it as a hold.
+const HOLD_DELAY_MS = 250;
 const CONTROLS_HIDE_MS = 2500;
 const SCRUB_HIDE_MS = 800;
 
@@ -34,12 +35,13 @@ export default function VideoPlayer({
   muted = false,
   preload = "metadata",
   autoPlay = false,
-  loop = false,
+  loop = true,
   objectFit = "contain",
   stableLayout = false,
   scrubBottomRatio = 0.25,
   blurredBackdrop = false,
   isolateScrubGesture = false,
+  bottomInset = 0,
   onVerticalSwipe,
   onVerticalSwipeMove,
 }) {
@@ -53,8 +55,10 @@ export default function VideoPlayer({
   const touchStartRef = useRef(null);
   const gestureAxisRef = useRef(null);
   const isHoldingRef = useRef(false);
+  const suppressControlsRef = useRef(false);
   const isScrubbingRef = useRef(false);
   const touchHandledRef = useRef(false);
+  const pointerTapStartRef = useRef(null);
   const isMutedRef = useRef(muted);
 
   const [aspectRatio, setAspectRatio] = useState(null);
@@ -63,6 +67,7 @@ export default function VideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(muted);
   const [controlsVisible, setControlsVisible] = useState(false);
+  const [showPlaybackControl, setShowPlaybackControl] = useState(true);
   const [showTimeline, setShowTimeline] = useState(false);
 
   const clearHoldTimer = () => {
@@ -86,9 +91,10 @@ export default function VideoPlayer({
     }
   };
 
-  const showControls = (autoHide = true) => {
+  const showControls = (autoHide = true, showPlayback = true) => {
     clearControlsTimer();
     setControlsVisible(true);
+    setShowPlaybackControl(showPlayback);
     if (autoHide) {
       controlsTimerRef.current = window.setTimeout(() => {
         setControlsVisible(false);
@@ -213,11 +219,15 @@ export default function VideoPlayer({
   const togglePlayback = () => {
     if (!videoRef.current) return;
     if (videoRef.current.paused || videoRef.current.ended) {
+      suppressControlsRef.current = false;
       playVideo();
       hideControls();
     } else {
+      // A regular tap pauses the video and keeps the playback/audio controls
+      // visible. Only the long-press path suppresses controls while paused.
+      suppressControlsRef.current = false;
       pauseVideo();
-      showControls(true);
+      showControls(true, true);
     }
   };
 
@@ -251,6 +261,12 @@ export default function VideoPlayer({
     return !!rect && clientY >= rect.top + rect.height * (1 - scrubBottomRatio);
   };
 
+  // The whole video surface toggles playback on a tap.
+  const isInPlaybackTapArea = () => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    return !!rect && rect.width > 0 && rect.height > 0;
+  };
+
   const scrubToClientX = (clientX) => {
     const video = videoRef.current;
     const rect = containerRef.current?.getBoundingClientRect();
@@ -279,13 +295,15 @@ export default function VideoPlayer({
     };
 
     clearHoldTimer();
+    suppressControlsRef.current = false;
     if (!startedOnButton) {
       holdTimerRef.current = window.setTimeout(() => {
         isHoldingRef.current = true;
+        suppressControlsRef.current = true;
         pauseVideo();
-        // Keep the controls visible for the whole hold and briefly after the
-        // finger is released, so the pause state is discoverable.
-        showControls(true);
+        // Holding the video pauses playback silently. Do not reveal the
+        // pause/play or mute controls while the finger is held down.
+        hideControls();
       }, HOLD_DELAY_MS);
     }
   };
@@ -367,8 +385,9 @@ export default function VideoPlayer({
     if (wasHolding) {
       event.stopPropagation();
       touchHandledRef.current = true;
+      suppressControlsRef.current = false;
       playVideo();
-      showControls(true);
+      hideControls();
       window.setTimeout(() => { touchHandledRef.current = false; }, 400);
       return;
     }
@@ -376,13 +395,10 @@ export default function VideoPlayer({
     if (Math.hypot(dx, dy) < TAP_MOVEMENT_PX) {
       event.stopPropagation();
       touchHandledRef.current = true;
-      const rect = containerRef.current?.getBoundingClientRect();
-      const relX = rect ? (start.x - rect.left) / rect.width : 0.5;
-      const relY = rect ? (start.y - rect.top) / rect.height : 0.5;
-      if (relX > 0.25 && relX < 0.75 && relY > 0.2 && relY < 0.8) {
+      if (isInPlaybackTapArea(start.x, start.y)) {
         togglePlayback();
       } else {
-        showControls(true);
+        showControls(true, false);
       }
       window.setTimeout(() => { touchHandledRef.current = false; }, 400);
     }
@@ -393,6 +409,7 @@ export default function VideoPlayer({
     touchStartRef.current = null;
     gestureAxisRef.current = null;
     isHoldingRef.current = false;
+    suppressControlsRef.current = false;
     isScrubbingRef.current = false;
     pointerScrubRef.current = false;
   };
@@ -402,6 +419,11 @@ export default function VideoPlayer({
   const handlePointerDownCapture = (event) => {
     const isBottomScrub = isolateScrubGesture && isInBottomArea(event.clientY);
     pointerScrubRef.current = isBottomScrub;
+    if (!isBottomScrub && !event.target?.closest?.("button")) {
+      pointerTapStartRef.current = { x: event.clientX, y: event.clientY, pointerType: event.pointerType };
+    } else {
+      pointerTapStartRef.current = null;
+    }
     if (isBottomScrub) event.stopPropagation();
   };
 
@@ -412,15 +434,27 @@ export default function VideoPlayer({
   const handlePointerUpCapture = (event) => {
     if (pointerScrubRef.current) event.stopPropagation();
     pointerScrubRef.current = false;
+
+    const start = pointerTapStartRef.current;
+    pointerTapStartRef.current = null;
+    if (!start || start.pointerType !== "touch" || event.target?.closest?.("button")) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) >= TAP_MOVEMENT_PX) return;
+
+    // TouchEvent normally handles this first. The deferred fallback covers
+    // browsers where a parent gallery gesture prevents touchend from reaching
+    // this component, while touchHandledRef prevents a double toggle.
+    window.setTimeout(() => {
+      if (touchHandledRef.current) return;
+      touchHandledRef.current = true;
+      togglePlayback();
+      window.setTimeout(() => { touchHandledRef.current = false; }, 400);
+    }, 0);
   };
 
   const handleClick = (event) => {
     if (touchHandledRef.current || event.target?.closest?.("button")) return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    const relX = rect ? (event.clientX - rect.left) / rect.width : 0.5;
-    const relY = rect ? (event.clientY - rect.top) / rect.height : 0.5;
-    if (relX > 0.25 && relX < 0.75 && relY > 0.2 && relY < 0.8) togglePlayback();
-    else showControls(true);
+    if (isInPlaybackTapArea(event.clientX, event.clientY)) togglePlayback();
+    else showControls(true, false);
   };
 
   const handleSeek = (event) => {
@@ -453,8 +487,15 @@ export default function VideoPlayer({
         objectFit,
       };
 
+  const bottomInsetStyle = bottomInset > 0
+    ? {
+        height: `max(0px, calc(100% - ${bottomInset}px))`,
+        alignSelf: "flex-start",
+      }
+    : {};
+
   const wrapperStyle = stableLayout
-    ? style
+    ? { ...style, ...bottomInsetStyle }
     : aspectRatio
       ? {
           aspectRatio: `${aspectRatio}`,
@@ -463,8 +504,11 @@ export default function VideoPlayer({
           width: aspectRatio < 1 ? "auto" : "100%",
           height: aspectRatio < 1 ? "100%" : "auto",
           ...style,
+          ...bottomInsetStyle,
         }
-      : style;
+      : { ...style, ...bottomInsetStyle };
+
+  const controlsShown = controlsVisible || (!isPlaying && !suppressControlsRef.current) || showTimeline;
 
   return (
     <div
@@ -525,62 +569,74 @@ export default function VideoPlayer({
         aria-hidden="true"
       />
 
-      <div
-        className={`absolute inset-0 z-20 flex flex-col justify-between transition-opacity duration-150 ${
-          controlsVisible || !isPlaying || showTimeline ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        }`}
-        data-video-controls="true"
-        aria-hidden={!controlsVisible && isPlaying && !showTimeline}
-      >
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center">
+      <>
+          <div
+            className={`absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center ${
+              controlsShown ? "visible pointer-events-auto" : "invisible pointer-events-none"
+            }`}
+            data-video-controls="true"
+            style={{ background: "transparent", opacity: 1, mixBlendMode: "normal" }}
+          >
             <button
               type="button"
-              className="w-8 h-8 mb-3 rounded-full border-0 bg-black/50 backdrop-blur-sm text-white flex items-center justify-center hover:bg-black/70 transition-colors outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+              className="group relative isolate overflow-hidden w-8 h-8 mb-3 rounded-full border-0 bg-transparent text-white flex items-center justify-center transition-colors outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
               onClick={toggleMute}
               aria-label={isMuted ? "Unmute video" : "Mute video"}
             >
-              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 rounded-full bg-black/50 backdrop-blur-sm transition-colors group-hover:bg-black/70"
+              />
+              {isMuted
+                ? <VolumeX size={16} className="relative z-10" />
+                : <Volume2 size={16} className="relative z-10" />}
             </button>
-            <button
-              type="button"
-              className="w-14 h-14 rounded-full border-0 bg-black/50 backdrop-blur-sm text-white flex items-center justify-center hover:bg-black/70 transition-colors outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
-              onClick={(event) => {
-                event.stopPropagation();
-                togglePlayback();
-              }}
-              aria-label={isPlaying ? "Pause video" : "Play video"}
-            >
-              {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-0.5" />}
-            </button>
+            {showPlaybackControl && (
+              <button
+                type="button"
+                className="group relative isolate overflow-hidden w-14 h-14 rounded-full border-0 bg-transparent text-white flex items-center justify-center transition-colors outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  togglePlayback();
+                }}
+                aria-label={isPlaying ? "Pause video" : "Play video"}
+              >
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-0 rounded-full bg-black/50 backdrop-blur-sm transition-colors group-hover:bg-black/70"
+                />
+                {isPlaying
+                  ? <Pause size={24} fill="currentColor" className="relative z-10" />
+                  : <Play size={24} fill="currentColor" className="relative z-10 ml-0.5" />}
+              </button>
+            )}
           </div>
-        </div>
 
-        {showTimeline && (
-          <div
-            className="px-4 pb-3 pt-2 text-white"
-            onClick={stopSeekPropagation}
-            onTouchStart={stopSeekPropagation}
-            onTouchMove={stopSeekPropagation}
-            onTouchEnd={stopSeekPropagation}
-          >
-            <input
-              type="range"
-              min="0"
-              max={duration || 0}
-              step="0.01"
-              value={Math.min(currentTime, duration || 0)}
-              onChange={handleSeek}
-              className="w-full h-1 accent-white cursor-pointer"
-              aria-label="Video progress"
-            />
-            <div className="flex justify-between text-[11px] font-medium tabular-nums mt-1">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+          {showTimeline && (
+            <div
+              className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-3 pt-2 text-white"
+              onClick={stopSeekPropagation}
+              onTouchStart={stopSeekPropagation}
+              onTouchMove={stopSeekPropagation}
+              onTouchEnd={stopSeekPropagation}
+            >
+              <input
+                type="range"
+                min="0"
+                max={duration || 0}
+                step="0.01"
+                value={Math.min(currentTime, duration || 0)}
+                onChange={handleSeek}
+                className="w-full h-1 accent-white cursor-pointer"
+                aria-label="Video progress"
+              />
+              <div className="flex justify-between text-[11px] font-medium tabular-nums mt-1">
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </>
     </div>
   );
 }

@@ -135,9 +135,10 @@ export default function BottomSheet({
       time: Date.now(),
     };
     horizontalStartYRef.current = y.get();
-    verticalDragAllowedRef.current = Boolean(
-      event.target.closest?.("[data-bottom-sheet-handle]")
+    const startedInDragRegion = Boolean(
+      event.target.closest?.("[data-bottom-sheet-handle], [data-bottom-sheet-drag-region]")
     );
+    verticalDragAllowedRef.current = startedInDragRegion;
     gestureAxisRef.current = null;
     horizontalSwipeActiveRef.current = false;
     horizontalLastDxRef.current = 0;
@@ -241,14 +242,11 @@ export default function BottomSheet({
       return;
     }
 
-    if (horizontalGestureRef.current.axis === "y" && hasHorizontalSwipe) {
-      // Only the handle owns vertical sheet movement. The content area remains
-      // a native scroll surface; this prevents the panel and list from
-      // competing for the same vertical gesture.
-      if (verticalDragAllowedRef.current) {
-        event.preventDefault();
-        y.set(Math.max(0, Math.min(vh, startSheetY + dy)));
-      }
+    if (horizontalGestureRef.current.axis === "y" && verticalDragAllowedRef.current) {
+      // Vertical sheet movement is available only from the upper drag region.
+      // Scroll gestures that start inside the content remain content scrolls.
+      event.preventDefault();
+      y.set(Math.max(0, Math.min(vh, startSheetY + dy)));
     }
   };
 
@@ -258,7 +256,7 @@ export default function BottomSheet({
     const dy = event.clientY - startY;
     const wasHorizontal = horizontalSwipeActiveRef.current && axis === "x";
 
-    if (axis === "y" && hasHorizontalSwipe) {
+    if (axis === "y") {
       const elapsed = Math.max(1, Date.now() - (horizontalGestureRef.current.time || Date.now()));
       const velocityY = (dy / elapsed) * 1000;
       if (verticalDragAllowedRef.current) onDragEnd?.(event, { velocity: { y: velocityY } });
@@ -267,6 +265,7 @@ export default function BottomSheet({
       horizontalLastDyRef.current = 0;
       horizontalGestureRef.current = { x: 0, y: 0, sheetY: 0, axis: null, pointerId: null, time: 0 };
       gestureAxisRef.current = null;
+      verticalDragAllowedRef.current = false;
       suppressClickRef.current = false;
       return;
     }
@@ -390,6 +389,7 @@ export default function BottomSheet({
       horizontalLastDyRef.current = 0;
       horizontalEndHandledRef.current = false;
       gestureAxisRef.current = null;
+      verticalDragAllowedRef.current = false;
       suppressClickRef.current = false;
       return;
     }
@@ -405,8 +405,8 @@ export default function BottomSheet({
       startYAnimation(
         target,
         linearMotion
-          ? { duration: 0.25, ease: CLOSE_EASE_OUT }
-          : { type: "spring", stiffness: 350, damping: 35 }
+          ? { duration: 0.3, ease: CLOSE_EASE_OUT }
+          : { type: "spring", stiffness: 300, damping: 35 }
       );
     }
     const handler = (e) => { if (e.key === "Escape" && closeOnEscape) handleClose(); };
@@ -455,7 +455,7 @@ export default function BottomSheet({
     // cancelled by the browser before Framer Motion invokes onComplete;
     // closing synchronously keeps Back/drag interactions from freezing.
     if (animateOnClose) {
-      startYAnimation(vh, linearMotion ? { duration: 0.25, ease: CLOSE_EASE_OUT } : { duration: 0.25 });
+      startYAnimation(vh, linearMotion ? { duration: 0.3, ease: CLOSE_EASE_OUT } : { duration: 0.3 });
     }
     if (!closeNotifiedRef.current) {
       closeNotifiedRef.current = true;
@@ -479,9 +479,9 @@ export default function BottomSheet({
     ) {
       handleClose();
     } else if (currentY >= defaultOffset - vh * 0.07 || velocity > 140) {
-      startYAnimation(partialOffset, { type: "spring", stiffness: 350, damping: 35 });
+      startYAnimation(partialOffset, { type: "spring", stiffness: 300, damping: 35 });
     } else {
-      startYAnimation(0, { type: "spring", stiffness: 350, damping: 35 });
+      startYAnimation(0, { type: "spring", stiffness: 300, damping: 35 });
     }
   };
 
@@ -499,7 +499,7 @@ export default function BottomSheet({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.28 }}
+            transition={{ duration: 0.34 }}
             data-testid={testId ? `${testId}-backdrop` : undefined}
             data-dim={backdropDim ? "true" : "false"}
             className={`fixed inset-[-50vh] -inset-x-0 ${backdropDim ? "bg-black/60" : "bg-transparent"} ${backdropBlur ? "backdrop-blur-xl" : ""}`}
@@ -528,22 +528,22 @@ export default function BottomSheet({
             data-testid={testId ? `${testId}-panel` : undefined}
             data-bottom-sheet-surface="true"
             exit={linearMotion
-              ? { opacity: 0, transition: { duration: 0.25, ease: CLOSE_EASE_OUT } }
+              ? { opacity: 0, transition: { duration: 0.3, ease: CLOSE_EASE_OUT } }
               : { y: vh }}
             style={{
               y,
               height: Math.max(320, vh * heightVh),
               marginTop: "auto",
-              // Keep native vertical panning available until the recognizer
-              // conclusively locks this pointer stream to X. X then calls
-              // preventDefault and holds the sheet at its original Y.
+              // Vertical movement is handled manually so only the upper drag
+              // region can move the sheet; the content remains a native scroll
+              // surface and never opens or closes the panel.
               touchAction: "pan-y",
               willChange: "transform",
               overscrollBehavior: "contain",
             }}
             onClickCapture={handleSheetClickCapture}
             onDrag={handleVerticalDrag}
-            drag={hasHorizontalSwipe ? false : "y"}
+            drag={false}
             onUpdate={(latest) => {
               if (sharedY && Number.isFinite(latest.y)) sharedY.set(latest.y);
             }}
@@ -558,17 +558,23 @@ export default function BottomSheet({
                        rounded-t-[2.5rem] shadow-[0_-8px_40px_-8px_rgba(0,0,0,0.32)]
                        flex flex-col"
           >
-            {/* Drag handle */}
+            {/* Expanded drag target: the whole upper sheet chrome, not only the handle. */}
             <div
               data-testid={testId ? `${testId}-handle` : undefined}
               data-bottom-sheet-handle="true"
-              className="flex-shrink-0 pt-4 pb-2 flex justify-center"
+              data-bottom-sheet-drag-region="true"
+              className="flex-shrink-0 min-h-[64px] pt-4 pb-4 flex justify-center touch-none"
+              style={{ touchAction: "none" }}
             >
               <div className="w-12 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700" />
             </div>
 
             {/* Header */}
-            <div className="flex-shrink-0 border-b border-border-light dark:border-border-dark">
+            <div
+              data-bottom-sheet-drag-region="true"
+              className="flex-shrink-0 border-b border-border-light dark:border-border-dark"
+              style={{ touchAction: "none" }}
+            >
               {!hideHeader && (
                 <div className="flex items-center justify-between px-6 py-4">
                   <h3 className="font-bold text-lg">{title}</h3>
@@ -593,6 +599,7 @@ export default function BottomSheet({
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+4rem)]"
               style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
               data-testid={testId ? `${testId}-content` : undefined}
+              data-bottom-sheet-content="true"
             >
               {children}
             </div>
@@ -604,7 +611,7 @@ export default function BottomSheet({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.26 }}
               style={{ opacity: footerOpacity }}
               data-bottom-sheet-surface="true"
               className="absolute bottom-0 left-0 right-0 z-20

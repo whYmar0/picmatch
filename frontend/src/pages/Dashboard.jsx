@@ -113,7 +113,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     animate(baseScaleMV, galleryAlbum ? 0.94 : 1, {
-      duration: 0.36,
+      duration: 0.42,
       ease: [0.32, 0.72, 0, 1],
     });
   }, [galleryAlbum, baseScaleMV]);
@@ -161,7 +161,7 @@ export default function Dashboard() {
   const handleGalleryClose = useCallback(() => {
     closeProgressAnimRef.current?.stop();
     closeProgressAnimRef.current = animate(dragProgressMV, 1, {
-      duration: 0.22,
+      duration: 0.3,
       ease: [0.32, 0.72, 0, 1],
       onComplete: () => {
         closeProgressAnimRef.current = null;
@@ -496,7 +496,7 @@ export default function Dashboard() {
           <motion.div
             key={galleryKey}
             className="contents"
-            exit={{ opacity: 1, transition: { duration: 0.22 } }}
+            exit={{ opacity: 1, transition: { duration: 0.3 } }}
           >
             <AlbumGallery
               album={galleryAlbum.album}
