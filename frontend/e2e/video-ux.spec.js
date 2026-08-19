@@ -239,16 +239,48 @@ test("bottom horizontal swipe reveals the timeline and seeks", async ({ page }) 
   const box = await player.boundingBox();
   expect(box).not.toBeNull();
   await expect.poll(() => video.evaluate((node) => Number.isFinite(node.duration) && node.duration > 0)).toBe(true);
-  const y = box.y + box.height * 0.9;
-  await touch(player, "touchstart", box.x + 10, y);
-  await touch(player, "touchmove", box.x + box.width * 0.75, y);
+  await page.waitForTimeout(400);
+  const frameBox = await player.locator('[data-video-frame="true"]').boundingBox();
+  expect(frameBox).not.toBeNull();
+  const y = frameBox.y + frameBox.height * 0.9;
+  await touch(player, "touchstart", frameBox.x + 10, y);
+  await touch(player, "touchmove", frameBox.x + frameBox.width, y);
   await page.waitForTimeout(100);
-  await expect(player.locator('[data-video-controls="true"]')).toBeVisible();
+  await expect(player.locator('[data-video-timeline="true"]')).toBeVisible();
   const timeline = player.getByRole("slider", { name: "Video progress" });
   await expect(timeline).toHaveCount(1);
   await expect(timeline).toBeVisible();
+  const timelineBox = await player.locator('[data-video-timeline="true"]').boundingBox();
+  const trackBox = await player.locator('[data-video-timeline-track="true"]').boundingBox();
+  const measuredFrameBox = await player.locator('[data-video-frame="true"]').boundingBox();
+  expect(measuredFrameBox).not.toBeNull();
+  expect(timelineBox).not.toBeNull();
+  expect(trackBox).not.toBeNull();
+  expect(Math.abs((measuredFrameBox.y + measuredFrameBox.height) - (timelineBox.y + timelineBox.height))).toBeLessThanOrEqual(1);
+  expect(Math.abs(measuredFrameBox.x - trackBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs((measuredFrameBox.x + measuredFrameBox.width) - (trackBox.x + trackBox.width))).toBeLessThanOrEqual(1);
+  expect(Math.abs((measuredFrameBox.y + measuredFrameBox.height) - (trackBox.y + trackBox.height))).toBeLessThanOrEqual(1);
+  await expect(player.locator('[data-video-scrub-time="true"]')).toBeVisible();
+  const timelineStyles = await player.locator('[data-video-timeline-track="true"]').evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      height: style.height,
+      borderWidth: style.borderWidth,
+      borderRadius: style.borderRadius,
+      backgroundColor: style.backgroundColor,
+    };
+  });
+  expect(timelineStyles).toEqual({
+    height: "4px",
+    borderWidth: "0px",
+    borderRadius: "9999px",
+    backgroundColor: "rgba(55, 65, 81, 0.9)",
+  });
   await expect.poll(() => video.evaluate((node) => node.currentTime > 0)).toBe(true);
-  await touch(player, "touchend", box.x + box.width * 0.75, y);
+  const progress = player.locator('[data-video-timeline-progress="true"]');
+  await expect.poll(() => progress.evaluate((node) => node.style.width)).toBe("100%");
+  await touch(player, "touchend", frameBox.x + frameBox.width, y);
+  await expect.poll(() => progress.evaluate((node) => node.style.width)).toBe("100%");
 });
 
 test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop", async ({ page }) => {

@@ -5,7 +5,6 @@ const TAP_MOVEMENT_PX = 12;
 // Leave enough time for a normal tap to complete before treating it as a hold.
 const HOLD_DELAY_MS = 250;
 const CONTROLS_HIDE_MS = 2500;
-const SCRUB_HIDE_MS = 800;
 
 function formatTime(value) {
   if (!Number.isFinite(value) || value < 0) return "0:00";
@@ -46,12 +45,15 @@ export default function VideoPlayer({
   onVerticalSwipeMove,
 }) {
   const containerRef = useRef(null);
+  const mediaFrameRef = useRef(null);
   const videoRef = useRef(null);
   const backgroundVideoRef = useRef(null);
   const pointerScrubRef = useRef(false);
+  const animationFrameRef = useRef(null);
+  const endProgressLockRef = useRef(false);
+  const endProgressSeekPendingRef = useRef(false);
   const holdTimerRef = useRef(null);
   const controlsTimerRef = useRef(null);
-  const scrubTimerRef = useRef(null);
   const touchStartRef = useRef(null);
   const gestureAxisRef = useRef(null);
   const isHoldingRef = useRef(false);
@@ -64,11 +66,13 @@ export default function VideoPlayer({
   const [aspectRatio, setAspectRatio] = useState(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [progressPercent, setProgressPercent] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(muted);
   const [controlsVisible, setControlsVisible] = useState(false);
   const [showPlaybackControl, setShowPlaybackControl] = useState(true);
-  const [showTimeline, setShowTimeline] = useState(false);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPercent, setScrubPercent] = useState(0);
 
   const clearHoldTimer = () => {
     if (holdTimerRef.current) {
@@ -81,13 +85,6 @@ export default function VideoPlayer({
     if (controlsTimerRef.current) {
       window.clearTimeout(controlsTimerRef.current);
       controlsTimerRef.current = null;
-    }
-  };
-
-  const clearScrubTimer = () => {
-    if (scrubTimerRef.current) {
-      window.clearTimeout(scrubTimerRef.current);
-      scrubTimerRef.current = null;
     }
   };
 
@@ -111,7 +108,6 @@ export default function VideoPlayer({
   useEffect(() => () => {
     clearHoldTimer();
     clearControlsTimer();
-    clearScrubTimer();
   }, []);
 
   useEffect(() => {
@@ -119,6 +115,46 @@ export default function VideoPlayer({
     setIsMuted(muted);
     if (videoRef.current) videoRef.current.muted = muted;
   }, [muted]);
+
+  // Keep the progress indicator smooth between the video's coarser timeupdate events.
+  useEffect(() => {
+    if (!isPlaying) return undefined;
+
+    let cancelled = false;
+    const updateProgress = () => {
+      if (cancelled) return;
+      const video = videoRef.current;
+      if (video && !isScrubbingRef.current && Number.isFinite(video.duration) && video.duration > 0) {
+        const nextTime = video.currentTime || 0;
+        if (endProgressLockRef.current) {
+          if (endProgressSeekPendingRef.current) {
+            if (nextTime >= video.duration - 0.2) endProgressSeekPendingRef.current = false;
+          } else if (nextTime < video.duration * 0.2) {
+            // The loop has genuinely started after reaching the end.
+            endProgressLockRef.current = false;
+          }
+          if (endProgressLockRef.current) {
+            setCurrentTime(video.duration);
+            setProgressPercent(100);
+            animationFrameRef.current = window.requestAnimationFrame(updateProgress);
+            return;
+          }
+        }
+        setCurrentTime(nextTime);
+        setProgressPercent(clamp((nextTime / video.duration) * 100, 0, 100));
+      }
+      animationFrameRef.current = window.requestAnimationFrame(updateProgress);
+    };
+
+    animationFrameRef.current = window.requestAnimationFrame(updateProgress);
+    return () => {
+      cancelled = true;
+      if (animationFrameRef.current) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [isPlaying]);
 
   // The HTML autoPlay attribute is not enough when a carousel slide becomes
   // active while it remains mounted. Explicitly start/stop the active player.
@@ -170,16 +206,37 @@ export default function VideoPlayer({
     if (video.videoWidth && video.videoHeight) {
       setAspectRatio(video.videoWidth / video.videoHeight);
     }
-    if (Number.isFinite(video.duration)) setDuration(video.duration);
+    if (Number.isFinite(video.duration)) {
+      setDuration(video.duration);
+      setProgressPercent(clamp((video.currentTime / video.duration) * 100, 0, 100));
+    }
     syncBackgroundTime(video.currentTime);
   };
 
   const syncTime = (event) => {
     const video = event.currentTarget;
     const nextTime = video.currentTime || 0;
-    setCurrentTime(nextTime);
     syncBackgroundTime(nextTime);
-    if (Number.isFinite(video.duration)) setDuration(video.duration);
+    if (isScrubbingRef.current) return;
+    if (Number.isFinite(video.duration)) {
+      setDuration(video.duration);
+      if (endProgressLockRef.current) {
+        if (endProgressSeekPendingRef.current) {
+          if (nextTime >= video.duration - 0.2) endProgressSeekPendingRef.current = false;
+        } else if (nextTime < video.duration * 0.2) {
+          endProgressLockRef.current = false;
+        }
+        if (endProgressLockRef.current) {
+          setCurrentTime(video.duration);
+          setProgressPercent(100);
+          return;
+        }
+      }
+      setCurrentTime(nextTime);
+      setProgressPercent(clamp((nextTime / video.duration) * 100, 0, 100));
+    } else {
+      setCurrentTime(nextTime);
+    }
   };
 
   const playBackgroundVideo = () => {
@@ -240,8 +297,11 @@ export default function VideoPlayer({
     if (blurredBackdrop) pauseBackgroundVideo();
   };
   const handleEnded = () => {
+    endProgressLockRef.current = false;
+    endProgressSeekPendingRef.current = false;
     setIsPlaying(false);
     setCurrentTime(duration || 0);
+    setProgressPercent(100);
     showControls(true);
   };
 
@@ -256,8 +316,11 @@ export default function VideoPlayer({
     showControls(true);
   };
 
+  const getMediaRect = () => mediaFrameRef.current?.getBoundingClientRect()
+    || containerRef.current?.getBoundingClientRect();
+
   const isInBottomArea = (clientY) => {
-    const rect = containerRef.current?.getBoundingClientRect();
+    const rect = getMediaRect();
     return !!rect && clientY >= rect.top + rect.height * (1 - scrubBottomRatio);
   };
 
@@ -269,13 +332,23 @@ export default function VideoPlayer({
 
   const scrubToClientX = (clientX) => {
     const video = videoRef.current;
-    const rect = containerRef.current?.getBoundingClientRect();
+    const rect = getMediaRect();
     if (!video || !rect || !Number.isFinite(duration) || duration <= 0) return;
     const percentage = clamp((clientX - rect.left) / rect.width, 0, 1);
-    const nextTime = percentage * duration;
+    // Seeking exactly to duration fires `ended`; with loop enabled the browser
+    // immediately resets currentTime to 0. Keep the media just before the last
+    // frame while presenting a stable 100% progress value to the user.
+    const atEnd = percentage >= 1;
+    const nextTime = atEnd
+      ? Math.max(0, duration - 0.05)
+      : percentage * duration;
+    endProgressLockRef.current = atEnd;
+    endProgressSeekPendingRef.current = atEnd;
     video.currentTime = nextTime;
     syncBackgroundTime(nextTime);
-    setCurrentTime(nextTime);
+    setCurrentTime(percentage >= 1 ? duration : nextTime);
+    setProgressPercent(percentage * 100);
+    setScrubPercent(percentage * 100);
   };
 
   const handleTouchStart = (event) => {
@@ -292,6 +365,7 @@ export default function VideoPlayer({
       y: touch.clientY,
       time: Date.now(),
       bottomArea: isInBottomArea(touch.clientY),
+      timeline: !!event.target?.closest?.('[data-video-timeline="true"]'),
     };
 
     clearHoldTimer();
@@ -334,8 +408,7 @@ export default function VideoPlayer({
       event.preventDefault();
       event.stopPropagation();
       isScrubbingRef.current = true;
-      setShowTimeline(true);
-      clearScrubTimer();
+      setIsScrubbing(true);
       scrubToClientX(touch.clientX);
     }
   };
@@ -359,6 +432,7 @@ export default function VideoPlayer({
     const axis = gestureAxisRef.current;
     const wasHolding = isHoldingRef.current;
     const wasScrubbing = isScrubbingRef.current;
+    const startedOnTimeline = start.timeline;
 
     touchStartRef.current = null;
     gestureAxisRef.current = null;
@@ -374,11 +448,7 @@ export default function VideoPlayer({
     if (wasScrubbing) {
       event.preventDefault();
       event.stopPropagation();
-      clearScrubTimer();
-      scrubTimerRef.current = window.setTimeout(() => {
-        setShowTimeline(false);
-        scrubTimerRef.current = null;
-      }, SCRUB_HIDE_MS);
+      setIsScrubbing(false);
       return;
     }
 
@@ -391,6 +461,8 @@ export default function VideoPlayer({
       window.setTimeout(() => { touchHandledRef.current = false; }, 400);
       return;
     }
+
+    if (startedOnTimeline) return;
 
     if (Math.hypot(dx, dy) < TAP_MOVEMENT_PX) {
       event.stopPropagation();
@@ -411,6 +483,7 @@ export default function VideoPlayer({
     isHoldingRef.current = false;
     suppressControlsRef.current = false;
     isScrubbingRef.current = false;
+    setIsScrubbing(false);
     pointerScrubRef.current = false;
   };
 
@@ -419,7 +492,8 @@ export default function VideoPlayer({
   const handlePointerDownCapture = (event) => {
     const isBottomScrub = isolateScrubGesture && isInBottomArea(event.clientY);
     pointerScrubRef.current = isBottomScrub;
-    if (!isBottomScrub && !event.target?.closest?.("button")) {
+    const startedOnTimeline = event.target?.closest?.('[data-video-timeline="true"]');
+    if (!isBottomScrub && !startedOnTimeline && !event.target?.closest?.("button")) {
       pointerTapStartRef.current = { x: event.clientX, y: event.clientY, pointerType: event.pointerType };
     } else {
       pointerTapStartRef.current = null;
@@ -452,22 +526,42 @@ export default function VideoPlayer({
   };
 
   const handleClick = (event) => {
-    if (touchHandledRef.current || event.target?.closest?.("button")) return;
+    if (touchHandledRef.current || event.target?.closest?.("button") || event.target?.closest?.('[data-video-timeline="true"]')) return;
     if (isInPlaybackTapArea(event.clientX, event.clientY)) togglePlayback();
     else showControls(true, false);
   };
 
   const handleSeek = (event) => {
-    const nextTime = Number(event.target.value);
-    if (!videoRef.current || !Number.isFinite(nextTime)) return;
+    const requestedTime = Number(event.target.value);
+    if (!videoRef.current || !Number.isFinite(requestedTime)) return;
+    const atEnd = duration > 0 && requestedTime >= duration;
+    const nextTime = atEnd ? Math.max(0, duration - 0.05) : requestedTime;
+    endProgressLockRef.current = atEnd;
+    endProgressSeekPendingRef.current = atEnd;
     videoRef.current.currentTime = nextTime;
     syncBackgroundTime(nextTime);
-    setCurrentTime(nextTime);
+    setCurrentTime(atEnd ? duration : nextTime);
+    const nextPercent = atEnd || duration <= 0
+      ? (atEnd ? 100 : 0)
+      : clamp((nextTime / duration) * 100, 0, 100);
+    setProgressPercent(nextPercent);
+    setScrubPercent(nextPercent);
+    setIsScrubbing(true);
     showControls(true);
   };
 
   const stopSeekPropagation = (event) => {
     event.stopPropagation();
+  };
+
+  const handleTimelinePointerDown = (event) => {
+    event.stopPropagation();
+    setIsScrubbing(true);
+  };
+
+  const handleTimelinePointerUp = (event) => {
+    event.stopPropagation();
+    setIsScrubbing(false);
   };
 
   const videoStyle = stableLayout
@@ -508,7 +602,22 @@ export default function VideoPlayer({
         }
       : { ...style, ...bottomInsetStyle };
 
-  const controlsShown = controlsVisible || (!isPlaying && !suppressControlsRef.current) || showTimeline;
+  const mediaFrameStyle = stableLayout && aspectRatio
+    ? {
+        position: "relative",
+        aspectRatio: `${aspectRatio}`,
+        width: aspectRatio >= 1 ? "100%" : "auto",
+        height: aspectRatio >= 1 ? "auto" : "100%",
+        maxWidth: "100%",
+        maxHeight: "100%",
+      }
+    : {
+        position: "relative",
+        width: "100%",
+        height: "100%",
+      };
+
+  const controlsShown = controlsVisible || (!isPlaying && !suppressControlsRef.current);
 
   return (
     <div
@@ -546,6 +655,12 @@ export default function VideoPlayer({
           aria-hidden="true"
         />
       )}
+      <div
+        ref={mediaFrameRef}
+        className="relative z-10 flex max-w-full max-h-full items-center justify-center"
+        style={mediaFrameStyle}
+        data-video-frame="true"
+      >
       <video
         ref={videoRef}
         src={src}
@@ -569,7 +684,6 @@ export default function VideoPlayer({
         aria-hidden="true"
       />
 
-      <>
           <div
             className={`absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center ${
               controlsShown ? "visible pointer-events-auto" : "invisible pointer-events-none"
@@ -612,14 +726,35 @@ export default function VideoPlayer({
             )}
           </div>
 
-          {showTimeline && (
-            <div
-              className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-3 pt-2 text-white"
-              onClick={stopSeekPropagation}
-              onTouchStart={stopSeekPropagation}
-              onTouchMove={stopSeekPropagation}
-              onTouchEnd={stopSeekPropagation}
-            >
+          <div
+            className="absolute inset-x-0 bottom-0 z-20 h-10 px-0 text-white"
+            data-video-timeline="true"
+            onClick={stopSeekPropagation}
+            onPointerDown={handleTimelinePointerDown}
+            onPointerUp={handleTimelinePointerUp}
+          >
+              {isScrubbing && (
+                <span
+                  className="absolute bottom-4 -translate-x-1/2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-medium leading-none tabular-nums text-white pointer-events-none"
+                  style={{ left: `${scrubPercent}%` }}
+                  data-video-scrub-time="true"
+                >
+                  {formatTime(currentTime)}
+                </span>
+              )}
+              <div
+                className="absolute inset-x-0 bottom-0 h-1 rounded-full bg-gray-700/90"
+                data-video-timeline-track="true"
+              >
+                <span
+                  className="absolute inset-y-0 left-0 rounded-full bg-gray-300"
+                  style={{
+                    width: `${progressPercent}%`,
+                    transition: isScrubbing ? "none" : "width 80ms linear",
+                  }}
+                  data-video-timeline-progress="true"
+                />
+              </div>
               <input
                 type="range"
                 min="0"
@@ -627,16 +762,11 @@ export default function VideoPlayer({
                 step="0.01"
                 value={Math.min(currentTime, duration || 0)}
                 onChange={handleSeek}
-                className="w-full h-1 accent-white cursor-pointer"
+                className="absolute inset-x-0 inset-y-0 h-10 w-full cursor-pointer appearance-none bg-transparent opacity-0"
                 aria-label="Video progress"
               />
-              <div className="flex justify-between text-[11px] font-medium tabular-nums mt-1">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
-              </div>
-            </div>
-          )}
-        </>
+          </div>
+        </div>
     </div>
   );
 }
