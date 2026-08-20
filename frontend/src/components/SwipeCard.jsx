@@ -228,7 +228,7 @@ const SwipeCard = forwardRef(function SwipeCard(
         Only this card container is dark — page background stays themed.
         rounded-3xl for a refined card feel.
       */}
-      <div className={`relative w-full h-full rounded-3xl ${pinchActive ? "overflow-visible" : "overflow-hidden"} shadow-swipe bg-gray-950`}>
+      <div className={`relative w-full h-full rounded-3xl ${pinchActive ? "overflow-visible" : "overflow-hidden"} ${isTop ? "shadow-swipe" : ""} bg-gray-950`}>
 
         {imageFailed ? (
           <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-gray-400">

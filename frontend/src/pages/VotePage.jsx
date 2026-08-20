@@ -385,8 +385,8 @@ export default function VotePage() {
         {/* ─── Thumbnail strip ─────────────────────────────────────────────── */}
         <div className="relative flex-shrink-0 w-full max-w-[360px] min-w-0 mx-auto">
           {/* Soft edge fades keep the strip visually contained without blurring thumbnails. */}
-          <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-surface-light/80 dark:from-surface-dark/80 to-transparent z-10 pointer-events-none" />
-          <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-surface-light/80 dark:from-surface-dark/80 to-transparent z-10 pointer-events-none" />
+          <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-surface-light/40 dark:from-surface-dark/40 to-transparent z-10 pointer-events-none" />
+          <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-surface-light/40 dark:from-surface-dark/40 to-transparent z-10 pointer-events-none" />
 
           <div
             ref={thumbStripRef}
@@ -409,7 +409,7 @@ export default function VotePage() {
                                 transition-all duration-150
                                 ${isCur
                         ? "ring-2 ring-primary-400 ring-offset-1 ring-offset-surface-light dark:ring-offset-surface-dark scale-105"
-                        : "opacity-70 hover:opacity-100 hover:scale-105"
+                        : "hover:scale-105"
                       }`}
                   >
                     {isVideo(photo) ? (

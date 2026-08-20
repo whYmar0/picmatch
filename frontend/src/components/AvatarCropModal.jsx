@@ -186,7 +186,7 @@ export default function AvatarCropModal({ src, onConfirm, onCancel }) {
               step={0.05}
               value={zoom}
               onChange={(e) => setZoom(parseFloat(e.target.value))}
-              className="flex-1 accent-amber-400 h-1.5 rounded-full cursor-pointer"
+              className="flex-1 accent-primary-400 h-1.5 rounded-full cursor-pointer"
             />
             <ZoomIn size={15} className="text-gray-400 flex-shrink-0" />
           </div>
