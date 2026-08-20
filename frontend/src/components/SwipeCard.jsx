@@ -214,9 +214,9 @@ const SwipeCard = forwardRef(function SwipeCard(
         scale: stackScale,
         transition: { type: "spring", stiffness: 280, damping: 28 },
       }}
-      drag={isTop && !pinchActive ? "x" : false}
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.85}
+      drag={isTop && !pinchActive ? true : false}
+      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+      dragElastic={{ left: 0.85, right: 0.85, top: 0.25, bottom: 0.25 }}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onPointerDown={handlePointerDown}
