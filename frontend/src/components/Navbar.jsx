@@ -11,6 +11,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { LogOut, LayoutDashboard, Camera, Bell, MessageSquare, BarChart2, Sun, Moon, Languages, AtSign } from "lucide-react";
 import FilledHeart from "./FilledHeart";
+import topBarHeartIcon from "../../Screenshot_20260820_120332_Instagram.png";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
@@ -21,11 +22,11 @@ import AvatarCropModal from "./AvatarCropModal";
 // ─── Avatar color map ─────────────────────────────────────────────────────────
 const AVATAR_COLORS = {
   purple: { bg: "bg-purple-100 dark:bg-purple-900/40", text: "text-purple-600" },
-  green:  { bg: "bg-green-100 dark:bg-green-900/40",   text: "text-green-600" },
+  green: { bg: "bg-green-100 dark:bg-green-900/40", text: "text-green-600" },
   yellow: { bg: "bg-yellow-100 dark:bg-yellow-900/40", text: "text-yellow-600" },
   orange: { bg: "bg-orange-100 dark:bg-orange-900/40", text: "text-orange-600" },
-  pink:   { bg: "bg-pink-100 dark:bg-pink-900/40",     text: "text-pink-600" },
-  blue:   { bg: "bg-blue-100 dark:bg-blue-900/40",     text: "text-blue-600" },
+  pink: { bg: "bg-pink-100 dark:bg-pink-900/40", text: "text-pink-600" },
+  blue: { bg: "bg-blue-100 dark:bg-blue-900/40", text: "text-blue-600" },
 };
 
 // ─── User Avatar (reusable) ────────────────────────────────────────────────────
@@ -209,10 +210,16 @@ export default function Navbar() {
                   onClick={() => navigate("/inbox")}
                   className="btn-ghost relative flex items-center justify-center w-11 h-11 rounded-2xl"
                 >
-                  <FilledHeart size={24} className="text-gray-900 dark:text-gray-100" />
-                  {unreadNotifs.length > 0 && (
-                    <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(255,255,255,1)] dark:shadow-[0_0_0_2px_rgba(30,41,59,1)]" />
-                  )}
+                  <span className="relative flex items-center justify-center w-8 h-7">
+                    <img
+                      src={topBarHeartIcon}
+                      alt="Notifications"
+                      className="w-8 h-7 object-contain"
+                    />
+                    {unreadNotifs.length > 0 && (
+                      <span className="absolute top-1 right-0 w-[5.5px] h-[5.6px] aspect-square rounded-[50%] bg-[#ff1f46] outline outline-2 outline-card-light dark:outline-card-dark" />
+                    )}
+                  </span>
                 </button>
 
                 {/* Mini notification bubble (TikTok/Instagram style) */}

@@ -257,7 +257,7 @@ export default function Dashboard() {
                 </div>
 
                 {albums.length === 0 ? (
-                  <div className="text-center py-10 bg-card-light dark:bg-card-dark rounded-3xl p-6">
+                  <div className="flex min-h-[160px] items-center justify-center px-6 text-center">
                     <p className="text-gray-400 text-sm">{t("noAlbums")}</p>
                   </div>
                 ) : (
