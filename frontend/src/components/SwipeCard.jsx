@@ -37,7 +37,7 @@ function touchMidpoint(touches) {
 }
 
 const SwipeCard = forwardRef(function SwipeCard(
-  { photo, isTop, stackIndex, onSwipe, onImageClick, enablePinchZoom = false, videoScrubBottomRatio = 0.25, blurredVideoBackdrop = false },
+  { photo, isTop, stackIndex, onSwipe, onImageClick, onLikeThresholdCrossed, enablePinchZoom = false, videoScrubBottomRatio = 0.25, blurredVideoBackdrop = false },
   ref
 ) {
   const controls = useAnimation();
@@ -45,6 +45,9 @@ const SwipeCard = forwardRef(function SwipeCard(
   const y = useMotionValue(0);
   const pointerDown = useRef(null);
   const hasDragged = useRef(false);
+  const lastPointerPos = useRef({ x: 0, y: 0 });
+  const heartFired = useRef(false);
+  const cardElRef = useRef(null);
   const pinchRef = useRef({ active: false });
   const pinchResetTimerRef = useRef(null);
   const pinchTransformRef = useRef({ scale: 1, x: 0, y: 0 });
@@ -136,6 +139,15 @@ const SwipeCard = forwardRef(function SwipeCard(
   useImperativeHandle(ref, () => ({
     swipeTo: async (isLike) => {
       const dir = isLike ? 700 : -700;
+      // Button-tap like has no finger position — fire the heart at the card center.
+      if (isLike && !heartFired.current) {
+        heartFired.current = true;
+        const rect = cardElRef.current?.getBoundingClientRect();
+        const pos = rect
+          ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+          : lastPointerPos.current;
+        onLikeThresholdCrossed?.(pos);
+      }
       await controls.start({
         x: dir, rotate: isLike ? 22 : -22, opacity: 0,
         transition: { duration: 0.24, ease: [0.32, 0, 0.67, 0] },
@@ -152,6 +164,7 @@ const SwipeCard = forwardRef(function SwipeCard(
   const handlePointerDown = (e) => {
     if (!isTop) return;
     pointerDown.current = { x: e.clientX, y: e.clientY };
+    lastPointerPos.current = { x: e.clientX, y: e.clientY };
     hasDragged.current = false;
   };
 
@@ -170,6 +183,19 @@ const SwipeCard = forwardRef(function SwipeCard(
   };
 
   const handleDragStart = () => { hasDragged.current = true; };
+
+  // Fire the heart burst once the rightward swipe crosses the like threshold (x ≥ 80).
+  const handleDrag = (_, info) => {
+    lastPointerPos.current = { x: info.point.x, y: info.point.y };
+    const latest = info.offset.x;
+    if (latest >= 80 && !heartFired.current) {
+      heartFired.current = true;
+      onLikeThresholdCrossed?.(lastPointerPos.current);
+    }
+    if (latest < 40) {
+      heartFired.current = false; // reset when dragged back, allow re-fire
+    }
+  };
 
   const handleDragEnd = async (_, info) => {
     const absX = Math.abs(info.offset.x);
@@ -199,6 +225,7 @@ const SwipeCard = forwardRef(function SwipeCard(
   return (
     <motion.div
       className="absolute inset-0 no-select touch-manipulation"
+      ref={cardElRef}
       style={{
         x: isTop ? x : 0,
         y: isTop ? y : 0,
@@ -218,6 +245,7 @@ const SwipeCard = forwardRef(function SwipeCard(
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
       dragElastic={{ left: 0.85, right: 0.85, top: 0.25, bottom: 0.25 }}
       onDragStart={handleDragStart}
+      onDrag={handleDrag}
       onDragEnd={handleDragEnd}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}

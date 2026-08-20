@@ -17,6 +17,7 @@ import { albumsApi, votesApi } from "../api";
 import { useLang } from "../contexts/LangContext";
 import { useAuth } from "../contexts/AuthContext";
 import SwipeCard, { SwipeButtons } from "../components/SwipeCard";
+import HeartBurst from "../components/HeartBurst";
 import { VotePageSkeleton } from "../components/Skeleton";
 import { LogIn, MessageCircle, Check, Play } from "lucide-react";
 import FilledHeart from "../components/FilledHeart";
@@ -67,6 +68,7 @@ export default function VotePage() {
   const [albumError, setAlbumError] = useState(null);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [commentSheet, setCommentSheet] = useState(null); // null | photo object
+  const [hearts, setHearts] = useState([]); // active heart burst effects
   // ── Comment split-layout state ────────────────────────────────────────────
   const [replyTarget, setReplyTarget] = useState(null);
   const replyTriggerRef = useRef({});
@@ -85,6 +87,7 @@ export default function VotePage() {
   const votesMapRef = useRef({});
   const allPhotosRef = useRef([]);
   const topCardRef = useRef(null);
+  const cardStackRef = useRef(null); // card stack container for heart coordinate math
 
   const shouldLoad = !authLoading;
 
@@ -235,6 +238,20 @@ export default function VotePage() {
       if (photo) handleSwipe(photo.id, isLike);
     }
   }, [currentPhotoId, handleSwipe]);
+
+  // ── Heart burst ─────────────────────────────────────────────────────────────
+  const handleLikeThreshold = useCallback((fingerPos) => {
+    const rect = cardStackRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const localX = fingerPos.x - rect.left;
+    const localY = fingerPos.y - rect.top - 60; // 60px above the finger
+    const id = `heart-${Date.now()}-${Math.random()}`;
+    setHearts((prev) => [...prev, { id, x: localX, y: localY }]);
+  }, []);
+
+  const removeHeart = useCallback((id) => {
+    setHearts((prev) => prev.filter((h) => h.id !== id));
+  }, []);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const currentPhoto = allPhotos.find((p) => String(p.id) === currentPhotoId);
@@ -444,6 +461,7 @@ export default function VotePage() {
         {/* ─── Card stack ────────────────────────────────────────────────────── */}
         <div className="flex-shrink-0 w-full max-w-full min-w-0 overflow-visible flex items-center justify-center px-2 sm:px-6 py-2">
           <div
+            ref={cardStackRef}
             className="relative w-full max-w-[430px] min-w-0 aspect-[3/4]"
           >
             {/* n/m counter badge — now placed top-right on the cards */}
@@ -465,6 +483,7 @@ export default function VotePage() {
                       isTop={isTop}
                       stackIndex={stackIdx}
                       onSwipe={handleSwipe}
+                      onLikeThresholdCrossed={handleLikeThreshold}
                       enablePinchZoom
                       videoScrubBottomRatio={0.2}
                       blurredVideoBackdrop
@@ -484,6 +503,11 @@ export default function VotePage() {
                 );
               })}
             </AnimatePresence>
+
+            {/* Heart burst effects */}
+            {hearts.map((h) => (
+              <HeartBurst key={h.id} x={h.x} y={h.y} onComplete={() => removeHeart(h.id)} />
+            ))}
           </div>
         </div>
 
