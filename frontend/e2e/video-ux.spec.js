@@ -86,6 +86,20 @@ async function setup(page) {
   await expect(page.locator('[data-testid="album-gallery"]')).toBeVisible();
 }
 
+async function pointer(locator, type, x, y) {
+  await locator.evaluate((el, { type: eventType, x: clientX, y: clientY }) => {
+    el.dispatchEvent(new PointerEvent(eventType, {
+      pointerId: 1,
+      pointerType: "touch",
+      isPrimary: true,
+      clientX,
+      clientY,
+      bubbles: true,
+      cancelable: true,
+    }));
+  }, { type, x, y });
+}
+
 async function touch(locator, type, x, y) {
   await locator.evaluate((el, { type: eventType, x: clientX, y: clientY }) => {
     const touch = new Touch({ identifier: 1, target: el, clientX, clientY, pageX: clientX, pageY: clientY, radiusX: 1, radiusY: 1, force: 1 });
@@ -105,6 +119,24 @@ test("video opens muted and autoplaying, then pauses/resumes from custom control
   const video = player.locator("video");
   await expect(video).toHaveJSProperty("muted", true);
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
+  const progress = player.locator('[data-video-timeline-progress="true"]');
+  const progressBeforePlayback = await progress.evaluate((node) => node.getBoundingClientRect().width);
+  await page.waitForTimeout(300);
+  const progressDuringPlayback = await progress.evaluate((node) => node.getBoundingClientRect().width);
+  expect(progressDuringPlayback).toBeGreaterThan(progressBeforePlayback);
+  const playbackSamples = [];
+  for (let sample = 0; sample < 4; sample += 1) {
+    await page.waitForTimeout(200);
+    playbackSamples.push(await player.evaluate((root) => ({
+      currentTime: root.querySelector('[data-video-main="true"]')?.currentTime,
+      renderedRectWidth: root.querySelector('[data-video-timeline-progress="true"]')?.getBoundingClientRect().width,
+      isPlaying: !root.querySelector('[data-video-main="true"]')?.paused,
+    })));
+  }
+  expect(playbackSamples.every((sample) => sample.isPlaying)).toBe(true);
+  expect(playbackSamples.at(-1).currentTime).toBeGreaterThan(playbackSamples[0].currentTime);
+  expect(playbackSamples.at(-1).renderedRectWidth).toBeGreaterThan(playbackSamples[0].renderedRectWidth);
+  expect(playbackSamples.at(-1).renderedRectWidth).toBeGreaterThan(0);
 
   const playerBox = await player.boundingBox();
   expect(playerBox).not.toBeNull();
@@ -243,14 +275,23 @@ test("bottom horizontal swipe reveals the timeline and seeks", async ({ page }) 
   const frameBox = await player.locator('[data-video-frame="true"]').boundingBox();
   expect(frameBox).not.toBeNull();
   const y = frameBox.y + frameBox.height * 0.9;
-  await touch(player, "touchstart", frameBox.x + 10, y);
-  await touch(player, "touchmove", frameBox.x + frameBox.width, y);
+  const timeline = player.locator('[data-video-timeline="true"]');
+  await pointer(timeline, "pointerdown", frameBox.x + 10, y);
+  await touch(timeline, "touchstart", frameBox.x + 10, y);
+  await touch(timeline, "touchmove", frameBox.x + frameBox.width, y);
   await page.waitForTimeout(100);
-  await expect(player.locator('[data-video-timeline="true"]')).toBeVisible();
-  const timeline = player.getByRole("slider", { name: "Video progress" });
-  await expect(timeline).toHaveCount(1);
   await expect(timeline).toBeVisible();
-  const timelineBox = await player.locator('[data-video-timeline="true"]').boundingBox();
+  // Scrubbing freezes playback, including at the right edge. The video must
+  // not loop back to the beginning while the finger is still down.
+  await expect.poll(() => video.evaluate((node) => node.paused)).toBe(true);
+  await expect(player.getByRole("button", { name: "Play video" })).toBeHidden();
+  await expect(player.getByRole("button", { name: "Unmute video" })).toBeHidden();
+  await page.waitForTimeout(300);
+  await expect(video).toHaveJSProperty("paused", true);
+  const timelineSlider = player.getByRole("slider", { name: "Video progress" });
+  await expect(timelineSlider).toHaveCount(1);
+  await expect(timelineSlider).toBeVisible();
+  const timelineBox = await timeline.boundingBox();
   const trackBox = await player.locator('[data-video-timeline-track="true"]').boundingBox();
   const measuredFrameBox = await player.locator('[data-video-frame="true"]').boundingBox();
   expect(measuredFrameBox).not.toBeNull();
@@ -276,11 +317,12 @@ test("bottom horizontal swipe reveals the timeline and seeks", async ({ page }) 
     borderRadius: "9999px",
     backgroundColor: "rgba(55, 65, 81, 0.9)",
   });
-  await expect.poll(() => video.evaluate((node) => node.currentTime > 0)).toBe(true);
   const progress = player.locator('[data-video-timeline-progress="true"]');
-  await expect.poll(() => progress.evaluate((node) => node.style.width)).toBe("100%");
-  await touch(player, "touchend", frameBox.x + frameBox.width, y);
-  await expect.poll(() => progress.evaluate((node) => node.style.width)).toBe("100%");
+  await expect.poll(() => progress.evaluate((node) => node.style.transform)).toBe("scaleX(1)");
+  await touch(timeline, "touchend", frameBox.x + frameBox.width, y);
+  await pointer(timeline, "pointerup", frameBox.x + frameBox.width, y);
+  await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
+  await expect.poll(() => progress.evaluate((node) => node.style.transform)).toBe("scaleX(1)");
 });
 
 test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop", async ({ page }) => {
@@ -347,12 +389,20 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
   const startY = box.y + box.height * 0.9;
   const startX = box.x + 10;
   const endX = box.x + box.width * 0.75;
-  await touch(player, "touchstart", startX, startY);
-  await touch(player, "touchmove", endX, startY);
+  const timeline = player.locator('[data-video-timeline="true"]');
+  await pointer(timeline, "pointerdown", startX, startY);
+  await touch(timeline, "touchstart", startX, startY);
+  await touch(timeline, "touchmove", endX, startY);
   await page.waitForTimeout(100);
   await expect(player.getByRole("slider", { name: "Video progress" })).toBeVisible();
-  await expect.poll(() => video.evaluate((node) => node.currentTime > 0)).toBe(true);
-  await touch(player, "touchend", endX, startY);
+  await expect.poll(() => video.evaluate((node) => node.paused)).toBe(true);
+  await expect(player.getByRole("button", { name: "Play video" })).toBeHidden();
+  await expect(player.getByRole("button", { name: "Unmute video" })).toBeHidden();
+  await page.waitForTimeout(300);
+  await expect(video).toHaveJSProperty("paused", true);
+  await touch(timeline, "touchend", endX, startY);
+  await pointer(timeline, "pointerup", endX, startY);
+  await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
   await page.waitForTimeout(250);
   await expect(page.locator('[data-video-player="true"]')).toHaveCount(1);
   await expect(page.getByText("Vote Video UX Test")).toBeVisible();
