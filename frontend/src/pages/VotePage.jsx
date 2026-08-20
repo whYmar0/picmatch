@@ -243,8 +243,16 @@ export default function VotePage() {
   const handleLikeThreshold = useCallback((fingerPos) => {
     const rect = cardStackRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const localX = fingerPos.x - rect.left;
-    const localY = fingerPos.y - rect.top - 60; // 60px above the finger
+    // The heart is 64×64 CSS px, anchored at its BOTTOM edge and grows upward.
+    // Clamp so it never gets clipped or pushed off-screen when the finger is near
+    // an edge of the card stack.
+    const HALF_W = 34;   // half width (32) + 2px buffer
+    const FULL_H = 68;   // full height (64) + 4px buffer
+    const localX = Math.min(Math.max(fingerPos.x - rect.left, HALF_W), rect.width - HALF_W);
+    const localY = Math.min(
+      Math.max(fingerPos.y - rect.top - 60, FULL_H), // 60px above the finger
+      rect.height - 4
+    );
     const id = `heart-${Date.now()}-${Math.random()}`;
     setHearts((prev) => [...prev, { id, x: localX, y: localY }]);
   }, []);

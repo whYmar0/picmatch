@@ -185,8 +185,12 @@ const SwipeCard = forwardRef(function SwipeCard(
   const handleDragStart = () => { hasDragged.current = true; };
 
   // Fire the heart burst once the rightward swipe crosses the like threshold (x ≥ 80).
-  const handleDrag = (_, info) => {
-    lastPointerPos.current = { x: info.point.x, y: info.point.y };
+  // Uses raw event clientX/clientY (viewport coords) so the heart tracks the finger
+  // correctly even if the page is scrolled.
+  const handleDrag = (event, info) => {
+    const clientX = event?.clientX ?? info.point.x;
+    const clientY = event?.clientY ?? info.point.y;
+    lastPointerPos.current = { x: clientX, y: clientY };
     const latest = info.offset.x;
     if (latest >= 80 && !heartFired.current) {
       heartFired.current = true;
