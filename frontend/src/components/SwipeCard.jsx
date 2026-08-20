@@ -58,8 +58,6 @@ const SwipeCard = forwardRef(function SwipeCard(
   const [imageFailed, setImageFailed] = useState(false);
 
   const rotate = useTransform(x, [-300, 0, 300], [-22, 0, 22]);
-  const likeOpacity = useTransform(x, [15, 80], [0, 1]);
-  const nopeOpacity = useTransform(x, [-80, -15], [1, 0]);
 
   // All cards aligned perfectly (no scale difference)
   const stackScale = 1;
@@ -300,7 +298,7 @@ const SwipeCard = forwardRef(function SwipeCard(
               draggable={false}
               loading={isTop ? "eager" : "lazy"}
               decoding="async"
-              fetchPriority={isTop ? "high" : "low"}
+              fetchpriority={isTop ? "high" : "low"}
               style={{
                 transform: `translate3d(${pinchTransform.x}px, ${pinchTransform.y}px, 0) scale(${pinchTransform.scale})`,
                 transformOrigin: "center center",
@@ -311,27 +309,6 @@ const SwipeCard = forwardRef(function SwipeCard(
           </div>
         )}
 
-        {/* LIKE / NOPE stamps — top card only */}
-        {isTop && (
-          <>
-            <motion.div
-              style={{ opacity: likeOpacity }}
-              className="absolute top-6 left-5 border-[3px] border-green-400 text-green-400
-                         font-sans font-bold text-xl tracking-widest rounded-xl
-                         px-3 py-1 -rotate-[20deg] select-none whitespace-nowrap bg-black/20"
-            >
-              НРАВИТСЯ
-            </motion.div>
-            <motion.div
-              style={{ opacity: nopeOpacity }}
-              className="absolute top-6 right-5 border-[3px] border-red-400 text-red-400
-                         font-sans font-bold text-xl tracking-widest rounded-xl
-                         px-3 py-1 rotate-[20deg] select-none whitespace-nowrap bg-black/20"
-            >
-              НЕ НРАВИТСЯ
-            </motion.div>
-          </>
-        )}
       </div>
     </motion.div>
   );
