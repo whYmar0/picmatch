@@ -15,7 +15,8 @@ import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } f
 import { ChevronLeft, Lock } from "lucide-react";
 import toast from "react-hot-toast";
 import { albumsApi, commentsApi } from "../api";
-import AlbumSummary from "../components/AlbumSummary";
+import { useLang } from "../contexts/LangContext";
+import AlbumGallery from "../components/AlbumGallery";
 import PhotoComments from "../components/PhotoComments";
 import { AnalyticsSkeleton } from "../components/Skeleton";
 import { isVideoUrl } from "../utils/media";
@@ -23,6 +24,7 @@ import VideoPlayer from "../components/VideoPlayer";
 
 // ─── Locked comment overlay for private-album notification deep-link ──────────
 function LockedCommentSheet({ photoId, photoUrl, initialComments, onBack }) {
+  const { t } = useLang();
   const controls = useAnimation();
   const y = useMotionValue(0);
   // Calculate vh once on mount to prevent mobile address bar from triggering resize re-renders and stuttering animations
@@ -124,7 +126,7 @@ function LockedCommentSheet({ photoId, photoUrl, initialComments, onBack }) {
           >
             <ChevronLeft size={22} />
           </button>
-          <span className="font-bold text-xl ml-1">Comments</span>
+          <span className="font-bold text-xl ml-1">{t("Comments")}</span>
           <div className="ml-auto w-10 h-10 rounded-2xl flex items-center justify-center bg-amber-50 dark:bg-amber-900/20 text-amber-500">
             <Lock size={18} />
           </div>
@@ -160,7 +162,7 @@ export default function AnalyticsPage() {
   // URL params set when navigating from a notification
   const initialPhotoId = searchParams.get("photo");
   const initialCommentId = searchParams.get("comment");
-  const initialTab = searchParams.get("tab") || "comments";
+  const initialTab = searchParams.get("tab") || "stats";
 
   useEffect(() => {
     let cancelled = false;
@@ -187,7 +189,7 @@ export default function AnalyticsPage() {
             coverUrl,
             creatorUsername: data.creator?.username ?? null,
             is_public: data.is_public,
-            hasAccess: true,
+            hasAccess: data.can_view_stats || data.is_public,
           });
         }
       } catch (err) {
@@ -296,12 +298,23 @@ export default function AnalyticsPage() {
     );
   }
 
+  const galleryAlbum = {
+    id: analytics.id,
+    title: analytics.title,
+    description: analytics.description,
+    creator: analytics.creator,
+    creator_id: analytics.creator_id,
+    is_public: analytics.is_public,
+    photos: analytics.photos || [],
+  };
+
   return (
-    <AlbumSummary
-      analytics={analytics}
-      onBack={() => navigate("/dashboard")}
-      initialPhotoId={initialPhotoId}
+    <AlbumGallery
+      album={galleryAlbum}
+      startPhotoId={initialPhotoId}
+      initialAnalytics={analytics}
       initialTab={initialTab}
+      onClose={() => navigate("/dashboard")}
     />
   );
 }

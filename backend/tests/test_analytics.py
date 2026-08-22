@@ -1,16 +1,11 @@
 """
-tests/test_analytics.py — Analytics endpoint privacy regression tests.
+tests/test_analytics.py — Analytics access and privacy regression tests.
 
-Covered (MED2 from code-review on Wave 1):
-  • PUBLIC album, NON-OWNER viewer → voter_summaries=[] + photos[].reactions=[]
-  • PUBLIC album, OWNER viewer     → see full voter_summaries + reactions
-  • PRIVATE album, NON-OWNER       → 403 (already covered by route, kept here for
-                                       completeness)
-
-These tests guard against the M1 regression where the privacy gate in
-_build_analytics would silently drop voter identities even when called
-with can_view_stats=True by mistake. If a future refactor changes the
-ownership check, these tests fail loudly.
+Covered:
+  • PUBLIC album, NON-OWNER viewer → full analytics
+  • PUBLIC album, OWNER viewer     → full analytics
+  • PRIVATE album, shared viewer   → photos/comments-only payload
+  • PRIVATE album, non-shared      → 403
 """
 import pytest
 
@@ -55,20 +50,13 @@ async def _seed_album_with_vote(db_session, async_client, headers, *, is_public=
 
 
 # ─── Tests ──────────────────────────────────────────────────────────────────
-async def test_analytics_strips_voter_identities_for_non_owner_on_public_album(
+async def test_analytics_non_owner_on_public_album_sees_full_stats(
     async_client,
-    make_user,
     auth_headers,
     second_user_headers,
     db_session,
 ):
-    """Alice owns a PUBLIC album and has voted on it. Bob is a different
-    authenticated user (NOT shared). Bob's GET /albums/{id}/analytics must
-    return:
-      • voter_summaries == []  (privacy gate fires)
-      • each photos[].reactions == []
-      • but counts (like_count, total_votes, like_percentage) preserved
-    """
+    """Any authenticated voter can see full analytics for a public album."""
     album_id, _photo_id = await _seed_album_with_vote(
         db_session, async_client, auth_headers, is_public=True,
     )
@@ -79,21 +67,11 @@ async def test_analytics_strips_voter_identities_for_non_owner_on_public_album(
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
-    # PRIVACY GATE (M1 fix): voter identities must be stripped
-    assert body["voter_summaries"] == [], (
-        f"REGRESSION: non-owner on public album still receives "
-        f"voter identities: {body['voter_summaries']}"
-    )
-    assert body["can_view_stats"] is False    # explicit marker is also set
-    for ps in body["photos"]:
-        assert ps["reactions"] == [], (
-            f"REGRESSION: per-photo reactions leaked to non-owner: "
-            f"{ps['reactions']}"
-        )
-
-    # AGGREGATES preserved (the privacy gate only removes identities)
+    assert body["can_view_stats"] is True
     assert body["total_votes"] >= 1
     assert body["photos"][0]["like_count"] >= 1
+    assert len(body["voter_summaries"]) >= 1
+    assert len(body["photos"][0]["reactions"]) >= 1
 
 
 async def test_analytics_owner_on_public_album_sees_everything(
@@ -113,6 +91,39 @@ async def test_analytics_owner_on_public_album_sees_everything(
     # Owner sees at least one voter (themselves) — the seed runs a vote.
     assert len(body["voter_summaries"]) >= 1
     assert len(body["photos"][0]["reactions"]) >= 1
+
+
+async def test_analytics_private_album_shared_viewer_sees_photos_only(
+    async_client,
+    auth_headers,
+    second_user_headers,
+    db_session,
+):
+    """A SharedAccess holder can open a private album without seeing stats."""
+    from models import SharedAccess
+
+    album_id, _ = await _seed_album_with_vote(
+        db_session, async_client, auth_headers, is_public=False,
+    )
+    viewer_id = (await async_client.get("/api/auth/me", headers=second_user_headers)).json()["id"]
+    db_session.add(SharedAccess(user_id=viewer_id, album_id=album_id, can_view_stats=True))
+    await db_session.commit()
+
+    resp = await async_client.get(
+        f"/api/albums/{album_id}/analytics", headers=second_user_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["can_view_stats"] is False
+    assert body["total_votes"] == 0
+    assert body["unique_voters"] == 0
+    assert body["global_like_rate"] == 0
+    assert body["voter_summaries"] == []
+    assert body["winner"] is None
+    assert body["photos"][0]["reactions"] == []
+    assert body["photos"][0]["like_count"] == 0
+    assert body["photos"][0]["dislike_count"] == 0
+    assert body["photos"][0]["total_votes"] == 0
 
 
 async def test_analytics_private_album_blocks_non_owner_with_403(

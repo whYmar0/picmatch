@@ -49,7 +49,7 @@ function VoterRow({ username, avatarUrl, right }) {
   );
 }
 
-function PhotoListRow({ photo, rank, onPhotoClick }) {
+function PhotoListRow({ photo, rank, onPhotoClick, canViewStats }) {
   return (
     <div className="flex items-center gap-3 py-2 px-2 rounded-2xl
                     hover:bg-border-light dark:hover:bg-border-dark transition-colors">
@@ -66,31 +66,35 @@ function PhotoListRow({ photo, rank, onPhotoClick }) {
         )}
       </button>
       <button onClick={() => onPhotoClick(photo)} className="flex-1 min-w-0 text-left">
-        <div className="h-1.5 bg-border-light dark:bg-border-dark rounded-full mt-1.5 overflow-hidden">
-          <motion.div
-            className="h-full bg-primary-400 rounded-full"
-            initial={{ width: 0 }}
-            animate={{ width: `${photo.like_percentage}%` }}
-            transition={{ delay: rank * 0.04 + 0.2, duration: 0.5 }}
-          />
-        </div>
-        <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
-          <span className="text-green-500 flex items-center gap-0.5">
-            <FilledHeart size={9} /> {photo.like_count}
-          </span>
-          <span className="text-red-400 flex items-center gap-0.5">
-            <BrokenHeart size={9} strokeWidth={2} /> {photo.dislike_count}
-          </span>
-          <span className="ml-auto">
-            {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
-          </span>
-        </div>
+        {canViewStats ? (
+          <>
+            <div className="h-1.5 bg-border-light dark:bg-border-dark rounded-full mt-1.5 overflow-hidden">
+              <motion.div
+                className="h-full bg-primary-400 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${photo.like_percentage}%` }}
+                transition={{ delay: rank * 0.04 + 0.2, duration: 0.5 }}
+              />
+            </div>
+            <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
+              <span className="text-green-500 flex items-center gap-0.5">
+                <FilledHeart size={9} /> {photo.like_count}
+              </span>
+              <span className="text-red-400 flex items-center gap-0.5">
+                <BrokenHeart size={9} strokeWidth={2} /> {photo.dislike_count}
+              </span>
+              <span className="ml-auto">
+                {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
+              </span>
+            </div>
+          </>
+        ) : null}
       </button>
     </div>
   );
 }
 
-function PhotoGridCard({ photo, rank, onPhotoClick }) {
+function PhotoGridCard({ photo, rank, onPhotoClick, canViewStats }) {
   return (
     <div className="relative aspect-square rounded-xl overflow-hidden
                     bg-border-light dark:bg-border-dark group">
@@ -108,9 +112,11 @@ function PhotoGridCard({ photo, rank, onPhotoClick }) {
       >
         <div className="flex justify-between">
           <span className="text-white text-xs font-bold">#{rank + 1}</span>
-          <span className="text-white text-xs">
-            {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
-          </span>
+          {canViewStats && (
+            <span className="text-white text-xs">
+              {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
+            </span>
+          )}
         </div>
       </button>
     </div>
@@ -118,7 +124,7 @@ function PhotoGridCard({ photo, rank, onPhotoClick }) {
 }
 
 // ─── Tab Bar for photo detail sheet ─────────────────────────────────────────
-function PhotoTabBar({ tab, setTab, likeCount, dislikeCount, canViewStats }) {
+function PhotoTabBar({ tab, setTab, likeCount, dislikeCount, canViewStats, commentsLabel }) {
   return (
     <div className="flex gap-2">
       {canViewStats && (
@@ -146,7 +152,7 @@ function PhotoTabBar({ tab, setTab, likeCount, dislikeCount, canViewStats }) {
                       : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}
       >
         <MessageCircle size={14} />
-        Комментарии
+        {commentsLabel}
       </button>
     </div>
   );
@@ -174,10 +180,21 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
           creator_id, is_public, can_view_stats } = analytics;
 
   const isOwner = user && String(user.id) === String(creator_id);
+  const canViewStats = Boolean(can_view_stats);
+  const visiblePhotos = canViewStats
+    ? photos
+    : photos.map((photo) => ({
+        ...photo,
+        like_count: 0,
+        dislike_count: 0,
+        total_votes: 0,
+        like_percentage: 0,
+        reactions: [],
+      }));
 
   // ── Open photo detail (always resets to reactions tab if authorized) ────────
   const openPhotoSheet = (photo) => {
-    setReactionTab(can_view_stats ? "reactions" : "comments");
+    setReactionTab(canViewStats ? "reactions" : "comments");
     setReactionSheet(photo);
   };
 
@@ -187,16 +204,26 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
     const photo = photos.find((p) => String(p.id) === String(initialPhotoId));
     if (!photo) return;
     setReactionSheet(photo);
-    setReactionTab(initialTab);
+    setReactionTab(canViewStats ? initialTab : "comments");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount — analytics is already available as a prop
 
+  useEffect(() => {
+    if (!canViewStats) {
+      setSortOpen(false);
+      setFilterOpen(false);
+      setSelectedVoters(new Set());
+      setPendingVoters(new Set());
+      setReactionTab("comments");
+    }
+  }, [canViewStats]);
+
   // Sort
-  const sorted = useMemo(() => [...photos].sort((a, b) =>
+  const sorted = useMemo(() => [...visiblePhotos].sort((a, b) =>
     sortKey === "dislikes_desc"
       ? b.dislike_count - a.dislike_count
       : b.like_count - a.like_count
-  ), [photos, sortKey]);
+  ), [visiblePhotos, sortKey]);
 
   // Ref 23: robust filter — recomputes counts per photo from selected voters only
   const filtered = useMemo(() => {
@@ -215,7 +242,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
                  dislike_count: dislikes, total_votes: filteredRx.length, like_percentage: pct };
       })
       .filter(Boolean);
-  }, [sorted, selectedVoters]);
+  }, [sorted, selectedVoters, canViewStats]);
 
   // ── Reaction sheet content ───────────────────────────────────────────────────
   const renderVotersList = () =>
@@ -261,7 +288,8 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
       setTab={setReactionTab}
       likeCount={reactionSheet.like_count}
       dislikeCount={reactionSheet.dislikeCount || reactionSheet.dislike_count}
-      canViewStats={can_view_stats}
+      canViewStats={canViewStats}
+      commentsLabel={t("Comments")}
     />
   ) : null;
 
@@ -293,7 +321,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
             </button>
           )}
           <div className="ml-auto flex items-center gap-1">
-            {can_view_stats && (
+            {canViewStats && (
               <button onClick={() => setReactionSheet("voters")}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl
                            text-gray-500 dark:text-gray-400 hover:text-primary-500 hover:bg-primary-50
@@ -320,7 +348,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
       </div>
 
       {/* Sort + Filter */}
-      <div className="flex items-center gap-3">
+      {canViewStats && <div className="flex items-center gap-3">
         <button onClick={() => setSortOpen(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm
                      bg-border-light dark:bg-border-dark
@@ -343,7 +371,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
         <span className="ml-auto text-xs text-gray-400 hidden">
           {filtered.length}/{photos.length}
         </span>
-      </div>
+      </div>}
 
       {/* Photo list/grid */}
       <div>
@@ -357,14 +385,14 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
           <div className="space-y-1">
             {filtered.map((photo, i) => (
               <PhotoListRow key={photo.id} photo={photo} rank={i}
-                onPhotoClick={openPhotoSheet} />
+                onPhotoClick={openPhotoSheet} canViewStats={canViewStats} />
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2">
             {filtered.map((photo, i) => (
               <PhotoGridCard key={photo.id} photo={photo} rank={i}
-                onPhotoClick={openPhotoSheet} />
+                onPhotoClick={openPhotoSheet} canViewStats={canViewStats} />
             ))}
           </div>
         )}

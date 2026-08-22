@@ -579,7 +579,8 @@ async def get_album_analytics(
     """
     Returns analytics. Accessible by:
       1. The album owner (full access)
-      2. Any user with a SharedAccess record where can_view_stats=True (read-only)
+      2. Any authenticated voter on a public album (full access)
+      3. A SharedAccess holder on a private album (photos/comments only)
 
     OPTIMIZED v2: 2 queries instead of eager-loading all Vote/User ORM objects.
     Fetches raw vote columns and aggregates in O(n) Python pass.
@@ -598,31 +599,46 @@ async def get_album_analytics(
 
     is_owner = _s(album.creator_id) == uid
 
-    if not is_owner and not album.is_public:
-        raise HTTPException(403, detail="Access denied. This album is private.")
-
-    # M1 fix (code-review): previously hardcoded `can_view_stats = True` for
-    # any authenticated viewer of a public album, which made the privacy gate
-    # in `_build_analytics` a no-op on this route. Now we compute it correctly:
-    #   • owner                                → can_view_stats=True
-    #   • explicit SharedAccess(can_view_stats)→ can_view_stats=<the-bit>
-    #   • anyone else                          → can_view_stats=False
-    #                                          → builder strips voter identities
+    # Private albums are available here only to users explicitly allowed to
+    # vote/view the album. Their analytics response remains photo-only.
     is_shared = False
-    can_view_stats = is_owner
     if not is_owner:
         sa_res = await db.execute(
             select(SharedAccess).where(
                 and_(
-                    SharedAccess.user_id == _s(current_user.id),
-                    SharedAccess.album_id == album_id,
+                    SharedAccess.user_id == uid,
+                    SharedAccess.album_id == _s(album.id),
                 )
             )
         )
         sa = sa_res.scalar_one_or_none()
-        if sa:
-            is_shared = True
-            can_view_stats = sa.can_view_stats
+        is_shared = sa is not None
+
+        # A voter or commenter who already participated in a private album
+        # keeps read-only access to the photos and their own comment threads.
+        photo_ids = [p.id for p in album.photos]
+        has_participated = False
+        if photo_ids:
+            vote_res = await db.execute(
+                select(Vote.id).where(
+                    and_(Vote.photo_id.in_(photo_ids), Vote.voter_id == uid)
+                ).limit(1)
+            )
+            comment_res = await db.execute(
+                select(Comment.id).where(
+                    and_(Comment.photo_id.in_(photo_ids), Comment.user_id == uid)
+                ).limit(1)
+            )
+            has_participated = vote_res.scalar_one_or_none() is not None or \
+                comment_res.scalar_one_or_none() is not None
+
+        if not album.is_public and not (sa or has_participated):
+            raise HTTPException(403, detail="Access denied. This album is private.")
+
+    # Public albums expose full analytics to authenticated viewers. Private
+    # non-owners receive the limited photo/comment view regardless of their
+    # SharedAccess stats bit; token-based share links use the builder directly.
+    can_view_stats = is_owner or album.is_public
 
     return await _build_analytics(
         album=album, db=db, is_shared=is_shared, can_view_stats=can_view_stats,
@@ -841,8 +857,8 @@ async def _build_analytics(
 
     # ── Privacy gate — OWASP A01 / data-minimization ───────────────────────────
     # `can_view_stats` is the contract this builder already accepts:
-    #   True  → owner OR a user with SharedAccess(can_view_stats=True)
-    #   False → any other authenticated viewer, including public-album browsers
+    #   True  → owner or public-album viewer
+    #   False → private-album non-owner viewer
     #
     # Voter identities (WHO voted, and HOW they voted on each photo) are
     # sensitive. Aggregate counts (likes/total per photo) are not. The
@@ -850,22 +866,35 @@ async def _build_analytics(
     # registered user — minimum-necessary says: strip identities, keep
     # totals. Recipients who passed the explicit auth check above still
     # see everything.
-    photo_stats_out: List[PhotoStats] = []
-    for ps in photo_stats:
-        if can_view_stats:
-            photo_stats_out.append(ps)
-        else:
-            # Strip the reactions field; counts + percentages are preserved.
-            ps_anonymised = ps.model_copy(update={"reactions": []})
-            photo_stats_out.append(ps_anonymised)
-
+    # Private non-owners can confirm the album's photos and use their own
+    # comment threads, but must not receive any voting-derived information.
     if can_view_stats:
+        photo_stats_out = photo_stats
         voter_summaries = [
             VoterSummary(voter_id=v["voter_id"], username=v["username"], vote_count=v["vote_count"])
             for v in sorted(voter_map.values(), key=lambda x: x["vote_count"], reverse=True)
         ]
+        response_total_votes = total_votes
+        response_unique_voters = len(voter_map)
+        response_global_like_rate = global_like_rate
+        response_winner = winner
     else:
-        voter_summaries = []  
+        photo_stats_out = [
+            ps.model_copy(update={
+                "like_count": 0,
+                "dislike_count": 0,
+                "total_votes": 0,
+                "like_percentage": 0.0,
+                "is_winner": False,
+                "reactions": [],
+            })
+            for ps in photo_stats
+        ]
+        voter_summaries = []
+        response_total_votes = 0
+        response_unique_voters = 0
+        response_global_like_rate = 0.0
+        response_winner = None
 
     return AlbumAnalytics(
         id=album.id, title=album.title, description=album.description,
@@ -873,10 +902,10 @@ async def _build_analytics(
         creator=album.creator,
         is_public=album.is_public,
         total_photos=len(photos),
-        total_votes=total_votes, unique_voters=len(voter_map),
-        global_like_rate=global_like_rate,
+        total_votes=response_total_votes, unique_voters=response_unique_voters,
+        global_like_rate=response_global_like_rate,
         voter_summaries=voter_summaries,
-        photos=photo_stats_out, winner=winner,
+        photos=photo_stats_out, winner=response_winner,
         created_at=album.created_at,
         is_shared=is_shared,
         can_view_stats=can_view_stats,

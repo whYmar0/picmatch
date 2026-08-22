@@ -45,6 +45,7 @@ function PillBar({
   onSwipeMove,
   onSwipeEnd,
   onSwipeCancel,
+  canViewStats = true,
 }) {
   const dragStartY = useRef(0);
   const didDrag = useRef(false);
@@ -116,18 +117,22 @@ function PillBar({
                    bg-gray-900
                    text-white shadow-lg cursor-pointer"
       >
-        <span className="flex items-center gap-2.5 text-base font-semibold">
-          <span className="flex items-center justify-center w-[22px] h-[22px]">
-            <FilledHeart size={22} className="text-white" />
-          </span>
-          {likeCount}
-        </span>
-        <span className="flex items-center gap-2.5 text-base font-semibold">
-          <span className="flex items-center justify-center w-[22px] h-[22px]">
-            <BrokenHeart size={22} className="text-white" />
-          </span>
-          {dislikeCount}
-        </span>
+        {canViewStats && (
+          <>
+            <span className="flex items-center gap-2.5 text-base font-semibold">
+              <span className="flex items-center justify-center w-[22px] h-[22px]">
+                <FilledHeart size={22} className="text-white" />
+              </span>
+              {likeCount}
+            </span>
+            <span className="flex items-center gap-2.5 text-base font-semibold">
+              <span className="flex items-center justify-center w-[22px] h-[22px]">
+                <BrokenHeart size={22} className="text-white" />
+              </span>
+              {dislikeCount}
+            </span>
+          </>
+        )}
         <span className="flex items-center gap-2.5 text-base font-semibold">
           <span className="flex items-center justify-center w-[22px] h-[22px]">
             <MessageCircle
@@ -620,7 +625,14 @@ function GalleryFilterSheet({
 }
 
 // ─── Main Gallery Component ─────────────────────────────────────────────────
-export default function AlbumGallery({ album, onClose, startPhotoId, dragProgressMV }) {
+export default function AlbumGallery({
+  album,
+  onClose,
+  startPhotoId,
+  dragProgressMV,
+  initialAnalytics = null,
+  initialTab = "stats",
+}) {
   const { t } = useLang();
   const { user } = useAuth();
   const [vh, setVh] = useState(
@@ -652,16 +664,23 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     return 0;
   })();
 
-  const [analytics, setAnalytics] = useState(null);
+  const initialCanViewStats = initialAnalytics?.can_view_stats ??
+    (album.is_public !== false ||
+      (user && String(user.id) === String(album.creator_id)));
+  const [analytics, setAnalytics] = useState(initialAnalytics);
   const [currentIdx, setCurrentIdx] = useState(initialIdx);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [sheetGestureActive, setSheetGestureActive] = useState(false);
-  const [sheetTab, setSheetTab] = useState("stats");
+  const [sheetTab, setSheetTab] = useState(
+    initialCanViewStats ? initialTab : "comments",
+  );
   const tabTrackX = useMotionValue(0);
   const tabAnimationRef = useRef(null);
   const tabViewportRef = useRef(null);
   const tabWidthRef = useRef(0);
-  const tabSwipeStartTabRef = useRef("stats");
+  const tabSwipeStartTabRef = useRef(
+    initialCanViewStats ? initialTab : "comments",
+  );
   const tabGestureActiveRef = useRef(false);
   const galleryHistoryRef = useRef(false);
   const historyLayersRef = useRef({ sheet: false, sort: false, filter: false, share: false });
@@ -691,8 +710,9 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   // wrapper is reused for shared-with-me albums in the future).
   const isOwner = !!user && !!album?.creator_id &&
     String(user.id) === String(album.creator_id);
-
-
+  const canViewStats = analytics
+    ? Boolean(analytics.can_view_stats)
+    : (album.is_public !== false || isOwner);
 
   // ── Carousel refs ────────────────────────────────────────────────────────
   const galleryRef = useRef(null);
@@ -978,10 +998,18 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     return () => window.removeEventListener("popstate", handlePopState);
   }, [closePrimarySheet, closeSecondarySheet, closeShareSheet, closeGallery]);
 
-  const tabCommittedRef = useRef("stats");
+  const tabCommittedRef = useRef(
+    initialCanViewStats ? initialTab : "comments",
+  );
 
   const animateToTab = useCallback((nextTab) => {
     const width = tabViewportRef.current?.clientWidth || tabWidthRef.current;
+    if (!canViewStats) {
+      tabCommittedRef.current = "comments";
+      setSheetTab("comments");
+      tabTrackX.set(0);
+      return;
+    }
     tabCommittedRef.current = nextTab;
     setSheetTab(nextTab);
     tabAnimationRef.current?.stop();
@@ -993,7 +1021,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
       ease: [0.32, 0.72, 0, 1],
       onComplete: () => { tabAnimationRef.current = null; },
     });
-  }, [tabTrackX]);
+  }, [canViewStats, tabTrackX]);
 
   const handleTabSwipeStart = useCallback(() => {
     tabWidthRef.current = tabViewportRef.current?.clientWidth
@@ -1140,12 +1168,28 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
   // ── Data fetching ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!album?.id) return;
+    if (initialAnalytics && String(initialAnalytics.id) === String(album.id)) {
+      fetchedAlbumIdRef.current = album.id;
+      return;
+    }
     if (fetchedAlbumIdRef.current === album.id) return;
     fetchedAlbumIdRef.current = album.id;
     albumsApi.getAnalytics(album.id)
       .then(setAnalytics)
       .catch(() => setAnalytics(null));
   }, [album?.id]);
+
+  useEffect(() => {
+    if (canViewStats) return;
+    tabCommittedRef.current = "comments";
+    setSheetTab("comments");
+    const width = tabViewportRef.current?.clientWidth || tabWidthRef.current;
+    if (width) tabTrackX.set(0);
+    setSortOpen(false);
+    setFilterOpen(false);
+    setSelectedVoters(new Set());
+    setPendingVoters(new Set());
+  }, [canViewStats, tabTrackX]);
 
   const photos = useMemo(() => {
     if (analytics?.photos?.length) return analytics.photos;
@@ -1588,7 +1632,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
     return n;
   });
 
-  const voter_summaries = analytics?.voter_summaries || [];
+  const voter_summaries = canViewStats ? (analytics?.voter_summaries || []) : [];
 
   // ── Comment state for split layout (list in scrollable area, input in footer) ──
   const [replyTarget, setReplyTarget] = useState(null);
@@ -1825,6 +1869,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
 
         {(!sheetExpanded || sheetGestureActive) && (
           <PillBar
+            canViewStats={canViewStats}
             likeCount={likeCount}
             dislikeCount={dislikeCount}
             commentCount={commentsCount}
@@ -1842,10 +1887,10 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         open={sheetExpanded}
         onClose={closePrimarySheet}
         sharedY={sheetY}
-        onHorizontalSwipeStart={handleTabSwipeStart}
-        onHorizontalSwipeMove={handleTabSwipeMove}
-        onHorizontalSwipeEnd={handleTabSwipeEnd}
-        onHorizontalSwipeCancel={handleTabSwipeCancel}
+        onHorizontalSwipeStart={canViewStats ? handleTabSwipeStart : undefined}
+        onHorizontalSwipeMove={canViewStats ? handleTabSwipeMove : undefined}
+        onHorizontalSwipeEnd={canViewStats ? handleTabSwipeEnd : undefined}
+        onHorizontalSwipeCancel={canViewStats ? handleTabSwipeCancel : undefined}
         partialOffsetVh={0.25}
         backdropBlur={false}
         backdropDim={false}
@@ -1861,18 +1906,20 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         footer={sheetTab === "comments" ? renderCommentInput() : null}
         headerChildren={
           <div role="tablist" aria-label={t("statistics")} className="flex gap-2">
-            <button
-              role="tab"
-              aria-selected={sheetTab === "stats"}
-              onClick={() => animateToTab("stats")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "stats"
-                ? "bg-primary-400 text-white"
-                : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
-                }`}
-            >
-              <BarChart2 size={14} />
-              {t("statistics")}
-            </button>
+            {canViewStats && (
+              <button
+                role="tab"
+                aria-selected={sheetTab === "stats"}
+                onClick={() => animateToTab("stats")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "stats"
+                  ? "bg-primary-400 text-white"
+                  : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
+                  }`}
+              >
+                <BarChart2 size={14} />
+                {t("statistics")}
+              </button>
+            )}
             <button
               role="tab"
               aria-selected={sheetTab === "comments"}
@@ -1891,24 +1938,26 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         <div ref={tabViewportRef} className="overflow-hidden w-full min-h-full">
           <motion.div
             data-testid="stats-comments-tab-track"
-            className="flex w-[200%] min-h-full"
+            className={canViewStats ? "flex w-[200%] min-h-full" : "flex w-full min-h-full"}
             style={{ x: tabTrackX }}
           >
-            <div className="w-1/2 flex-shrink-0 min-h-full">
-              <StatisticsTab
-                analytics={analytics}
-                photos={filtered}
-                currentPhotoId={currentPhoto?.id}
-                onJump={jumpToPhoto}
-                selectedVotersSize={selectedVoters.size}
-                onOpenSort={openSortSheet}
-                onOpenFilter={openFilterSheet}
-                onShare={handleShare}
-                shareDone={shareDone}
-                viewMode={viewMode}
-              />
-            </div>
-            <div className="w-1/2 flex-shrink-0 min-h-full">
+            {canViewStats && (
+              <div className="w-1/2 flex-shrink-0 min-h-full">
+                <StatisticsTab
+                  analytics={analytics}
+                  photos={filtered}
+                  currentPhotoId={currentPhoto?.id}
+                  onJump={jumpToPhoto}
+                  selectedVotersSize={selectedVoters.size}
+                  onOpenSort={openSortSheet}
+                  onOpenFilter={openFilterSheet}
+                  onShare={handleShare}
+                  shareDone={shareDone}
+                  viewMode={viewMode}
+                />
+              </div>
+            )}
+            <div className={canViewStats ? "w-1/2 flex-shrink-0 min-h-full" : "w-full min-h-full"}>
               {renderComments()}
             </div>
           </motion.div>
@@ -1922,6 +1971,7 @@ export default function AlbumGallery({ album, onClose, startPhotoId, dragProgres
         >
           <div className="pointer-events-auto">
             <PillBar
+              canViewStats={canViewStats}
               likeCount={likeCount}
               dislikeCount={dislikeCount}
               commentCount={commentsCount}

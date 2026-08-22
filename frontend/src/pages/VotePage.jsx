@@ -144,7 +144,7 @@ export default function VotePage() {
               coverUrl: photos[0]?.url ?? null,
               creatorUsername: albumData.creator?.username ?? null,
               is_public: albumData.is_public,
-              hasAccess: true, // vote page = public access
+              hasAccess: albumData.is_public !== false,
             });
           });
         }
@@ -335,24 +335,20 @@ export default function VotePage() {
   if (finished) return (
     <div className="h-[100dvh] flex items-center justify-center px-4
                     bg-surface-light dark:bg-surface-dark">
-      <motion.div
-        initial={{ scale: 0.85, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 240, damping: 22 }}
-        className="card p-10 text-center max-w-[360px] w-full mx-auto"
-      >
-        <motion.div animate={{ y: [0, -10, 0] }}
-          transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
-          className="w-20 h-20 bg-green-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-green"
-        >
+      <div className="card p-10 text-center max-w-[360px] w-full mx-auto">
+        <div className="w-20 h-20 bg-green-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-green">
           <Check size={40} className="text-white" />
-        </motion.div>
-        <h2 className="font-display font-bold text-2xl mb-2">{t("allDone")}</h2>
-        <p className="text-gray-400 text-sm mb-6">{t("allDoneSubtitle")}</p>
-        <button onClick={() => navigate("/analytics/" + album.id)} className="btn-primary w-full">
-          {t("viewResults")}
-        </button>
-      </motion.div>
+        </div>
+        <h2 className="font-display font-bold text-2xl mb-6">{t("allDone")}</h2>
+        <div className="flex flex-col gap-2">
+          <button onClick={() => navigate("/analytics/" + album.id)} className="btn-primary w-full">
+            {t("viewResults")}
+          </button>
+          <button onClick={() => navigate("/dashboard")} className="btn-ghost w-full">
+            {t("backToAlbums")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 

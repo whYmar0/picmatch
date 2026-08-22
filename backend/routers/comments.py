@@ -21,7 +21,7 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db
 from middleware.rate_limit import _get_limit, limiter
-from models import User, Comment, CommentLike, Photo, Album, Notification, NotificationType
+from models import User, Comment, CommentLike, Photo, Album, Vote, SharedAccess, Notification, NotificationType
 from schemas import CommentCreate, CommentOut, MessageResponse, CommentThreadOut
 from auth import get_current_user
 from cloudinary_utils import is_cloudinary_configured as _cloudinary_enabled, get_image_url as _cloudinary_url
@@ -109,6 +109,34 @@ async def get_comments(
     photo, album = await _get_photo_and_album(photo_id, db)
     uid = _s(current_user.id)
     is_owner = _s(album.creator_id) == uid
+
+    if not is_owner and not album.is_public:
+        access_res = await db.execute(
+            select(SharedAccess.id).where(
+                and_(SharedAccess.user_id == uid, SharedAccess.album_id == _s(album.id))
+            )
+        )
+        has_access = access_res.scalar_one_or_none() is not None
+        if not has_access:
+            photo_id_rows = await db.execute(select(Photo.id).where(Photo.album_id == _s(album.id)))
+            photo_ids = photo_id_rows.scalars().all()
+            if photo_ids:
+                vote_res = await db.execute(
+                    select(Vote.id).where(
+                        and_(Vote.photo_id.in_(photo_ids), Vote.voter_id == uid)
+                    ).limit(1)
+                )
+                comment_res = await db.execute(
+                    select(Comment.id).where(
+                        and_(Comment.photo_id.in_(photo_ids), Comment.user_id == uid)
+                    ).limit(1)
+                )
+                has_access = (
+                    vote_res.scalar_one_or_none() is not None
+                    or comment_res.scalar_one_or_none() is not None
+                )
+        if not has_access:
+            raise HTTPException(403, detail="Access denied. This album is private.")
 
     result = await db.execute(
         select(Comment)
@@ -247,6 +275,32 @@ async def create_comment(
 
     album = photo_obj.album
     album_creator_id = _s(album.creator_id) if album else None
+    uid = _s(current_user.id)
+
+    if album and not album.is_public and album_creator_id != uid:
+        access_res = await db.execute(
+            select(SharedAccess.id).where(
+                and_(SharedAccess.user_id == uid, SharedAccess.album_id == _s(album.id))
+            )
+        )
+        has_access = access_res.scalar_one_or_none() is not None
+        if not has_access:
+            vote_res = await db.execute(
+                select(Vote.id).where(
+                    and_(Vote.photo_id == _s(photo_obj.id), Vote.voter_id == uid)
+                ).limit(1)
+            )
+            comment_res = await db.execute(
+                select(Comment.id).where(
+                    and_(Comment.photo_id == _s(photo_obj.id), Comment.user_id == uid)
+                ).limit(1)
+            )
+            has_access = (
+                vote_res.scalar_one_or_none() is not None
+                or comment_res.scalar_one_or_none() is not None
+            )
+        if not has_access:
+            raise HTTPException(403, detail="Access denied. This album is private.")
 
     # Verify parent exists if given
     if body.parent_id:
@@ -272,7 +326,6 @@ async def create_comment(
     new_comment_parent_id = comment.parent_id
 
     # Create Notification
-    uid = _s(current_user.id)
     try:
         if body.parent_id:
             # It's a reply: notify parent comment author

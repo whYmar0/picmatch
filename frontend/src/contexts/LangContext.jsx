@@ -65,7 +65,6 @@ const T = {
 
     swipeHint: "Swipe right to like · left to dislike",
     allDone: "You've rated all photos!",
-    allDoneSubtitle: "Thanks for your votes",
     viewResults: "See results",
     swipeRemaining: "left",
 
@@ -263,7 +262,6 @@ const T = {
 
     swipeHint: "Вправо — нравится · влево — не нравится",
     allDone: "Вы оценили все фото!",
-    allDoneSubtitle: "Спасибо за ваши голоса",
     viewResults: "Посмотреть результаты",
     swipeRemaining: "осталось",
 
