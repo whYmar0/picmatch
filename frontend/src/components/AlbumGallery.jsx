@@ -632,6 +632,7 @@ export default function AlbumGallery({
   dragProgressMV,
   initialAnalytics = null,
   initialTab = "stats",
+  manageHistory = true,
 }) {
   const { t } = useLang();
   const { user } = useAuth();
@@ -785,7 +786,7 @@ export default function AlbumGallery({
   }, []);
 
   useEffect(() => {
-    if (galleryHistoryRef.current) return undefined;
+    if (!manageHistory || galleryHistoryRef.current) return undefined;
     const key = `gallery-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     galleryHistoryKeyRef.current = key;
     historyStackRef.current = [{ key, layer: "gallery" }];
@@ -796,7 +797,7 @@ export default function AlbumGallery({
     );
     galleryHistoryRef.current = true;
     return undefined;
-  }, []);
+  }, [manageHistory]);
 
 
   // The sheet occupies `heightVh` of the viewport. Binding the photo stage to
@@ -852,7 +853,7 @@ export default function AlbumGallery({
     // authoritative after rapid Back/programmatic closes and avoids traversing
     // too far when the sheet was already consumed by popstate.
     const historyEntriesAboveGallery = Math.max(0, historyStackRef.current.length - 1);
-    const shouldTraverseGalleryEntry = !fromHistory && galleryHistoryRef.current;
+    const shouldTraverseGalleryEntry = manageHistory && !fromHistory && galleryHistoryRef.current;
     galleryHistoryRef.current = false;
     setSheetGestureActive(false);
     setSheetExpanded(false);
@@ -877,10 +878,10 @@ export default function AlbumGallery({
       window.history.go(-(historyEntriesAboveGallery + 1));
     }
     onClose();
-  }, [onClose, sheetY, sheetGestureY, dragY, dragProgressMV, vh]);
+  }, [onClose, sheetY, sheetGestureY, dragY, dragProgressMV, vh, manageHistory]);
 
   const pushHistoryLayer = useCallback((layer) => {
-    if (historyLayersRef.current[layer]) return;
+    if (!manageHistory || historyLayersRef.current[layer]) return;
     const key = `layer-${layer}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     historyLayersRef.current[layer] = true;
     historyStackRef.current.push({ key, layer });
@@ -889,10 +890,10 @@ export default function AlbumGallery({
       "",
       window.location.href,
     );
-  }, []);
+  }, [manageHistory]);
 
   const closeHistoryLayer = useCallback((layer) => {
-    if (!historyLayersRef.current[layer]) return;
+    if (!manageHistory || !historyLayersRef.current[layer]) return;
     historyLayersRef.current[layer] = false;
     const stack = historyStackRef.current;
     const top = stack[stack.length - 1];
@@ -903,7 +904,7 @@ export default function AlbumGallery({
       expectedKey: stack[stack.length - 1]?.key || galleryHistoryKeyRef.current,
     };
     window.history.back();
-  }, []);
+  }, [manageHistory]);
 
   const closeShareSheet = useCallback((fromHistory = false) => {
     if (!fromHistory) closeHistoryLayer("share");
@@ -1905,8 +1906,8 @@ export default function AlbumGallery({
         animateOnClose={false}
         footer={sheetTab === "comments" ? renderCommentInput() : null}
         headerChildren={
-          <div role="tablist" aria-label={t("statistics")} className="flex gap-2">
-            {canViewStats && (
+          canViewStats ? (
+            <div role="tablist" aria-label={t("statistics")} className="flex gap-2">
               <button
                 role="tab"
                 aria-selected={sheetTab === "stats"}
@@ -1919,20 +1920,22 @@ export default function AlbumGallery({
                 <BarChart2 size={14} />
                 {t("statistics")}
               </button>
-            )}
-            <button
-              role="tab"
-              aria-selected={sheetTab === "comments"}
-              onClick={() => animateToTab("comments")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "comments"
-                ? "bg-primary-400 text-white"
-                : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
-                }`}
-            >
-              <MessageCircle size={14} />
-              {t("Comments")}
-            </button>
-          </div>
+              <button
+                role="tab"
+                aria-selected={sheetTab === "comments"}
+                onClick={() => animateToTab("comments")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${sheetTab === "comments"
+                  ? "bg-primary-400 text-white"
+                  : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
+                  }`}
+              >
+                <MessageCircle size={14} />
+                {t("Comments")}
+              </button>
+            </div>
+          ) : (
+            <h3 className="font-bold text-lg px-0">{t("Comments")}</h3>
+          )
         }
       >
         <div ref={tabViewportRef} className="overflow-hidden w-full min-h-full">

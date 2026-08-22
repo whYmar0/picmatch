@@ -7,7 +7,7 @@
  * - Preserves gallery mode / depth-zoom integration
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { Plus, ChevronLeft, Search, SlidersHorizontal, ChevronDown, Check } from "lucide-react";
 import toast from "react-hot-toast";
@@ -75,9 +75,21 @@ function parseUTC(dateStr) {
 export default function Dashboard() {
   const { user } = useAuth();
   const { t } = useLang();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [galleryAlbum, setGalleryAlbum] = useState(null);
+  const [galleryAlbum, setGalleryAlbum] = useState(() => {
+    const request = location.state?.openGallery;
+    return request?.album
+      ? {
+          album: request.album,
+          photoId: request.photo?.id,
+          initialTab: request.initialTab || "stats",
+          manageHistory: request.manageHistory !== false,
+        }
+      : null;
+  });
   const [galleryKey, setGalleryKey] = useState(0);
 
   // View state
@@ -150,13 +162,40 @@ export default function Dashboard() {
     }
   };
 
-  const handlePhotoClick = useCallback((album, photo) => {
+  const handlePhotoClick = useCallback((album, photo, initialTab = "stats", manageHistory = true) => {
     closeProgressAnimRef.current?.stop();
     closeProgressAnimRef.current = null;
     dragProgressMV.set(0);
     setGalleryKey((k) => k + 1);
-    setGalleryAlbum({ album: album, photoId: photo?.id });
+    setGalleryAlbum({ album, photoId: photo?.id, initialTab, manageHistory });
   }, [dragProgressMV]);
+
+  const handleRecentOpen = useCallback((album, initialTab = "stats") => {
+    const photo = album.photos?.[0] || (album.coverUrl ? { id: null, url: album.coverUrl } : null);
+    handlePhotoClick({
+      id: album.id,
+      title: album.title,
+      creator: album.creatorUsername ? { username: album.creatorUsername } : null,
+      creator_id: album.creator_id,
+      is_public: album.is_public,
+      photos: photo ? [photo] : [],
+      invite_url: album.invite_url,
+    }, photo, initialTab);
+  }, [handlePhotoClick]);
+
+  useEffect(() => {
+    const request = location.state?.openGallery;
+    if (!request?.album) return;
+    if (!galleryAlbum) {
+      handlePhotoClick(
+        request.album,
+        request.photo || request.album.photos?.[0],
+        request.initialTab || "stats",
+        request.manageHistory !== false,
+      );
+    }
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate, handlePhotoClick, galleryAlbum]);
 
   const handleGalleryClose = useCallback(() => {
     closeProgressAnimRef.current?.stop();
@@ -226,7 +265,7 @@ export default function Dashboard() {
     setActiveView(view);
   };
 
-  if (loading) {
+  if (loading && !galleryAlbum) {
     return <DashboardSkeleton />;
   }
 
@@ -323,7 +362,7 @@ export default function Dashboard() {
                       <div
                         key={album.id} className="w-[180px] sm:w-[210px] flex-shrink-0"
                       >
-                        <RecentAlbumCard album={album} index={i} />
+                        <RecentAlbumCard album={album} index={i} onOpen={handleRecentOpen} />
                       </div>
                     ))}
                   </div>                    {recentOverflows && (
@@ -438,7 +477,7 @@ export default function Dashboard() {
               ) : (
                 <div className="grid grid-cols-2 gap-4 pb-20 px-4">
                   {filteredRecent.map((album, i) => (
-                    <RecentAlbumCard key={album.id} album={album} index={i} />
+                    <RecentAlbumCard key={album.id} album={album} index={i} onOpen={handleRecentOpen} />
                   ))}
                 </div>
               )}
@@ -503,6 +542,8 @@ export default function Dashboard() {
               startPhotoId={galleryAlbum.photoId}
               onClose={handleGalleryClose}
               dragProgressMV={dragProgressMV}
+              initialTab={galleryAlbum.initialTab || "stats"}
+              manageHistory={galleryAlbum.manageHistory !== false}
             />
           </motion.div>
         )}

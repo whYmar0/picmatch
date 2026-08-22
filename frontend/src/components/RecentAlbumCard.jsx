@@ -5,8 +5,8 @@
  * Privacy badge kept. Single-line truncation for titles.
  * "Results" button stays as is.
  */
-import { Link } from "react-router-dom";
 import { Image, Lock, Globe, BarChart2, MessageCircle, Play } from "lucide-react";
+import { motion } from "framer-motion";
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext";
 import { isVideo } from "../utils/media";
@@ -31,7 +31,7 @@ function timeAgo(dateStr, lang) {
     : `${Math.floor(s / 86400)} d ago`;
 }
 
-export default function RecentAlbumCard({ album, index }) {
+export default function RecentAlbumCard({ album, index, onOpen }) {
   const { t, lang } = useLang();
   const [imgLoaded, setImgLoaded] = useState(false);
 
@@ -41,7 +41,10 @@ export default function RecentAlbumCard({ album, index }) {
   return (
     <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card hover:shadow-card-hover transition-shadow duration-200 flex flex-col w-full min-w-0">
       {/* Photo area (2/3) — same as AlbumCard */}
-      <div className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark overflow-hidden rounded-t-3xl">
+      <div
+        onClick={() => onOpen?.(album, hasAccess ? "stats" : "comments")}
+        className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark overflow-hidden rounded-t-3xl cursor-pointer"
+      >
         {album.coverUrl ? (
           isVideo({ url: album.coverUrl }) ? (
             <div className="relative w-full h-full">
@@ -59,13 +62,16 @@ export default function RecentAlbumCard({ album, index }) {
               </div>
             </div>
           ) : (
-            <img
+            <motion.img
               src={album.coverUrl}
               alt=""
+              layoutId={`album-cover-${album.id}`}
+              data-shared-media={`album-cover-${album.id}`}
               className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
               loading="lazy"
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgLoaded(true)}
+              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
             />
           )
         ) : (
@@ -101,19 +107,20 @@ export default function RecentAlbumCard({ album, index }) {
         </div>
 
         {/* Results button or no-access indicator */}
-        <Link
-          to={`/analytics/${album.id}`}
+        <button
+          type="button"
+          onClick={() => onOpen?.(album, hasAccess ? "stats" : "comments")}
           className={`w-full text-xs py-2 flex items-center justify-center gap-1.5 rounded-2xl font-semibold transition-colors
             ${hasAccess
               ? "btn-primary"
-              : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              : "bg-primary-50 dark:bg-primary-900/20 text-primary-500 hover:bg-primary-100 dark:hover:bg-primary-900/30"
             }`}
         >
           {hasAccess
             ? <><BarChart2 size={13} /> {t("viewAnalytics")}</>
             : <span className="inline-flex items-center gap-1.5"><MessageCircle size={14} className="flex-shrink-0" />{t("Comments")}</span>
           }
-        </Link>
+        </button>
       </div>
     </div>
   );

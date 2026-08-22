@@ -341,7 +341,19 @@ export default function VotePage() {
         </div>
         <h2 className="font-display font-bold text-2xl mb-6">{t("allDone")}</h2>
         <div className="flex flex-col gap-2">
-          <button onClick={() => navigate("/analytics/" + album.id)} className="btn-primary w-full">
+          <button
+            onClick={() => navigate("/dashboard", {
+              replace: true,
+              state: {
+                openGallery: {
+                  album,
+                  photo: album.photos?.[0],
+                  initialTab: album.is_public === false ? "comments" : "stats",
+                },
+              },
+            })}
+            className="btn-primary w-full"
+          >
             {t("viewResults")}
           </button>
           <button onClick={() => navigate("/dashboard")} className="btn-ghost w-full">
