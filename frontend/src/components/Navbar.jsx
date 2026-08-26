@@ -249,7 +249,7 @@ export default function Navbar() {
                   {showNotifToast && (unreadNotifs.length > 0 || DEBUG_NOTIFICATION_TOAST_LOOP) && (
                     <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-[128px] pointer-events-none">
                       <motion.div
-                        style={{ transformOrigin: "64px 13.8px" }}
+                        style={{ transformOrigin: "64px 16.8px" }}
                         initial={{ opacity: 1, scale: 0.08 }}
                         animate={{
                           opacity: 1,
@@ -268,10 +268,10 @@ export default function Navbar() {
                         className="relative w-[128px] origin-top pointer-events-none"
                       >
                         {/* Rounded half-diamond tail at the top-right of the tablet */}
-                        <div className="absolute top-[-6px] left-[50px] w-7 h-7 rounded-[15%] rotate-45 bg-[#ef4444]" />
+                        <div className="absolute top-[-3px] left-[50px] w-7 h-7 rounded-[15%] rotate-45 bg-[#ef4444]" />
 
                         {/* Bubble Content */}
-                        <div className="absolute top-0 left-0 z-10 w-[96px] h-[50px] bg-[#ef4444] rounded-full py-2.5 px-3 flex items-center justify-center shadow-2xl gap-2.5 text-white">
+                        <div className="absolute top-0 left-[-8px] z-10 w-[96px] h-[50px] bg-[#ef4444] rounded-full py-2.5 px-3 flex items-center justify-center shadow-2xl gap-2.5 text-white">
                         {repliesCount > 0 && (
                           <div className="flex items-center gap-1.5">
                             <MessageSquare size={13} fill="white" className="text-white" />
