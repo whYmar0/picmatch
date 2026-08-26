@@ -418,9 +418,9 @@ export default function VotePage() {
 
         {/* ─── Thumbnail strip ─────────────────────────────────────────────── */}
         <div className="relative flex-shrink-0 w-full max-w-[410px] min-w-0 mx-auto">
-          {/* Fade is confined to the 3px gutters and sits directly on each edge. */}
-          <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-r from-surface-light/95 dark:from-surface-dark/95 to-transparent z-10 pointer-events-none" />
-          <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-[3px] bg-gradient-to-l from-surface-light/95 dark:from-surface-dark/95 to-transparent z-10 pointer-events-none" />
+          {/* Wide edge fades cover the strip boundary without changing its width. */}
+          <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
+          <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
 
           <div
             ref={thumbStripRef}
