@@ -29,6 +29,7 @@ import { isVideo } from "../utils/media";
 const STACK_SIZE = 3;
 const DESC_LIMIT = 100;
 const TITLE_LIMIT = 40;
+const MAX_ACTIVE_HEARTS = 5;
 
 // ── Small reusable avatar ──────────────────────────────────────────────────────
 function AuthorAvatar({ user, size = 36 }) {
@@ -254,7 +255,10 @@ export default function VotePage() {
       rect.height - 4
     );
     const id = `heart-${Date.now()}-${Math.random()}`;
-    setHearts((prev) => [...prev, { id, x: localX, y: localY }]);
+    setHearts((prev) => [
+      ...prev.slice(-(MAX_ACTIVE_HEARTS - 1)),
+      { id, x: localX, y: localY },
+    ]);
   }, []);
 
   const removeHeart = useCallback((id) => {

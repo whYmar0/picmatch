@@ -2,9 +2,9 @@
  * HeartBurst.jsx - compact SVG heart burst animation.
  *
  * The heart appears above the finger, pops into place, swings around its
- * center, and fades out in one overlapping sequence.
+ * center, and deflates back in one overlapping sequence.
  */
-import { useCallback, useRef } from "react";
+import { memo, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 
 const HEART_SIZE = 100;
@@ -15,7 +15,7 @@ const HEART_PATH =
   "C38 10 47 15 50 24 C53 15 62 10 70 10 " +
   "C84 10 94 20 94 34 C94 54 72 72 50 88 Z";
 
-export default function HeartBurst({ x, y, onComplete }) {
+function HeartBurst({ x, y, onComplete }) {
   const completedRef = useRef(false);
   const gradientId = useRef(`heart-gradient-${Math.random().toString(36).slice(2, 8)}`).current;
 
@@ -38,10 +38,12 @@ export default function HeartBurst({ x, y, onComplete }) {
     >
       <motion.div
         className="relative w-[100px] h-[100px]"
-        initial={{ opacity: 0, y: 0 }}
+        initial={{ opacity: 0, y: 0, scale: 1 }}
         animate={{
-          opacity: [0, 1, 1, 0],
-          y: [0, -60, -60, -80],
+          opacity: [0, 1, 1, 1],
+          y: [0, -60, -60, -60],
+          // The outer scale is the final uniform deflate, not a fade.
+          scale: [1, 1, 1, 0],
         }}
         transition={{
           opacity: {
@@ -54,9 +56,18 @@ export default function HeartBurst({ x, y, onComplete }) {
             times: [0, 0.233, 0.733, 1],
             ease: "easeOut",
           },
+          scale: {
+            duration: 0.4,
+            delay: 1.1,
+            ease: "easeIn",
+          },
         }}
         onAnimationComplete={handleComplete}
-        style={{ willChange: "transform, opacity" }}
+        style={{
+          // Deflate toward the bottom tip instead of shrinking toward center.
+          transformOrigin: "50% 100%",
+          willChange: "transform, opacity",
+        }}
       >
         <motion.svg
           viewBox="0 0 100 100"
@@ -67,7 +78,7 @@ export default function HeartBurst({ x, y, onComplete }) {
           initial={{ scale: 0, rotate: 0 }}
           animate={{
             // Uniform scale keeps the SVG proportions intact during the pop.
-            scale: [0, 1.15, 0.95, 1, 0.8],
+            scale: [0, 1.15, 0.95, 1],
             // The swing pivots around the heart's center, not its bottom tip.
             rotate: [0, -18, 14, -8, 4, 0],
           }}
@@ -87,6 +98,8 @@ export default function HeartBurst({ x, y, onComplete }) {
           }}
           style={{
             transformOrigin: "50% 50%",
+            // Static, low-cost glow; the filter itself is never animated.
+            filter: "drop-shadow(0 4px 10px rgba(255, 55, 145, 0.32))",
             willChange: "transform",
           }}
         >
@@ -109,3 +122,7 @@ export default function HeartBurst({ x, y, onComplete }) {
     </div>
   );
 }
+
+export default memo(HeartBurst, (previous, next) => (
+  previous.x === next.x && previous.y === next.y
+));

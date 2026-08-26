@@ -47,6 +47,7 @@ const SwipeCard = forwardRef(function SwipeCard(
   const hasDragged = useRef(false);
   const lastPointerPos = useRef({ x: 0, y: 0 });
   const heartFired = useRef(false);
+  const suppressHeartRef = useRef(false);
   const cardElRef = useRef(null);
   const pinchRef = useRef({ active: false });
   const pinchResetTimerRef = useRef(null);
@@ -64,7 +65,7 @@ const SwipeCard = forwardRef(function SwipeCard(
   useEffect(() => {
     if (!isTop) return undefined;
     const unsubscribe = x.on("change", (latest) => {
-      if (latest >= 80 && !heartFired.current) {
+      if (!suppressHeartRef.current && latest >= 80 && !heartFired.current) {
         heartFired.current = true;
         onLikeThresholdCrossed?.(lastPointerPos.current);
       }
@@ -153,6 +154,7 @@ const SwipeCard = forwardRef(function SwipeCard(
   useImperativeHandle(ref, () => ({
     swipeTo: async (isLike) => {
       const dir = isLike ? 700 : -700;
+      suppressHeartRef.current = true;
       // Button-tap like has no finger position. Seed the tracked pointer at
       // the card center; the x motion subscription fires at x >= 80 below.
       if (isLike) {
@@ -166,9 +168,11 @@ const SwipeCard = forwardRef(function SwipeCard(
         transition: { duration: 0.24, ease: [0.32, 0, 0.67, 0] },
       });
       onSwipe(photo.id, isLike);
+      suppressHeartRef.current = false;
     },
     resetPosition: () => {
       heartFired.current = false;
+      suppressHeartRef.current = false;
       x.set(0);
       y.set(0);
       controls.set({ x: 0, y: 0, rotate: 0, opacity: 1 });
@@ -196,7 +200,10 @@ const SwipeCard = forwardRef(function SwipeCard(
     pointerDown.current = null;
   };
 
-  const handleDragStart = () => { hasDragged.current = true; };
+  const handleDragStart = () => {
+    hasDragged.current = true;
+    suppressHeartRef.current = false;
+  };
 
   // Fire the heart burst once the rightward swipe crosses the like threshold (x ≥ 80).
   // Uses raw event clientX/clientY (viewport coords) so the heart tracks the finger
