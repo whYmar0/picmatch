@@ -53,6 +53,7 @@ export default function BottomSheet({
   partialOffsetVh = 0.35,
   zIndex = 50,
   hideHeader = false,
+  resizeTopContentWithSheet = false,
   closeOnEscape = true,
   backdropBlur = true,
   backdropDim = true,
@@ -102,9 +103,16 @@ export default function BottomSheet({
     return animationRef.current;
   };
 
-  // Scale top content as we drag. 
-  // It stops shrinking once the sheet takes 60% space (y reaches defaultOffset).
-  const scale = useTransform(y, [0, defaultOffset, dismissOffset], [0.85, 1, 1]);
+  // The default mode preserves the existing top-content behavior. The resize
+  // mode gives photo content the exact space left above the sheet, matching
+  // the Dashboard gallery layout.
+  const topContentScale = useTransform(y, [0, defaultOffset, dismissOffset], [0.85, 1, 1]);
+  const topContentHeight = useTransform(
+    y,
+    [0, defaultOffset, vh],
+    [vh * 0.25, vh * 0.50, vh],
+    { clamp: true },
+  );
   // Fade out top content only when dragging DOWN to dismiss
   const topOpacity = useTransform(y, [defaultOffset, dismissOffset], [1, 0]);
   // Footer fades out when sheet is dragged toward dismiss
@@ -544,13 +552,17 @@ export default function BottomSheet({
 
           {/* Optional: Top content (e.g. image) */}
           {topContent && (
-            <motion.div 
-              style={{ opacity: topOpacity }}
-              className="absolute top-0 left-0 w-full h-[40dvh] flex items-center justify-center p-4 z-10 pointer-events-none"
+            <motion.div
+              data-testid={testId ? `${testId}-top-content` : undefined}
+              className="absolute top-0 left-0 w-full flex items-center justify-center p-4 z-10 pointer-events-none"
+              style={{
+                height: resizeTopContentWithSheet ? topContentHeight : "40dvh",
+                opacity: topOpacity,
+              }}
             >
               <motion.div
-                style={{ scale }}
-                className="pointer-events-auto max-w-full max-h-full"
+                className={`pointer-events-auto max-w-full max-h-full ${resizeTopContentWithSheet ? "w-full h-full" : ""}`}
+                style={resizeTopContentWithSheet ? undefined : { scale: topContentScale }}
               >
                 {topContent}
               </motion.div>

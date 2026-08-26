@@ -11,7 +11,7 @@
  */
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue } from "framer-motion";
 import toast from "react-hot-toast";
 import { albumsApi, votesApi } from "../api";
 import { useLang } from "../contexts/LangContext";
@@ -25,11 +25,14 @@ import BrokenHeart from "../components/BrokenHeart";
 import BottomSheet from "../components/BottomSheet";
 import { PhotoCommentsList, CommentInput } from "../components/PhotoComments";
 import { isVideo } from "../utils/media";
+import VideoPlayer from "../components/VideoPlayer";
 
 const STACK_SIZE = 3;
 const DESC_LIMIT = 100;
 const TITLE_LIMIT = 40;
 const MAX_ACTIVE_HEARTS = 5;
+const COMMENT_SHEET_HEIGHT_VH = 0.75;
+const COMMENT_SHEET_PARTIAL_OFFSET_VH = 0.25;
 
 // ── Small reusable avatar ──────────────────────────────────────────────────────
 function AuthorAvatar({ user, size = 36 }) {
@@ -55,6 +58,12 @@ export default function VotePage() {
   const location = useLocation();
   const { t } = useLang();
   const { user, loading: authLoading } = useAuth();
+  const [viewportHeight, setViewportHeight] = useState(() => (
+    typeof window !== "undefined"
+      ? (window.visualViewport?.height || window.innerHeight)
+      : 800
+  ));
+  const commentSheetY = useMotionValue(viewportHeight);
   const thumbStripRef = useRef(null);
 
   const [album, setAlbum] = useState(null);
@@ -91,6 +100,24 @@ export default function VotePage() {
   const cardStackRef = useRef(null); // card stack container for heart coordinate math
 
   const shouldLoad = !authLoading;
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const updateViewport = () => {
+      const nextHeight = Math.round(viewport?.height || window.innerHeight);
+      setViewportHeight(nextHeight);
+      if (!commentSheet) commentSheetY.set(nextHeight);
+    };
+    updateViewport();
+    viewport?.addEventListener("resize", updateViewport);
+    viewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    return () => {
+      viewport?.removeEventListener("resize", updateViewport);
+      viewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+    };
+  }, [commentSheet, commentSheetY]);
 
   // ── Load ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -493,7 +520,14 @@ export default function VotePage() {
                 const stackIdx = stackPhotos.length - 1 - revIdx;
                 const isTop = stackIdx === 0;
                 return (
-                  <div key={photo.id} className="absolute inset-0">
+                  <div
+                    key={photo.id}
+                    className="absolute inset-0"
+                    style={{
+                      opacity: commentSheet ? 0 : 1,
+                      pointerEvents: commentSheet ? "none" : "auto",
+                    }}
+                  >
                     <SwipeCard
                       ref={isTop ? topCardRef : null}
                       photo={photo}
@@ -512,6 +546,7 @@ export default function VotePage() {
                                    bg-black/60 backdrop-blur-md border border-white/20
                                    text-white hover:bg-black/80 transition-all active:scale-90"
                         title={t("Comments")}
+                        data-testid="vote-comment-button"
                       >
                         <MessageCircle size={20} />
                       </button>
@@ -548,6 +583,15 @@ export default function VotePage() {
         open={!!commentSheet}
         onClose={() => { setCommentSheet(null); setReplyTarget(null); }}
         title={t("Comments")}
+        sharedY={commentSheetY}
+        viewportHeight={viewportHeight}
+        heightVh={COMMENT_SHEET_HEIGHT_VH}
+        partialOffsetVh={COMMENT_SHEET_PARTIAL_OFFSET_VH}
+        resizeTopContentWithSheet
+        hideHeader
+        backdropBlur={false}
+        backdropDim={false}
+        testId="vote-comments-sheet"
         footer={
           commentSheet ? (
             <CommentInput
@@ -558,14 +602,28 @@ export default function VotePage() {
             />
           ) : null
         }
+        headerChildren={<h3 className="font-bold text-lg px-0">{t("Comments")}</h3>}
         topContent={
           commentSheet ? (
-            <div className="w-full flex justify-center px-4">
-              <img
-                src={commentSheet.url}
-                className="max-h-[40dvh] rounded-2xl object-contain shadow-2xl border border-white/10"
-                alt=""
-              />
+            <div className="w-full h-full min-h-0 flex items-center justify-center">
+              {isVideo(commentSheet) ? (
+                <VideoPlayer
+                  src={commentSheet.url}
+                  className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl border border-white/10"
+                  preload="auto"
+                  muted
+                  autoPlay
+                  loop
+                  objectFit="contain"
+                  stableLayout
+                />
+              ) : (
+                <img
+                  src={commentSheet.url}
+                  className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl border border-white/10"
+                  alt=""
+                />
+              )}
             </div>
           ) : null
         }
@@ -573,7 +631,7 @@ export default function VotePage() {
         {commentSheet && (
           <PhotoCommentsList
             photoId={String(commentSheet.id)}
-            albumCreatorId={album?.creator_id}
+            albumCreatorId={album?.creator_id || album?.creator?.id}
             onReplyTrigger={replyTriggerRef.current}
             apiRef={listApiRef}
           />
