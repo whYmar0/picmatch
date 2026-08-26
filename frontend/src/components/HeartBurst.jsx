@@ -1,23 +1,23 @@
 /**
- * HeartBurst.jsx — Instagram-style heart burst animation
+ * HeartBurst.jsx - compact SVG heart burst animation.
  *
- * The heart erupts from the finger in one overlapping 1.5s sequence:
- * vertical bubble inflate, aggressive spring wobble, then settle and fade.
+ * The heart appears above the finger, pops into place, swings around its
+ * center, and fades out in one overlapping sequence.
  */
 import { useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import heartBurstPng from "../assets/heart-burst.png";
 
 const HEART_SIZE = 64;
 const ANIMATION_DURATION = 1.5;
 
-const burstLines = Array.from({ length: 10 }, (_, index) => ({
-  angle: index * 36,
-  length: 18 + (index % 3) * 5,
-}));
+const HEART_PATH =
+  "M50 88 C28 72 6 54 6 34 C6 20 16 10 30 10 " +
+  "C38 10 47 15 50 24 C53 15 62 10 70 10 " +
+  "C84 10 94 20 94 34 C94 54 72 72 50 88 Z";
 
 export default function HeartBurst({ x, y, onComplete }) {
   const completedRef = useRef(false);
+  const gradientId = useRef(`heart-gradient-${Math.random().toString(36).slice(2, 8)}`).current;
 
   const handleComplete = useCallback(() => {
     if (completedRef.current) return;
@@ -36,32 +36,6 @@ export default function HeartBurst({ x, y, onComplete }) {
         transform: "translate(-50%, -50%)",
       }}
     >
-      {/* Radial burst starts beneath the heart and expands outward. */}
-      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-        {burstLines.map(({ angle, length }, index) => (
-          <motion.div
-            key={angle}
-            className="absolute left-1/2 top-1/2 h-[2px] rounded-full bg-white"
-            style={{
-              width: length,
-              transformOrigin: "0 50%",
-              rotate: angle,
-              x: 0,
-              y: "-50%",
-              willChange: "transform, opacity",
-            }}
-            initial={{ x: 0, scaleX: 0, opacity: 1 }}
-            animate={{ x: 24 + (index % 3) * 7, scaleX: 1, opacity: 0 }}
-            transition={{
-              duration: 0.42,
-              delay: 0.1 + index * 0.015,
-              ease: "easeOut",
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Lifecycle movement: opacity and upward eruption. */}
       <motion.div
         className="relative w-16 h-16"
         initial={{ opacity: 0, y: 0 }}
@@ -84,32 +58,26 @@ export default function HeartBurst({ x, y, onComplete }) {
         onAnimationComplete={handleComplete}
         style={{ willChange: "transform, opacity" }}
       >
-        {/* Bubble stretch and spring wobble overlap from the first 100ms. */}
-        <motion.img
-          src={heartBurstPng}
-          alt=""
-          draggable={false}
-          className="block w-16 h-16 select-none pointer-events-none"
-          initial={{ scaleX: 0, scaleY: 0, rotate: 0 }}
+        <motion.svg
+          viewBox="0 0 100 100"
+          width={HEART_SIZE}
+          height={HEART_SIZE}
+          className="block select-none"
+          aria-hidden="true"
+          initial={{ scale: 0, rotate: 0 }}
           animate={{
-            scaleX: [0, 0.85, 1, 0.8],
-            scaleY: [0, 1.4, 1, 0.8],
+            // Uniform scale keeps the SVG proportions intact during the pop.
+            scale: [0, 1.15, 0.95, 1, 0.8],
+            // The swing pivots around the heart's center, not its bottom tip.
             rotate: [0, -18, 14, -8, 4, 0],
           }}
           transition={{
-            scaleX: {
+            scale: {
               type: "spring",
               stiffness: 500,
               damping: 12,
               mass: 0.7,
-              duration: 1.5,
-            },
-            scaleY: {
-              type: "spring",
-              stiffness: 500,
-              damping: 12,
-              mass: 0.7,
-              duration: 1.5,
+              duration: ANIMATION_DURATION,
             },
             rotate: {
               delay: 0.1,
@@ -118,10 +86,25 @@ export default function HeartBurst({ x, y, onComplete }) {
             },
           }}
           style={{
-            transformOrigin: "50% 100%",
+            transformOrigin: "50% 50%",
             willChange: "transform",
           }}
-        />
+        >
+          <defs>
+            <linearGradient
+              id={gradientId}
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
+              <stop offset="0%" stopColor="#FF7A00" />
+              <stop offset="55%" stopColor="#FF1493" />
+              <stop offset="100%" stopColor="#B000FF" />
+            </linearGradient>
+          </defs>
+          <path d={HEART_PATH} fill={`url(#${gradientId})`} />
+        </motion.svg>
       </motion.div>
     </div>
   );
