@@ -247,9 +247,9 @@ export default function Navbar() {
                 {/* Mini notification bubble (TikTok/Instagram style) */}
                 <AnimatePresence>
                   {showNotifToast && (unreadNotifs.length > 0 || DEBUG_NOTIFICATION_TOAST_LOOP) && (
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-[128px] pointer-events-none">
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 w-[120px] pointer-events-none">
                       <motion.div
-                        style={{ transformOrigin: "64px 16.8px" }}
+                        style={{ transformOrigin: "60px -5.5px" }}
                         initial={{ opacity: 1, scale: 0.08 }}
                         animate={{
                           opacity: 1,
@@ -262,38 +262,38 @@ export default function Navbar() {
                         }}
                         transition={{
                           duration: 5,
-                          times: [0, 0.16, 0.28, 0.82, 1],
+                          times: [0, 0.08, 0.16, 0.88, 1],
                           ease: ["easeOut", "easeOut", "linear", "easeIn", "easeIn"],
                         }}
-                        className="relative w-[128px] origin-top pointer-events-none"
+                        className="relative w-[120px] origin-top pointer-events-none"
                       >
                         {/* Rounded half-diamond tail at the top-right of the tablet */}
-                        <div className="absolute top-[-3px] left-[50px] w-7 h-7 rounded-[15%] rotate-45 bg-[#ef4444]" />
+                        <div className="absolute top-[-1px] left-[49px] w-[22px] h-[22px] rounded-[15%] rotate-45 bg-[#ef4444]" />
 
                         {/* Bubble Content */}
-                        <div className="absolute top-0 left-[-8px] z-10 w-[96px] h-[50px] bg-[#ef4444] rounded-full py-2.5 px-3 flex items-center justify-center shadow-2xl gap-2.5 text-white">
+                        <div className="absolute top-0 left-[-7px] z-10 w-[88px] h-[46px] bg-[#ef4444] rounded-full py-2 px-3 overflow-hidden flex items-center justify-center shadow-2xl gap-2.5 text-white">
                         {repliesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <MessageSquare size={13} fill="white" className="text-white" />
-                            <span className="font-bold text-[12px] leading-none mb-[1px]">{repliesCount}</span>
+                            <MessageSquare size={16} fill="white" className="text-white" />
+                            <span className="font-bold text-[14px] leading-none mb-[1px]">{repliesCount}</span>
                           </div>
                         )}
                         {likesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <FilledHeart size={13} className="text-white" />
-                            <span className="font-bold text-[12px] leading-none mb-[1px]">{likesCount}</span>
+                            <FilledHeart size={16} className="text-white" />
+                            <span className="font-bold text-[14px] leading-none mb-[1px]">{likesCount}</span>
                           </div>
                         )}
                         {votesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <BarChart2 size={13} fill="white" className="text-white" />
-                            <span className="font-bold text-[12px] leading-none mb-[1px]">{votesCount}</span>
+                            <BarChart2 size={16} fill="white" className="text-white" />
+                            <span className="font-bold text-[14px] leading-none mb-[1px]">{votesCount}</span>
                           </div>
                         )}
                         {DEBUG_NOTIFICATION_TOAST_LOOP && unreadNotifs.length === 0 && (
                           <div className="flex items-center gap-2">
-                            <UserRound size={14} strokeWidth={2.5} className="text-white" />
-                            <span className="font-bold text-[14px] leading-none">1</span>
+                            <UserRound size={18} strokeWidth={2.5} className="text-white" />
+                            <span className="font-bold text-[16px] leading-none">1</span>
                           </div>
                         )}
                       </div>
