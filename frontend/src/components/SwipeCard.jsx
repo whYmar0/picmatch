@@ -59,6 +59,22 @@ const SwipeCard = forwardRef(function SwipeCard(
 
   const rotate = useTransform(x, [-300, 0, 300], [-22, 0, 22]);
 
+  // Use the card's actual x motion value so drag and button swipes trigger at
+  // the same like-commit threshold.
+  useEffect(() => {
+    if (!isTop) return undefined;
+    const unsubscribe = x.on("change", (latest) => {
+      if (latest >= 80 && !heartFired.current) {
+        heartFired.current = true;
+        onLikeThresholdCrossed?.(lastPointerPos.current);
+      }
+      if (latest < 40) {
+        heartFired.current = false;
+      }
+    });
+    return unsubscribe;
+  }, [x, isTop, onLikeThresholdCrossed]);
+
   // All cards aligned perfectly (no scale difference)
   const stackScale = 1;
   const pinchEnabled = enablePinchZoom && !isVideo(photo);
@@ -137,14 +153,13 @@ const SwipeCard = forwardRef(function SwipeCard(
   useImperativeHandle(ref, () => ({
     swipeTo: async (isLike) => {
       const dir = isLike ? 700 : -700;
-      // Button-tap like has no finger position — fire the heart at the card center.
-      if (isLike && !heartFired.current) {
-        heartFired.current = true;
+      // Button-tap like has no finger position. Seed the tracked pointer at
+      // the card center; the x motion subscription fires at x >= 80 below.
+      if (isLike) {
         const rect = cardElRef.current?.getBoundingClientRect();
-        const pos = rect
+        lastPointerPos.current = rect
           ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
           : lastPointerPos.current;
-        onLikeThresholdCrossed?.(pos);
       }
       await controls.start({
         x: dir, rotate: isLike ? 22 : -22, opacity: 0,
@@ -153,6 +168,7 @@ const SwipeCard = forwardRef(function SwipeCard(
       onSwipe(photo.id, isLike);
     },
     resetPosition: () => {
+      heartFired.current = false;
       x.set(0);
       y.set(0);
       controls.set({ x: 0, y: 0, rotate: 0, opacity: 1 });
@@ -190,13 +206,6 @@ const SwipeCard = forwardRef(function SwipeCard(
     const clientY = event?.clientY ?? info.point.y;
     lastPointerPos.current = { x: clientX, y: clientY };
     const latest = info.offset.x;
-    if (latest >= 80 && !heartFired.current) {
-      heartFired.current = true;
-      onLikeThresholdCrossed?.(lastPointerPos.current);
-    }
-    if (latest < 40) {
-      heartFired.current = false; // reset when dragged back, allow re-fire
-    }
   };
 
   const handleDragEnd = async (_, info) => {

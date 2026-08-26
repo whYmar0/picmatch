@@ -243,20 +243,18 @@ export default function VotePage() {
   const handleLikeThreshold = useCallback((fingerPos) => {
     const rect = cardStackRef.current?.getBoundingClientRect();
     if (!rect) return;
-    // Heart size scales with the card so the effect stays proportional on any
-    // viewport; amplitudes inside HeartBurst scale with it too.
-    const size = Math.round(Math.min(88, Math.max(56, rect.width * 0.15)));
-    // The heart is anchored at its BOTTOM edge. Clamp so it never gets clipped
-    // or pushed off-screen when the finger is near an edge of the card stack.
-    const HALF_W = size / 2 + 2;
-    const FULL_H = size + 6;
+    // The spec renders the PNG at a fixed 64×64 CSS pixels.
+    const HEART_SIZE = 64;
+    // Clamp the spawn point so the fixed-size heart remains inside the stack.
+    const HALF_W = HEART_SIZE / 2 + 2;
+    const FULL_H = HEART_SIZE + 6;
     const localX = Math.min(Math.max(fingerPos.x - rect.left, HALF_W), rect.width - HALF_W);
     const localY = Math.min(
       Math.max(fingerPos.y - rect.top - 60, FULL_H), // 60px above the finger
       rect.height - 4
     );
     const id = `heart-${Date.now()}-${Math.random()}`;
-    setHearts((prev) => [...prev, { id, x: localX, y: localY, size }]);
+    setHearts((prev) => [...prev, { id, x: localX, y: localY }]);
   }, []);
 
   const removeHeart = useCallback((id) => {
@@ -524,7 +522,7 @@ export default function VotePage() {
 
             {/* Heart burst effects */}
             {hearts.map((h) => (
-              <HeartBurst key={h.id} x={h.x} y={h.y} size={h.size} onComplete={() => removeHeart(h.id)} />
+              <HeartBurst key={h.id} x={h.x} y={h.y} onComplete={() => removeHeart(h.id)} />
             ))}
           </div>
         </div>

@@ -24,47 +24,60 @@ This is a purple-pink gradient heart PNG with transparency. It will be used as a
 
 ---
 
-## Animation Phases (Total duration: ~1.5s)
+## Animation Sequence (Total duration: ~1.5s)
 
-### Phase 1 — Inflate (0ms → 250ms)
-The heart appears at the user's last known finger position (details below) and rapidly scales up from 0 to its full size.
+The heart does NOT gently fade in or float. It **erupts from under the user's finger** like a bubble being inflated, while simultaneously rocking side-to-side like a spring. The entire animation is one continuous, overlapping sequence.
 
-```
-scale:   0 → 1.35 → 1.0  (overshoot then settle)
-opacity: 0 → 1
-```
+### Starting Position
+- The heart spawns at `opacity: 0`, `scale: 0` at the exact coordinates of the user's finger (the last known `touchmove`/`pointermove` position).
+- `transform-origin: center bottom` — the heart inflates upward from its bottom point (the tip), as if growing out from under the finger.
 
-- Use Framer Motion `animate` with a spring: `{ type: "spring", stiffness: 600, damping: 15, mass: 0.8 }`
-- The overshoot to 1.35 is natural from the spring's underdamping.
-
-### Phase 2 — Radial Line Burst (200ms → 550ms, overlapping with end of Phase 1)
-At the moment the heart reaches peak scale (~200ms), 8–12 thin lines radiate outward from the heart's center. These lines:
-- Are 2px wide, 18–28px long (randomized per line).
-- Are evenly distributed around 360° (e.g., 10 lines = 36° apart).
-- Shoot outward from radius 32px to radius 55–70px over ~350ms.
-- Fade from `opacity: 1` → `0` as they travel outward.
-- Color: white (`#FFFFFF`) with a subtle drop-shadow for visibility on any background.
-
-**Implementation:** Create a `<div>` container with `position: absolute` centered on the heart. Each line is a small `<div>` rotated by its angle, animated with `translateY` (outward) and `opacity` (fade). Use CSS `@keyframes` or Framer Motion `animate` for the burst. Stagger each line by 15–25ms for a natural feel.
-
-### Phase 3 — Spring Wobble (400ms → 1500ms)
-After settling from Phase 1, the heart does a gentle rocking wobble on its vertical axis:
+### Phase 1 — Bubble Inflate (0ms → 350ms)
+The heart rapidly inflates from nothing, stretching vertically like a soap bubble. It overshoots and settles.
 
 ```
-rotate: 0° → -12° → 10° → -6° → 3° → 0°
+scaleX:  0 → 0.85 → 1.0         (slightly narrower during stretch, then settle)
+scaleY:  0 → 1.4  → 1.0         (vertical overshoot — the "bubble" effect)
+opacity: 0 → 1                   (instant, within first 50ms)
+y:       0 → -60px               (flies upward from the finger as it inflates)
 ```
 
-- Use Framer Motion `animate` with keyframes: `{ rotate: [0, -12, 10, -6, 3, 0] }`
-- Duration: ~1.1s, ease: `"easeInOut"`
-- Simultaneously, a very gentle scale pulse: `scale: [1.0, 1.05, 0.97, 1.02, 1.0]`
+- The Y-axis scale (`scaleY`) must overshoot to **1.4** before settling to 1.0. This creates the "inflating bubble" feel.
+- The X-axis scale (`scaleX`) stays slightly behind the Y-axis — reaches 0.85 when scaleY is at 1.4, then catches up to 1.0. This makes the heart look like it's being stretched vertically during inflation.
+- Use Framer Motion spring: `{ type: "spring", stiffness: 500, damping: 12, mass: 0.7 }` for the scale.
+- The `y: -60px` translation makes the heart fly upward above the finger. Use a separate spring for Y: `{ type: "spring", stiffness: 350, damping: 20 }`.
 
-### Fade Out (1200ms → 1500ms)
+### Phase 2 — Spring Wobble (100ms → 1100ms, overlaps Phase 1)
+**Simultaneously** with the inflation (starting ~100ms in, when the heart is already partially visible), the heart rocks side-to-side around its vertical axis **3–4 times** with decreasing amplitude, like a spring that was flicked.
+
+```
+rotate: 0° → -18° → 14° → -8° → 4° → 0°
+```
+
+This is NOT a gentle sway. The first swing is aggressive (-18°), each subsequent one dampens. The rocking should feel physical — like the heart has momentum and inertia.
+
+- Use Framer Motion keyframes: `{ rotate: [0, -18, 14, -8, 4, 0] }`
+- Duration: **1.0s**
+- Easing: `[0.25, 0.1, 0.25, 1]` (ease-out-like, so the wobble decelerates naturally)
+- The wobble runs concurrently with the inflate — the heart is already swinging while still growing.
+
+### Phase 3 — Settle & Fade Out (1000ms → 1500ms)
+After the wobble dampens to near-zero, the heart holds briefly at its final position, then fades out:
+
 ```
 opacity: 1 → 0
-scale:   1.0 → 0.85
+scale:   1.0 → 0.8               (slight shrink as it disappears)
+y:       -60px → -80px           (drifts slightly upward as it fades)
 ```
-- Duration: 300ms, ease: `"easeIn"`
-- After fade completes, remove the DOM element entirely.
+
+- Duration: 400ms, ease: `"easeIn"`
+- After fade completes, remove the DOM element entirely via the `onComplete` callback.
+
+### Key Animation Principles
+1. **Everything overlaps.** The wobble starts before the inflate finishes. The fade starts before the wobble fully dampens. There are no discrete sequential phases — it's one fluid motion.
+2. **transform-origin: center bottom.** The heart grows from its tip, not from its center.
+3. **No levitation / floating.** The heart does NOT drift around gently. It erupts, wobbles, and disappears.
+4. **The bubble stretch is vertical.** `scaleY` always leads `scaleX` during the inflate — the heart looks tall and narrow for a split second before settling into its natural proportions.
 
 ---
 
