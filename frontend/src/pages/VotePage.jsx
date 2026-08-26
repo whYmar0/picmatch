@@ -243,8 +243,8 @@ export default function VotePage() {
   const handleLikeThreshold = useCallback((fingerPos) => {
     const rect = cardStackRef.current?.getBoundingClientRect();
     if (!rect) return;
-    // The spec renders the PNG at a fixed 64×64 CSS pixels.
-    const HEART_SIZE = 64;
+    // Keep the spawn bounds in sync with HeartBurst's 100×100 size.
+    const HEART_SIZE = 100;
     // Clamp the spawn point so the fixed-size heart remains inside the stack.
     const HALF_W = HEART_SIZE / 2 + 2;
     const FULL_H = HEART_SIZE + 6;

@@ -7,7 +7,7 @@
 import { useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 
-const HEART_SIZE = 64;
+const HEART_SIZE = 100;
 const ANIMATION_DURATION = 1.5;
 
 const HEART_PATH =
@@ -37,7 +37,7 @@ export default function HeartBurst({ x, y, onComplete }) {
       }}
     >
       <motion.div
-        className="relative w-16 h-16"
+        className="relative w-[100px] h-[100px]"
         initial={{ opacity: 0, y: 0 }}
         animate={{
           opacity: [0, 1, 1, 0],
@@ -80,8 +80,8 @@ export default function HeartBurst({ x, y, onComplete }) {
               duration: ANIMATION_DURATION,
             },
             rotate: {
-              delay: 0.1,
-              duration: 1,
+              delay: 0,
+              duration: 0.75,
               ease: [0.25, 0.1, 0.25, 1],
             },
           }}
