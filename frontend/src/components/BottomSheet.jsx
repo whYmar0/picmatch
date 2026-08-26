@@ -75,6 +75,8 @@ export default function BottomSheet({
   const horizontalStartYRef = useRef(0);
   const verticalDragAllowedRef = useRef(false);
   const animationRef = useRef(null);
+  const contentExpansionStartedRef = useRef(false);
+  const contentTouchStartYRef = useRef(null);
   const closeStartedRef = useRef(false);
   const closeNotifiedRef = useRef(false);
   const [vh, setVh] = useState(
@@ -332,6 +334,39 @@ export default function BottomSheet({
     suppressClickRef.current = false;
   };
 
+  // In the partial snap point the lower part of the scroll surface can sit
+  // below the viewport. Let the first content scroll expand the sheet, then
+  // keep the user's existing scroll position so the gesture continues
+  // naturally instead of ending at the clipped partial viewport.
+  const expandFromContentGesture = () => {
+    if (y.get() <= 1 || contentExpansionStartedRef.current) return;
+    contentExpansionStartedRef.current = true;
+    animationRef.current?.stop();
+    startYAnimation(0, { duration: 0.24, ease: CLOSE_EASE_OUT });
+  };
+
+  const handleContentScroll = (event) => {
+    const content = event.currentTarget;
+    if (content.scrollTop <= 0) return;
+    expandFromContentGesture();
+  };
+
+  const handleContentWheel = (event) => {
+    if (event.deltaY > 0) expandFromContentGesture();
+  };
+
+  const handleContentTouchStart = (event) => {
+    contentTouchStartYRef.current = event.touches[0]?.clientY ?? null;
+  };
+
+  const handleContentTouchMove = (event) => {
+    const startY = contentTouchStartYRef.current;
+    const currentY = event.touches[0]?.clientY;
+    if (Number.isFinite(startY) && Number.isFinite(currentY) && startY - currentY > 8) {
+      expandFromContentGesture();
+    }
+  };
+
   const handleVerticalDrag = () => {
     if (gestureAxisRef.current === "y") return;
     animationRef.current?.stop();
@@ -376,6 +411,7 @@ export default function BottomSheet({
     if (open) {
       closeStartedRef.current = false;
       closeNotifiedRef.current = false;
+      contentExpansionStartedRef.current = false;
     }
   }, [open]);
 
@@ -596,10 +632,16 @@ export default function BottomSheet({
 
             {/* Scrollable content */}
             <div
-              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+4rem)]"
+              className={`flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 ${footer
+                ? "pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+6rem)]"
+                : "pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+4rem)]"}`}
               style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
               data-testid={testId ? `${testId}-content` : undefined}
               data-bottom-sheet-content="true"
+              onScroll={handleContentScroll}
+              onWheel={handleContentWheel}
+              onTouchStart={handleContentTouchStart}
+              onTouchMove={handleContentTouchMove}
             >
               {children}
             </div>

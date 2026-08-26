@@ -365,7 +365,7 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
   await page.goto(`${FRONTEND}/vote/video-ux-test`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText("Vote Video UX Test")).toBeVisible();
   await expect(page.getByText("Вправо — нравится · влево — не нравится")).toBeVisible();
-  await expect(page.getByText("НЕ НРАВИТСЯ", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Dislike", exact: true })).toBeVisible();
   const viewportWidth = await page.evaluate(() => window.innerWidth);
   const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(documentWidth).toBeLessThanOrEqual(viewportWidth);
@@ -383,7 +383,6 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
   await expect(background).toHaveClass(/object-cover/);
   await expect(background).toHaveClass(/blur-2xl/);
   await expect.poll(() => video.evaluate((node) => Number.isFinite(node.duration) && node.duration > 0)).toBe(true);
-
   const box = await player.boundingBox();
   expect(box).not.toBeNull();
   const startY = box.y + box.height * 0.9;
@@ -403,6 +402,30 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
   await touch(timeline, "touchend", endX, startY);
   await pointer(timeline, "pointerup", endX, startY);
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
+
+  // Long-press must pause and resume the master and its blurred mirror as one
+  // unit. A delayed background play() must not escape the hold and drift away.
+  const holdBox = await player.boundingBox();
+  expect(holdBox).not.toBeNull();
+  const holdX = holdBox.x + holdBox.width / 2;
+  const holdY = holdBox.y + holdBox.height * 0.45;
+  await touch(player, "touchstart", holdX, holdY);
+  await page.waitForTimeout(320);
+  await expect.poll(() => video.evaluate((node) => node.paused)).toBe(true);
+  await expect.poll(() => background.evaluate((node) => node.paused)).toBe(true);
+  await touch(player, "touchend", holdX, holdY);
+  await expect.poll(() => video.evaluate((node) => !node.paused)).toBe(true);
+  await expect.poll(() => background.evaluate((node) => !node.paused)).toBe(true);
+  await page.waitForTimeout(250);
+  const resumedTimes = await player.evaluate((root) => ({
+    main: root.querySelector('[data-video-main="true"]')?.currentTime,
+    backdrop: root.querySelector('[data-video-backdrop="true"]')?.currentTime,
+    mainPaused: root.querySelector('[data-video-main="true"]')?.paused,
+    backdropPaused: root.querySelector('[data-video-backdrop="true"]')?.paused,
+  }));
+  expect(resumedTimes.mainPaused).toBe(false);
+  expect(resumedTimes.backdropPaused).toBe(false);
+
   await page.waitForTimeout(250);
   await expect(page.locator('[data-video-player="true"]')).toHaveCount(1);
   await expect(page.getByText("Vote Video UX Test")).toBeVisible();

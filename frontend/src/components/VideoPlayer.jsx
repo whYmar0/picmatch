@@ -63,6 +63,7 @@ export default function VideoPlayer({
   const touchHandledRef = useRef(false);
   const pointerTapStartRef = useRef(null);
   const isMutedRef = useRef(muted);
+  const backgroundPlaybackRequestRef = useRef(0);
 
   const [aspectRatio, setAspectRatio] = useState(null);
   const [duration, setDuration] = useState(0);
@@ -109,6 +110,8 @@ export default function VideoPlayer({
   useEffect(() => () => {
     clearHoldTimer();
     clearControlsTimer();
+    backgroundPlaybackRequestRef.current += 1;
+    backgroundVideoRef.current?.pause();
   }, []);
 
   useEffect(() => {
@@ -240,20 +243,47 @@ export default function VideoPlayer({
     }
   };
 
+  // The blurred layer is a rendering mirror, not an independent player. A
+  // play() promise may resolve after a long-press has already paused the main
+  // video, so every request gets a generation that is invalidated on pause.
   const playBackgroundVideo = () => {
     const backgroundVideo = backgroundVideoRef.current;
-    if (!backgroundVideo) return;
+    const video = videoRef.current;
+    if (
+      !backgroundVideo ||
+      !video ||
+      video.paused ||
+      video.ended
+    ) return;
+
+    const requestId = ++backgroundPlaybackRequestRef.current;
+    syncBackgroundTime(video.currentTime, true);
     const promise = backgroundVideo.play();
-    promise?.catch?.(() => {});
+    promise?.then?.(() => {
+      // An old play() promise may resolve after a newer release/play request.
+      // It must not pause the media belonging to that newer request.
+      if (requestId !== backgroundPlaybackRequestRef.current) return;
+      if (videoRef.current?.paused || videoRef.current?.ended) {
+        backgroundVideo.pause();
+        return;
+      }
+      // A seek can become available only after play has opened the media
+      // pipeline. Align once more after the promise resolves so a delayed
+      // backdrop never resumes from an old frame.
+      syncBackgroundTime(video.currentTime, true);
+    }).catch?.(() => {});
   };
 
-  const pauseBackgroundVideo = () => backgroundVideoRef.current?.pause();
+  const pauseBackgroundVideo = () => {
+    backgroundPlaybackRequestRef.current += 1;
+    backgroundVideoRef.current?.pause();
+  };
 
-  const syncBackgroundTime = (time) => {
+  const syncBackgroundTime = (time, force = false) => {
     const backgroundVideo = backgroundVideoRef.current;
-    if (!backgroundVideo || !Number.isFinite(time) || backgroundVideo.readyState < 1) return;
+    if (!backgroundVideo || !Number.isFinite(time)) return;
     try {
-      if (Math.abs(backgroundVideo.currentTime - time) > 0.08) {
+      if (force || Math.abs(backgroundVideo.currentTime - time) > 0.08) {
         backgroundVideo.currentTime = time;
       }
     } catch {
@@ -270,8 +300,11 @@ export default function VideoPlayer({
   };
 
   const pauseVideo = () => {
-    videoRef.current?.pause();
+    // Pause the mirror first so a pending backdrop play cannot outlive a hold.
     if (blurredBackdrop) pauseBackgroundVideo();
+    const video = videoRef.current;
+    video?.pause();
+    syncBackgroundTime(video?.currentTime, true);
   };
 
   const togglePlayback = () => {
@@ -301,6 +334,7 @@ export default function VideoPlayer({
     endProgressLockRef.current = false;
     endProgressSeekPendingRef.current = false;
     setIsPlaying(false);
+    if (blurredBackdrop) pauseBackgroundVideo();
     setCurrentTime(duration || 0);
     setProgressPercent(100);
     showControls(true);

@@ -80,17 +80,23 @@ export default function RecentAlbumCard({ album, index, onOpen }) {
           </div>
         )}
 
-        {/* Privacy badge (top-left) — KEPT */}
-        <span className={`absolute top-2 left-2 flex items-center gap-1
-                          text-[10px] font-semibold px-2 py-0.5 rounded-lg
-                          ${isPrivate
-                            ? "bg-amber-500/80 text-white"
-                            : "bg-black/50 text-white"}`}>
-          {isPrivate
-            ? <><Lock size={9} /> {lang === "ru" ? "Приватный" : "Private"}</>
-            : <><Globe size={9} /> {lang === "ru" ? "Открытый" : "Public"}</>
-          }
-        </span>
+        {/* Privacy indicator (top-left) */}
+        {isPrivate ? (
+          <span
+            className="absolute top-2 left-2 flex items-center justify-center
+                       w-7 h-7 rounded-lg bg-amber-500/80 text-white"
+            title={lang === "ru" ? "Приватный альбом" : "Private album"}
+            aria-label={lang === "ru" ? "Приватный альбом" : "Private album"}
+          >
+            <Lock size={13} />
+          </span>
+        ) : (
+          <span className="absolute top-2 left-2 flex items-center gap-1
+                           text-[10px] font-semibold px-2 py-0.5 rounded-lg
+                           bg-black/50 text-white">
+            <Globe size={9} /> {lang === "ru" ? "Открытый" : "Public"}
+          </span>
+        )}
       </div>
 
       {/* Info area (1/3) */}
