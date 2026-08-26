@@ -524,7 +524,7 @@ export default function VotePage() {
                     key={photo.id}
                     className="absolute inset-0"
                     style={{
-                      opacity: commentSheet ? 0 : 1,
+                      opacity: 1,
                       pointerEvents: commentSheet ? "none" : "auto",
                     }}
                   >
@@ -538,6 +538,7 @@ export default function VotePage() {
                       enablePinchZoom
                       videoScrubBottomRatio={0.2}
                       blurredVideoBackdrop
+                      sharedLayoutId={isTop && !isVideo(photo) ? `vote-photo-${photo.id}` : null}
                     />
                     {isTop && (
                       <button
@@ -588,6 +589,7 @@ export default function VotePage() {
         heightVh={COMMENT_SHEET_HEIGHT_VH}
         partialOffsetVh={COMMENT_SHEET_PARTIAL_OFFSET_VH}
         resizeTopContentWithSheet
+        deferClose
         hideHeader
         backdropBlur={false}
         backdropDim={false}
@@ -602,7 +604,7 @@ export default function VotePage() {
             />
           ) : null
         }
-        headerChildren={<h3 className="font-bold text-lg px-0">{t("Comments")}</h3>}
+        headerChildren={<h3 className="w-full text-center font-bold text-lg px-0">{t("Comments")}</h3>}
         topContent={
           commentSheet ? (
             <div className="w-full h-full min-h-0 flex items-center justify-center">
@@ -618,7 +620,8 @@ export default function VotePage() {
                   stableLayout
                 />
               ) : (
-                <img
+                <motion.img
+                  layoutId={`vote-photo-${commentSheet.id}`}
                   src={commentSheet.url}
                   className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl border border-white/10"
                   alt=""

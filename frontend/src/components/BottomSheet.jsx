@@ -54,6 +54,7 @@ export default function BottomSheet({
   zIndex = 50,
   hideHeader = false,
   resizeTopContentWithSheet = false,
+  deferClose = false,
   closeOnEscape = true,
   backdropBlur = true,
   backdropDim = true,
@@ -103,14 +104,13 @@ export default function BottomSheet({
     return animationRef.current;
   };
 
-  // The default mode preserves the existing top-content behavior. The resize
-  // mode gives photo content the exact space left above the sheet, matching
-  // the Dashboard gallery layout.
-  const topContentScale = useTransform(y, [0, defaultOffset, dismissOffset], [0.85, 1, 1]);
+  // Scale top content as we drag. The resize mode instead changes the stage
+  // height, matching the Dashboard gallery photo stage.
+  const scale = useTransform(y, [0, defaultOffset, dismissOffset], [0.85, 1, 1]);
   const topContentHeight = useTransform(
     y,
     [0, defaultOffset, vh],
-    [vh * 0.25, vh * 0.50, vh],
+    [vh * 0.5, vh * 0.5, vh],
     { clamp: true },
   );
   // Fade out top content only when dragging DOWN to dismiss
@@ -494,17 +494,22 @@ export default function BottomSheet({
     if (closeStartedRef.current) return;
     closeStartedRef.current = true;
 
-    // Start the visual exit, but do not make state closure depend on a
-    // MotionValue completion callback. Pointer-driven animations can be
-    // cancelled by the browser before Framer Motion invokes onComplete;
-    // closing synchronously keeps Back/drag interactions from freezing.
-    if (animateOnClose) {
-      startYAnimation(vh, linearMotion ? { duration: 0.3, ease: CLOSE_EASE_OUT } : { duration: 0.3 });
-    }
-    if (!closeNotifiedRef.current) {
+    const notifyClose = () => {
+      if (closeNotifiedRef.current) return;
       closeNotifiedRef.current = true;
       onClose();
+    };
+    if (animateOnClose) {
+      const transition = linearMotion
+        ? { duration: 0.3, ease: CLOSE_EASE_OUT }
+        : { duration: 0.3 };
+      if (deferClose) {
+        startYAnimation(vh, { ...transition, onComplete: notifyClose });
+        return;
+      }
+      startYAnimation(vh, transition);
     }
+    notifyClose();
   };
 
   const onDragEnd = (_, info) => {
@@ -557,12 +562,12 @@ export default function BottomSheet({
               className="absolute top-0 left-0 w-full flex items-center justify-center p-4 z-10 pointer-events-none"
               style={{
                 height: resizeTopContentWithSheet ? topContentHeight : "40dvh",
-                opacity: topOpacity,
+                opacity: resizeTopContentWithSheet ? 1 : topOpacity,
               }}
             >
               <motion.div
+                style={resizeTopContentWithSheet ? undefined : { scale }}
                 className={`pointer-events-auto max-w-full max-h-full ${resizeTopContentWithSheet ? "w-full h-full" : ""}`}
-                style={resizeTopContentWithSheet ? undefined : { scale: topContentScale }}
               >
                 {topContent}
               </motion.div>

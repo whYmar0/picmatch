@@ -37,7 +37,7 @@ function touchMidpoint(touches) {
 }
 
 const SwipeCard = forwardRef(function SwipeCard(
-  { photo, isTop, stackIndex, onSwipe, onImageClick, onLikeThresholdCrossed, enablePinchZoom = false, videoScrubBottomRatio = 0.25, blurredVideoBackdrop = false },
+  { photo, isTop, stackIndex, onSwipe, onImageClick, onLikeThresholdCrossed, enablePinchZoom = false, videoScrubBottomRatio = 0.25, blurredVideoBackdrop = false, sharedLayoutId = null },
   ref
 ) {
   const controls = useAnimation();
@@ -304,8 +304,9 @@ const SwipeCard = forwardRef(function SwipeCard(
             onTouchEndCapture={handlePinchEndCapture}
             onTouchCancelCapture={finishPinch}
           >
-            <img
+            <motion.img
               ref={pinchImageRef}
+              layoutId={sharedLayoutId || undefined}
               src={photo.url}
               alt="Фото альбома"
               onLoad={onImageLoad}

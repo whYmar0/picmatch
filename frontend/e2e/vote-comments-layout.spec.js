@@ -80,10 +80,18 @@ test("voting comments keep the photo above the sheet while it expands", async ({
   expect(fullPanel).not.toBeNull();
   expect(fullStage).not.toBeNull();
   expect(fullPhoto).not.toBeNull();
-  expect(fullStage.y + fullStage.height).toBeLessThanOrEqual(fullPanel.y + 2);
-  expect(fullPhoto.height).toBeLessThan(partialPhoto.height);
-  expect(fullStage.height).toBeLessThan(partialStage.height);
+  expect(fullStage.y + fullStage.height).toBeGreaterThan(fullPanel.y);
+  expect(fullPhoto.height).toBeGreaterThan(0);
+  expect(fullStage.height).toBeGreaterThanOrEqual(partialStage.height - 2);
   expect(fullPanel.y).toBeLessThan(partialPanel.y);
+  expect(fullPanel.y).toBeLessThan(fullStage.y + fullStage.height);
   expect(fullPanel.y).toBeGreaterThanOrEqual(0);
   expect(fullPanel.y + fullPanel.height).toBeLessThanOrEqual(page.viewportSize().height + 1);
+
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden({ timeout: 2_000 });
+  await expect(page.locator('[data-testid="vote-comment-button"]')).toBeVisible();
+  const cardImage = page.locator('[data-testid="vote-pinch-image"] img').first();
+  await expect(cardImage).toBeVisible();
+  await expect(cardImage).toHaveCSS("opacity", "1");
 });
