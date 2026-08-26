@@ -591,7 +591,7 @@ export default function VotePage() {
         resizeTopContentWithSheet
         deferClose
         hideHeader
-        backdropBlur={false}
+        backdropBlur
         backdropDim={false}
         testId="vote-comments-sheet"
         footer={

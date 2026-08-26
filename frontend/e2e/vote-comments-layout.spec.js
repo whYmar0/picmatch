@@ -55,6 +55,11 @@ test("voting comments keep the photo above the sheet while it expands", async ({
   await expect(photo).toBeVisible();
   await expect(page.getByText("Комментарии")).toBeVisible();
   await expect(page.getByTestId("vote-comments-sheet-content")).toBeVisible();
+  const backdrop = page.getByTestId("vote-comments-sheet-backdrop");
+  await expect(backdrop).toHaveCSS("backdrop-filter", /blur/);
+  // The blur is not faded together with the transparent backdrop: it must be
+  // at full strength on the first frame of the opened comments sheet.
+  await expect(backdrop).toHaveCSS("opacity", "1");
   await page.waitForTimeout(700);
 
   const partialPanel = await panel.boundingBox();
@@ -80,11 +85,14 @@ test("voting comments keep the photo above the sheet while it expands", async ({
   expect(fullPanel).not.toBeNull();
   expect(fullStage).not.toBeNull();
   expect(fullPhoto).not.toBeNull();
-  expect(fullStage.y + fullStage.height).toBeGreaterThan(fullPanel.y);
+  // During the upward drag the stage contracts with the sheet instead of
+  // leaving the photo at its partial height. At the full snap the panel reaches
+  // the stage's lower boundary and owns the overlap layer.
+  expect(fullStage.y + fullStage.height).toBeGreaterThanOrEqual(fullPanel.y - 2);
   expect(fullPhoto.height).toBeGreaterThan(0);
-  expect(fullStage.height).toBeGreaterThanOrEqual(partialStage.height - 2);
+  expect(fullStage.height).toBeLessThan(partialStage.height - 2);
   expect(fullPanel.y).toBeLessThan(partialPanel.y);
-  expect(fullPanel.y).toBeLessThan(fullStage.y + fullStage.height);
+  expect(fullPanel.y).toBeLessThanOrEqual(fullStage.y + fullStage.height + 2);
   expect(fullPanel.y).toBeGreaterThanOrEqual(0);
   expect(fullPanel.y + fullPanel.height).toBeLessThanOrEqual(page.viewportSize().height + 1);
 

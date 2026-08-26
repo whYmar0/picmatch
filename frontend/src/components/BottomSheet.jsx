@@ -110,7 +110,7 @@ export default function BottomSheet({
   const topContentHeight = useTransform(
     y,
     [0, defaultOffset, vh],
-    [vh * 0.5, vh * 0.5, vh],
+    [vh * 0.25, vh * 0.50, vh],
     { clamp: true },
   );
   // Fade out top content only when dragging DOWN to dismiss
@@ -545,7 +545,7 @@ export default function BottomSheet({
           {/* Backdrop (Blur + Dimming) */}
           <motion.div
             key="backdrop"
-            initial={{ opacity: 0 }}
+            initial={{ opacity: backdropBlur && !backdropDim ? 1 : 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.34 }}
