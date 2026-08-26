@@ -875,9 +875,19 @@ export default function AlbumGallery({
       // a rapid close/back sequence. Clear the local stack before traversal so
       // a queued popstate cannot calculate another traversal from stale data.
       historyStackRef.current = [];
+      // history.go() is asynchronous while a router navigate() pushes
+      // synchronously — calling both in the same tick makes the browser pop
+      // the freshly pushed destination and strand the user on the old page.
+      // Wait for the traversal's popstate, then hand off to onClose.
+      const onTraversalComplete = () => {
+        window.removeEventListener("popstate", onTraversalComplete);
+        onClose();
+      };
+      window.addEventListener("popstate", onTraversalComplete);
       window.history.go(-(historyEntriesAboveGallery + 1));
+    } else {
+      onClose();
     }
-    onClose();
   }, [onClose, sheetY, sheetGestureY, dragY, dragProgressMV, vh, manageHistory]);
 
   const pushHistoryLayer = useCallback((layer) => {

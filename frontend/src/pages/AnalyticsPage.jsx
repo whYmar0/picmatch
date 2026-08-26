@@ -292,7 +292,7 @@ export default function AnalyticsPage() {
           photoId={photoId ?? initialPhotoId}
           photoUrl={photoUrl}
           initialComments={threadComments}
-          onBack={() => navigate(-1)}
+          onBack={() => navigate("/dashboard")}
         />
       </AnimatePresence>
     );
