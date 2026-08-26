@@ -374,7 +374,7 @@ export default function VotePage() {
               2. Album title (font-sans)
               3. Expandable description 
         */}
-        <div className="w-full max-w-[360px] mx-auto px-4 pt-3 pb-1 flex-shrink-0">
+        <div className="w-full max-w-[360px] mx-auto px-[3px] pt-3 pb-1 flex-shrink-0">
           {/* 1. Author avatar + username — large, at the top */}
           <div className="flex items-center gap-3 mb-4">
             <AuthorAvatar user={album.creator} size={44} />
@@ -417,14 +417,14 @@ export default function VotePage() {
         </div>
 
         {/* ─── Thumbnail strip ─────────────────────────────────────────────── */}
-        <div className="relative flex-shrink-0 w-full max-w-[360px] min-w-0 mx-auto">
-          {/* Soft edge fades keep the strip visually contained without blurring thumbnails. */}
-          <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-surface-light/40 dark:from-surface-dark/40 to-transparent z-10 pointer-events-none" />
-          <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-surface-light/40 dark:from-surface-dark/40 to-transparent z-10 pointer-events-none" />
+        <div className="relative flex-shrink-0 w-full max-w-[410px] min-w-0 mx-auto">
+          {/* Fade is confined to the 3px gutters and sits directly on each edge. */}
+          <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-r from-surface-light/95 dark:from-surface-dark/95 to-transparent z-10 pointer-events-none" />
+          <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-[3px] bg-gradient-to-l from-surface-light/95 dark:from-surface-dark/95 to-transparent z-10 pointer-events-none" />
 
           <div
             ref={thumbStripRef}
-            className="w-full min-w-0 py-2 px-4 flex justify-start overflow-x-auto"
+            className="w-full min-w-0 py-2 px-[3px] flex justify-start overflow-x-auto"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             <div className="flex gap-2 items-center min-w-max">
