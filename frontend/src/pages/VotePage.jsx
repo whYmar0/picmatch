@@ -486,13 +486,17 @@ export default function VotePage() {
                       <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
                     )}
                     {hasVote && (
-                      <div className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full
-                                       flex items-center justify-center border-2 border-surface-light dark:border-surface-dark
+                      <div className={`absolute bottom-[3px] right-[3px] w-[18px] h-[18px] rounded-full
+                                       flex items-center justify-center
                                        ${reaction ? "bg-green-500" : "bg-red-400"}`}>
-                        {reaction
-                          ? <FilledHeart size={10} className="text-white" />
-                          : <BrokenHeart size={10} strokeWidth={2} className="text-white" />
-                        }
+                        <span
+                          className="absolute left-1/2 top-1/2 w-[10px] h-[10px] flex items-center justify-center -translate-x-1/2 -translate-y-[calc(50%-1px)]"
+                        >
+                          {reaction
+                            ? <FilledHeart size={10} className="block text-white" />
+                            : <BrokenHeart size={10} strokeWidth={2} className="block text-white" />
+                          }
+                        </span>
                       </div>
                     )}
                   </motion.button>

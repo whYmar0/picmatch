@@ -9,7 +9,7 @@
 import { useRef, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LogOut, LayoutDashboard, Camera, Bell, MessageSquare, BarChart2, Sun, Moon, Languages, AtSign } from "lucide-react";
+import { LogOut, LayoutDashboard, Camera, Bell, MessageSquare, BarChart2, UserRound, Sun, Moon, Languages, AtSign } from "lucide-react";
 import FilledHeart from "./FilledHeart";
 import topBarHeartIcon from "../../Screenshot_20260820_120332_Instagram.png";
 import { useTheme } from "../contexts/ThemeContext";
@@ -18,6 +18,9 @@ import { useLang } from "../contexts/LangContext";
 import { authApi, notificationsApi } from "../api";
 import toast from "react-hot-toast";
 import AvatarCropModal from "./AvatarCropModal";
+
+// Set to false after visually checking the notification bubble animation.
+const DEBUG_NOTIFICATION_TOAST_LOOP = true;
 
 // ─── Avatar color map ─────────────────────────────────────────────────────────
 const AVATAR_COLORS = {
@@ -78,6 +81,7 @@ export default function Navbar() {
 
   useEffect(() => {
     let intervalId;
+    let toastTimeoutId;
     if (user) {
       const fetchNotifs = () => {
         notificationsApi.getMine().then((data) => {
@@ -88,10 +92,10 @@ export default function Navbar() {
           // Only show toast if we have new unread notifications that haven't been shown
           const lastSeenId = sessionStorage.getItem("notif_toast_last_id");
 
-          if (latestId && lastSeenId !== latestId) {
+          if (!DEBUG_NOTIFICATION_TOAST_LOOP && latestId && lastSeenId !== latestId) {
             setShowNotifToast(true);
             sessionStorage.setItem("notif_toast_last_id", latestId);
-            setTimeout(() => setShowNotifToast(false), 5000);
+            toastTimeoutId = setTimeout(() => setShowNotifToast(false), 5000);
           }
         }).catch(console.error);
       };
@@ -102,6 +106,24 @@ export default function Navbar() {
     }
     return () => {
       if (intervalId) clearInterval(intervalId);
+      if (toastTimeoutId) clearTimeout(toastTimeoutId);
+    };
+  }, [user]);
+
+  // Debug-only loop: remount the toast so its entrance and deflate phases replay.
+  useEffect(() => {
+    if (!user || !DEBUG_NOTIFICATION_TOAST_LOOP) return undefined;
+
+    let restartTimeoutId;
+    const loopIntervalId = setInterval(() => {
+      setShowNotifToast(false);
+      restartTimeoutId = setTimeout(() => setShowNotifToast(true), 80);
+    }, 5600);
+
+    setShowNotifToast(true);
+    return () => {
+      clearInterval(loopIntervalId);
+      if (restartTimeoutId) clearTimeout(restartTimeoutId);
     };
   }, [user]);
 
@@ -224,45 +246,59 @@ export default function Navbar() {
 
                 {/* Mini notification bubble (TikTok/Instagram style) */}
                 <AnimatePresence>
-                  {showNotifToast && unreadNotifs.length > 0 && (
-                    <motion.div
-                      style={{ originY: 0, originX: 0.8 }}
-                      initial={{ opacity: 0, scale: 0 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0 }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 500,
-                        damping: 15,
-                        mass: 0.5
-                      }}
-                      className="absolute top-full right-0 mt-2 flex flex-col items-end z-50 pointer-events-none"
-                    >
-                      {/* Triangle Pointer */}
-                      <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-[#ef4444] mr-3" />
+                  {showNotifToast && (unreadNotifs.length > 0 || DEBUG_NOTIFICATION_TOAST_LOOP) && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-[128px] pointer-events-none">
+                      <motion.div
+                        style={{ transformOrigin: "64px 13.8px" }}
+                        initial={{ opacity: 1, scale: 0.08 }}
+                        animate={{
+                          opacity: 1,
+                          scale: [0.08, 1.08, 1, 1, 0.08],
+                        }}
+                        exit={{
+                          opacity: 1,
+                          scale: 0.08,
+                          transition: { duration: 0.08, ease: "easeIn" },
+                        }}
+                        transition={{
+                          duration: 5,
+                          times: [0, 0.16, 0.28, 0.82, 1],
+                          ease: ["easeOut", "easeOut", "linear", "easeIn", "easeIn"],
+                        }}
+                        className="relative w-[128px] origin-top pointer-events-none"
+                      >
+                        {/* Rounded half-diamond tail at the top-right of the tablet */}
+                        <div className="absolute top-[-6px] left-[50px] w-7 h-7 rounded-[15%] rotate-45 bg-[#ef4444]" />
 
-                      {/* Bubble Content */}
-                      <div className="bg-[#ef4444] rounded-2xl py-2 px-4 flex items-center shadow-2xl gap-4 text-white">
+                        {/* Bubble Content */}
+                        <div className="absolute top-0 left-0 z-10 w-[96px] h-[50px] bg-[#ef4444] rounded-full py-2.5 px-3 flex items-center justify-center shadow-2xl gap-2.5 text-white">
                         {repliesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <MessageSquare size={18} fill="white" className="text-white" />
-                            <span className="font-bold text-[16px] leading-none mb-[1px]">{repliesCount}</span>
+                            <MessageSquare size={13} fill="white" className="text-white" />
+                            <span className="font-bold text-[12px] leading-none mb-[1px]">{repliesCount}</span>
                           </div>
                         )}
                         {likesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <FilledHeart size={18} className="text-white" />
-                            <span className="font-bold text-[16px] leading-none mb-[1px]">{likesCount}</span>
+                            <FilledHeart size={13} className="text-white" />
+                            <span className="font-bold text-[12px] leading-none mb-[1px]">{likesCount}</span>
                           </div>
                         )}
                         {votesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <BarChart2 size={18} fill="white" className="text-white" />
-                            <span className="font-bold text-[16px] leading-none mb-[1px]">{votesCount}</span>
+                            <BarChart2 size={13} fill="white" className="text-white" />
+                            <span className="font-bold text-[12px] leading-none mb-[1px]">{votesCount}</span>
+                          </div>
+                        )}
+                        {DEBUG_NOTIFICATION_TOAST_LOOP && unreadNotifs.length === 0 && (
+                          <div className="flex items-center gap-2">
+                            <UserRound size={14} strokeWidth={2.5} className="text-white" />
+                            <span className="font-bold text-[14px] leading-none">1</span>
                           </div>
                         )}
                       </div>
-                    </motion.div>
+                      </motion.div>
+                    </div>
                   )}
                 </AnimatePresence>
               </div>
