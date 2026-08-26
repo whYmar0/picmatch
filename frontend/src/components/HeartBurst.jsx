@@ -15,9 +15,25 @@ const HEART_PATH =
   "C38 10 47 15 50 24 C53 15 62 10 70 10 " +
   "C84 10 94 20 94 34 C94 54 72 72 50 88 Z";
 
+const GRADIENTS = [
+  {
+    stops: ["#FF7A00", "#FF1493", "#B000FF"],
+    glow: "rgba(255, 55, 145, 0.32)",
+  },
+  {
+    stops: ["#7C3AED", "#EC4899"],
+    glow: "rgba(190, 76, 220, 0.32)",
+  },
+  {
+    stops: ["#22C55E", "#FDE047"],
+    glow: "rgba(111, 220, 67, 0.3)",
+  },
+];
+
 function HeartBurst({ x, y, onComplete }) {
   const completedRef = useRef(false);
   const gradientId = useRef(`heart-gradient-${Math.random().toString(36).slice(2, 8)}`).current;
+  const gradient = useRef(GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)]).current;
 
   const handleComplete = useCallback(() => {
     if (completedRef.current) return;
@@ -99,7 +115,7 @@ function HeartBurst({ x, y, onComplete }) {
           style={{
             transformOrigin: "50% 50%",
             // Static, low-cost glow; the filter itself is never animated.
-            filter: "drop-shadow(0 4px 10px rgba(255, 55, 145, 0.32))",
+            filter: `drop-shadow(0 4px 10px ${gradient.glow})`,
             willChange: "transform",
           }}
         >
@@ -111,9 +127,14 @@ function HeartBurst({ x, y, onComplete }) {
               x2="100%"
               y2="100%"
             >
-              <stop offset="0%" stopColor="#FF7A00" />
-              <stop offset="55%" stopColor="#FF1493" />
-              <stop offset="100%" stopColor="#B000FF" />
+              <stop offset="0%" stopColor={gradient.stops[0]} />
+              {gradient.stops.length === 3 && (
+                <stop offset="55%" stopColor={gradient.stops[1]} />
+              )}
+              <stop
+                offset="100%"
+                stopColor={gradient.stops[gradient.stops.length - 1]}
+              />
             </linearGradient>
           </defs>
           <path d={HEART_PATH} fill={`url(#${gradientId})`} />
