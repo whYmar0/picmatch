@@ -187,11 +187,10 @@ export default function VotePage() {
   }, [currentPhotoId, allPhotos]);
 
   // ── Vote handler ────────────────────────────────────────────────────────────
-  const handleSwipe = useCallback(async (photoId, isLike) => {
+  const handleSwipe = useCallback((photoId, isLike) => {
     if (votingRef.current) return;
     votingRef.current = true;
     setVoting(true);
-
     const safetyTimer = setTimeout(() => {
       votingRef.current = false;
       setVoting(false);
@@ -202,23 +201,25 @@ export default function VotePage() {
     votesMapRef.current = newMap;
     setVotesMap(newMap);
 
-    try { await votesApi.castVote(photoId, isLike); }
-    catch (err) {
-      if (!err.message?.includes("timeout")) toast.error(err.message, { duration: 2000 });
-    }
-
+    // Advance immediately. The API request runs in the background so neither
+    // network latency nor the button path delays the next card.
     const photos = allPhotosRef.current;
     const curIdx = photos.findIndex((p) => String(p.id) === pid);
     const nextUnvoted =
       photos.slice(curIdx + 1).find((p) => !(String(p.id) in newMap)) ||
       photos.find((p) => !(String(p.id) in newMap));
 
-    clearTimeout(safetyTimer);
-    votingRef.current = false;
-    setVoting(false);
-
     if (nextUnvoted) setCurrentPhotoId(String(nextUnvoted.id));
     else setFinished(true);
+    votesApi.castVote(photoId, isLike)
+      .catch((err) => {
+        if (!err.message?.includes("timeout")) toast.error(err.message, { duration: 2000 });
+      })
+      .finally(() => {
+        clearTimeout(safetyTimer);
+        votingRef.current = false;
+        setVoting(false);
+      });
   }, []);
 
   // ── Thumbnail jump ──────────────────────────────────────────────────────────
@@ -232,12 +233,8 @@ export default function VotePage() {
   // ── Button trigger ──────────────────────────────────────────────────────────
   const triggerSwipe = useCallback((isLike) => {
     if (votingRef.current) return;
-    if (topCardRef.current?.swipeTo) {
-      topCardRef.current.swipeTo(isLike);
-    } else {
-      const photo = allPhotosRef.current.find((p) => String(p.id) === currentPhotoId);
-      if (photo) handleSwipe(photo.id, isLike);
-    }
+    const photo = allPhotosRef.current.find((p) => String(p.id) === currentPhotoId);
+    if (photo) handleSwipe(photo.id, isLike);
   }, [currentPhotoId, handleSwipe]);
 
   // ── Heart burst ─────────────────────────────────────────────────────────────
