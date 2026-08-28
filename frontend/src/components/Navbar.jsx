@@ -9,7 +9,7 @@
 import { useRef, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LogOut, LayoutDashboard, Camera, Bell, MessageCircle, BarChart2, UserRound, Sun, Moon, Languages, AtSign } from "lucide-react";
+import { LogOut, LayoutDashboard, Camera, Bell, MessageCircle, BarChart2, Sun, Moon, Languages, AtSign } from "lucide-react";
 import FilledHeart from "./FilledHeart";
 import topBarHeartIcon from "../../Screenshot_20260820_120332_Instagram.png";
 import { useTheme } from "../contexts/ThemeContext";
@@ -18,9 +18,6 @@ import { useLang } from "../contexts/LangContext";
 import { authApi, notificationsApi } from "../api";
 import toast from "react-hot-toast";
 import AvatarCropModal from "./AvatarCropModal";
-
-// Set to false after visually checking the notification bubble animation.
-const DEBUG_NOTIFICATION_TOAST_LOOP = true;
 
 // ─── Avatar color map ─────────────────────────────────────────────────────────
 const AVATAR_COLORS = {
@@ -90,11 +87,8 @@ export default function Navbar() {
           const latestId = unread.length > 0 ? unread[0].id : null;
 
           // Only show toast if we have new unread notifications that haven't been shown
-          const lastSeenId = sessionStorage.getItem("notif_toast_last_id");
-
-          if (!DEBUG_NOTIFICATION_TOAST_LOOP && latestId && lastSeenId !== latestId) {
+          if (latestId) {
             setShowNotifToast(true);
-            sessionStorage.setItem("notif_toast_last_id", latestId);
             toastTimeoutId = setTimeout(() => setShowNotifToast(false), 5000);
           }
         }).catch(console.error);
@@ -110,26 +104,9 @@ export default function Navbar() {
     };
   }, [user]);
 
-  // Debug-only loop: remount the toast so its entrance and deflate phases replay.
-  useEffect(() => {
-    if (!user || !DEBUG_NOTIFICATION_TOAST_LOOP) return undefined;
-
-    let restartTimeoutId;
-    const loopIntervalId = setInterval(() => {
-      setShowNotifToast(false);
-      restartTimeoutId = setTimeout(() => setShowNotifToast(true), 80);
-    }, 5600);
-
-    setShowNotifToast(true);
-    return () => {
-      clearInterval(loopIntervalId);
-      if (restartTimeoutId) clearTimeout(restartTimeoutId);
-    };
-  }, [user]);
-
   const unreadNotifs = notifications.filter(n => !n.is_read);
-  const repliesCount = unreadNotifs.filter(n => n.type === "reply" || n.type === "comment").length;
-  const likesCount = unreadNotifs.filter(n => n.type === "like").length;
+  const repliesCount = unreadNotifs.filter(n => n.type === "reply").length;
+  const commentsCount = unreadNotifs.filter(n => n.type === "comment").length;
   const votesCount = unreadNotifs.filter(n => n.type === "vote").length;
 
   // Close menu on outside click
@@ -246,7 +223,7 @@ export default function Navbar() {
 
                 {/* Mini notification bubble (TikTok/Instagram style) */}
                 <AnimatePresence>
-                  {showNotifToast && (unreadNotifs.length > 0 || DEBUG_NOTIFICATION_TOAST_LOOP) && (
+                  {showNotifToast && unreadNotifs.length > 0 && (
                     <div className="absolute top-full left-1/2 -translate-x-1/2 mt-0 z-50 w-[120px] pointer-events-none">
                       <motion.div
                         style={{ transformOrigin: "60px -5.5px" }}
@@ -274,28 +251,23 @@ export default function Navbar() {
                         <div className="absolute top-0 right-[40px] z-10 w-max h-[46px] bg-[#ef4444] rounded-full py-2 px-3 overflow-hidden flex items-center justify-center shadow-2xl gap-2.5 text-white">
                         {repliesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <MessageCircle size={16} fill="white" className="text-white" />
-                            <span className="font-bold text-[14px] leading-none mb-[1px]" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" }}>{repliesCount}</span>
+                            <AtSign size={16} strokeWidth={3} className="text-white" />
+                            <span className="font-bold text-[14px] leading-none mb-[1px]" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" }}>{repliesCount > 999 ? "999+" : repliesCount}</span>
                           </div>
                         )}
-                        {likesCount > 0 && (
+                        {commentsCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <FilledHeart size={16} className="text-white" />
-                            <span className="font-bold text-[14px] leading-none mb-[1px]" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" }}>{likesCount}</span>
+                            <MessageCircle size={16} fill="white" className="text-white" />
+                            <span className="font-bold text-[14px] leading-none mb-[1px]" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" }}>{commentsCount > 999 ? "999+" : commentsCount}</span>
                           </div>
                         )}
                         {votesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <BarChart2 size={16} fill="white" className="text-white" />
+                            <BarChart2 size={17} strokeWidth={3} className="text-white" />
                             <span className="font-bold text-[14px] leading-none mb-[1px]" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" }}>{votesCount}</span>
                           </div>
                         )}
-                        {DEBUG_NOTIFICATION_TOAST_LOOP && unreadNotifs.length === 0 && (
-                          <div className="flex items-center gap-2">
-                            <UserRound size={18} strokeWidth={2.5} className="text-white" />
-                            <span className="font-bold text-[16px] leading-none" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" }}>1</span>
-                          </div>
-                        )}
+
                       </div>
                       </motion.div>
                     </div>

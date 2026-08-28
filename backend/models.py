@@ -219,7 +219,6 @@ class CommentLike(Base):
 
 class NotificationType(str, enum.Enum):
     REPLY   = "reply"   # someone replied to my comment
-    LIKE    = "like"    # someone liked my comment
     VOTE    = "vote"    # someone voted on my album
     COMMENT = "comment" # someone commented on my album
 

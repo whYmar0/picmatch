@@ -4,8 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import { UserAvatar } from "../components/Navbar";
 import { isVideoUrl } from "../utils/media";
-import { Bell, MessageSquare, BarChart2, CheckCircle, ChevronLeft } from "lucide-react";
-import FilledHeart from "../components/FilledHeart";
+import { Bell, MessageSquare, BarChart2, CheckCircle, ChevronLeft, AtSign, MessageCircle } from "lucide-react";
 import { formatDistanceToNow, isToday, isYesterday, differenceInDays } from "date-fns";
 import { ru, enUS } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
@@ -61,9 +60,8 @@ export default function Notifications() {
 
   const getIcon = (type) => {
     switch(type) {
-      case "reply":   return <MessageSquare size={12} fill="white" className="text-white" />;
-      case "comment": return <MessageSquare size={12} fill="white" className="text-white" />;
-      case "like":    return <FilledHeart size={12} className="text-white" />;
+      case "reply":   return <AtSign size={12} strokeWidth={3} className="text-white" />;
+      case "comment": return <MessageCircle size={12} fill="white" className="text-white" />;
       case "vote":    return <BarChart2 size={12} fill="white" className="text-white" />;
       default:        return <Bell size={12} className="text-white" />;
     }
@@ -73,7 +71,6 @@ export default function Notifications() {
     switch(type) {
       case "reply":   return "bg-blue-500";
       case "comment": return "bg-primary-500";
-      case "like":    return "bg-pink-500";
       case "vote":    return "bg-green-500";
       default:        return "bg-gray-500";
     }
@@ -91,7 +88,6 @@ export default function Notifications() {
     switch(n.type) {
       case "reply":   return <>{nameSpan} {t("notifRepliedComment")}{textPreview}</>;
       case "comment": return <>{nameSpan} {t("notifCommentPhoto")}{textPreview}</>;
-      case "like":    return <>{nameSpan} {t("notifLikedComment")}</>;
       case "vote":    return <>{nameSpan} {t("notifVotedAlbum")}</>;
       default:        return <>{t("newNotification")}</>;
     }
@@ -105,7 +101,7 @@ export default function Notifications() {
     //              (works even on private albums - AnalyticsPage handles the 403 case)
     // vote       → album analytics
     const handleClick = () => {
-      const isCommentRelated = n.type === "reply" || n.type === "like" || n.type === "comment";
+      const isCommentRelated = n.type === "reply" || n.type === "comment";
       if (isCommentRelated && n.album_id && n.photo_id) {
         const params = new URLSearchParams({ photo: n.photo_id, tab: "comments" });
         if (n.comment_id) params.set("comment", n.comment_id);
@@ -178,7 +174,7 @@ export default function Notifications() {
         <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2 px-1">
           {title}
         </h3>
-        <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+        <div>
           {items.map(item => <NotificationItem key={item.id} n={item} />)}
         </div>
       </div>

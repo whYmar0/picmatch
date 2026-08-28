@@ -302,11 +302,18 @@ async def create_comment(
         if not has_access:
             raise HTTPException(403, detail="Access denied. This album is private.")
 
-    # Verify parent exists if given
+    # Verify parent exists and belongs to the same photo. This prevents replies
+    # from being attached to a comment belonging to another photo.
+    parent = None
     if body.parent_id:
-        parent_result = await db.execute(select(Comment).where(Comment.id == _s(body.parent_id)))
-        if not parent_result.scalar_one_or_none():
+        parent_result = await db.execute(
+            select(Comment).where(Comment.id == _s(body.parent_id))
+        )
+        parent = parent_result.scalar_one_or_none()
+        if not parent:
             raise HTTPException(404, detail="Parent comment not found")
+        if _s(parent.photo_id) != _s(photo_obj.id):
+            raise HTTPException(400, detail="Parent comment belongs to another photo")
 
     comment = Comment(
         photo_id=_s(body.photo_id),
@@ -329,8 +336,6 @@ async def create_comment(
     try:
         if body.parent_id:
             # It's a reply: notify parent comment author
-            parent_result = await db.execute(select(Comment).where(Comment.id == _s(body.parent_id)))
-            parent = parent_result.scalar_one_or_none()
             parent_uid = _s(parent.user_id) if parent else None
 
             if parent and parent_uid != uid:
@@ -340,22 +345,22 @@ async def create_comment(
                     type=NotificationType.REPLY,
                     album_id=_s(album.id),
                     photo_id=_s(body.photo_id),
-                    comment_id=_s(body.parent_id),
+                    comment_id=new_comment_id,
                     text=comment.text[:100],
                 ))
 
-            # Always notify album owner if guest replies (no double notify)
-            if album_creator_id and album_creator_id != uid:
-                if not parent or _s(parent.user_id) != album_creator_id:
-                    db.add(Notification(
-                        user_id=album_creator_id,
-                        actor_id=uid,
-                        type=NotificationType.COMMENT,
-                        album_id=_s(album.id),
-                        photo_id=_s(body.photo_id),
-                        comment_id=new_comment_id,
-                        text=comment.text[:100],
-                    ))
+            # Notify the album owner about the reply only when the owner is
+            # not already the parent-comment recipient. It remains a reply.
+            if album_creator_id and album_creator_id != uid and parent_uid != album_creator_id:
+                db.add(Notification(
+                    user_id=album_creator_id,
+                    actor_id=uid,
+                    type=NotificationType.REPLY,
+                    album_id=_s(album.id),
+                    photo_id=_s(body.photo_id),
+                    comment_id=new_comment_id,
+                    text=comment.text[:100],
+                ))
         else:
             # Top-level comment: notify album owner
             if album_creator_id and album_creator_id != uid:
@@ -451,21 +456,5 @@ async def toggle_like(
         comment_obj = res.scalar_one()
         db.add(CommentLike(comment_id=comment_id, user_id=_s(current_user.id)))
         
-        # Notification
-        if _s(comment_obj.user_id) != _s(current_user.id):
-            # Get album_id through the photo relationship
-            photo_ctx = await db.execute(select(Photo).where(Photo.id == _s(comment_obj.photo_id)))
-            p_obj = photo_ctx.scalar_one_or_none()
-            
-            notif = Notification(
-                user_id=_s(comment_obj.user_id),
-                actor_id=_s(current_user.id),
-                type=NotificationType.LIKE,
-                album_id=_s(p_obj.album_id) if p_obj else None,
-                photo_id=_s(comment_obj.photo_id),
-                comment_id=comment_id,
-            )
-            db.add(notif)
-            
         await db.commit()
         return MessageResponse(message="liked")

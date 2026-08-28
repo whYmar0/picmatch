@@ -240,7 +240,6 @@ class CommentLikeOut(BaseModel):
 
 class NotificationType(str, enum.Enum):
     REPLY   = "reply"
-    LIKE    = "like"
     VOTE    = "vote"
     COMMENT = "comment"
 
