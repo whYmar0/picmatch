@@ -307,7 +307,9 @@ async def create_comment(
     parent = None
     if body.parent_id:
         parent_result = await db.execute(
-            select(Comment).where(Comment.id == _s(body.parent_id))
+            select(Comment)
+            .options(selectinload(Comment.author))
+            .where(Comment.id == _s(body.parent_id))
         )
         parent = parent_result.scalar_one_or_none()
         if not parent:
@@ -332,47 +334,48 @@ async def create_comment(
     new_comment_created_at = comment.created_at
     new_comment_parent_id = comment.parent_id
 
-    # Create Notification
+    # Notify from the structural relationship, not from optional @mentions.
     try:
+        notifications_to_create = []
+
         if body.parent_id:
-            # It's a reply: notify parent comment author
-            parent_uid = _s(parent.user_id) if parent else None
-
-            if parent and parent_uid != uid:
-                db.add(Notification(
-                    user_id=parent_uid,
+            root_author_id = _s(parent.user_id) if parent else None
+            if root_author_id and root_author_id != uid:
+                notifications_to_create.append(Notification(
+                    user_id=root_author_id,
                     actor_id=uid,
                     type=NotificationType.REPLY,
-                    album_id=_s(album.id),
+                    album_id=_s(album.id) if album else None,
                     photo_id=_s(body.photo_id),
                     comment_id=new_comment_id,
-                    text=comment.text[:100],
+                    text=new_comment_text[:100],
                 ))
 
-            # Notify the album owner about the reply only when the owner is
-            # not already the parent-comment recipient. It remains a reply.
-            if album_creator_id and album_creator_id != uid and parent_uid != album_creator_id:
-                db.add(Notification(
-                    user_id=album_creator_id,
-                    actor_id=uid,
-                    type=NotificationType.REPLY,
-                    album_id=_s(album.id),
-                    photo_id=_s(body.photo_id),
-                    comment_id=new_comment_id,
-                    text=comment.text[:100],
-                ))
-        else:
-            # Top-level comment: notify album owner
-            if album_creator_id and album_creator_id != uid:
-                db.add(Notification(
+            if (album_creator_id
+                    and album_creator_id != uid
+                    and album_creator_id != root_author_id):
+                notifications_to_create.append(Notification(
                     user_id=album_creator_id,
                     actor_id=uid,
                     type=NotificationType.COMMENT,
-                    album_id=_s(album.id),
+                    album_id=_s(album.id) if album else None,
                     photo_id=_s(body.photo_id),
                     comment_id=new_comment_id,
-                    text=comment.text[:100],
+                    text=new_comment_text[:100],
                 ))
+        elif album_creator_id and album_creator_id != uid:
+            notifications_to_create.append(Notification(
+                user_id=album_creator_id,
+                actor_id=uid,
+                type=NotificationType.COMMENT,
+                album_id=_s(album.id) if album else None,
+                photo_id=_s(body.photo_id),
+                comment_id=new_comment_id,
+                text=new_comment_text[:100],
+            ))
+
+        for notification in notifications_to_create:
+            db.add(notification)
     except Exception:
         logger.exception("Failed to create notifications for comment %s", new_comment_id)
 

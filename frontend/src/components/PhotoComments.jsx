@@ -184,15 +184,17 @@ export function CommentInput({ photoId, replyTarget, onCancelReply, onCommentCre
     if (!text.trim()) return;
     setSubmitting(true);
     try {
+      // Always attach replies to the thread root, even when replying to a reply.
+      const rootId = replyTarget?.parent_id ?? replyTarget?.id ?? null;
       const created = await commentsApi.create({
         photo_id: photoId,
         text: text.trim(),
-        parent_id: replyTarget?.id ?? null,
+        parent_id: rootId,
       });
       setText("");
       if (onCancelReply) onCancelReply();
       if (created && onCommentCreated) {
-        onCommentCreated(created, replyTarget?.id ?? null);
+        onCommentCreated(created, rootId);
       }
     } catch (err) {
       toast.error(err?.message || "Failed to submit comment");
@@ -372,10 +374,11 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
     if (!text.trim()) return;
     setSubmitting(true);
     try {
+      // replyTo is normalized to the thread root by startReply.
       const created = await commentsApi.create({
         photo_id: photoId,
         text: text.trim(),
-        parent_id: replyTo?.id ?? null,
+        parent_id: replyTo?.parent_id ?? replyTo?.id ?? null,
       });
       setText("");
       setReplyTo(null);

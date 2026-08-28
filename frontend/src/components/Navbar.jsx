@@ -79,6 +79,8 @@ export default function Navbar() {
   useEffect(() => {
     let intervalId;
     let toastTimeoutId;
+    let initialToastTimeoutId;
+    let initialToastScheduled = false;
     if (user) {
       const fetchNotifs = () => {
         notificationsApi.getMine().then((data) => {
@@ -87,9 +89,12 @@ export default function Navbar() {
           const latestId = unread.length > 0 ? unread[0].id : null;
 
           // Only show toast if we have new unread notifications that haven't been shown
-          if (latestId) {
-            setShowNotifToast(true);
-            toastTimeoutId = setTimeout(() => setShowNotifToast(false), 5000);
+          if (latestId && !initialToastScheduled) {
+            initialToastScheduled = true;
+            initialToastTimeoutId = setTimeout(() => {
+              setShowNotifToast(true);
+              toastTimeoutId = setTimeout(() => setShowNotifToast(false), 5000);
+            }, 3000);
           }
         }).catch(console.error);
       };
@@ -100,6 +105,7 @@ export default function Navbar() {
     }
     return () => {
       if (intervalId) clearInterval(intervalId);
+      if (initialToastTimeoutId) clearTimeout(initialToastTimeoutId);
       if (toastTimeoutId) clearTimeout(toastTimeoutId);
     };
   }, [user]);
