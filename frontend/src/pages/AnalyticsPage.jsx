@@ -9,7 +9,7 @@
  * so the sheet animation runs with zero concurrent network activity → no stutter.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from "framer-motion";
 import { ChevronLeft, Lock } from "lucide-react";
@@ -18,12 +18,13 @@ import { albumsApi, commentsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
 import AlbumGallery from "../components/AlbumGallery";
 import PhotoComments from "../components/PhotoComments";
+import Dashboard from "./Dashboard";
 import { AnalyticsSkeleton } from "../components/Skeleton";
 import { isVideoUrl } from "../utils/media";
 import VideoPlayer from "../components/VideoPlayer";
 
 // ─── Locked comment overlay for private-album notification deep-link ──────────
-function LockedCommentSheet({ photoId, photoUrl, initialComments, onBack }) {
+function LockedCommentSheet({ photoId, photoUrl, initialComments, commentId, onBack }) {
   const { t } = useLang();
   const controls = useAnimation();
   const y = useMotionValue(0);
@@ -133,11 +134,12 @@ function LockedCommentSheet({ photoId, photoUrl, initialComments, onBack }) {
         </div>
 
         {/* Pre-loaded comments — no network call during animation */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 min-h-0">
+        <div data-comment-scroll="true" className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 min-h-0">
           <PhotoComments
             photoId={String(photoId)}
             albumCreatorId={null}
             initialComments={initialComments}
+            highlightCommentId={commentId}
           />
         </div>
       </motion.div>
@@ -158,6 +160,18 @@ export default function AnalyticsPage() {
   const [photoUrl, setPhotoUrl] = useState(null);
   const [threadComments, setThreadComments] = useState(null);
   const [photoId, setPhotoId] = useState(null);
+  // When the sheet/gallery is dismissed we reveal the Dashboard that is
+  // already mounted underneath (no route swap, no skeleton flash) and only
+  // rewrite the address bar to /dashboard.
+  const [dismissed, setDismissed] = useState(false);
+  const dismissedRef = useRef(false);
+
+  const dismissToDashboard = useCallback(() => {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
+    window.history.replaceState(window.history.state, "", "/dashboard");
+    setDismissed(true);
+  }, []);
 
   // URL params set when navigating from a notification
   const initialPhotoId = searchParams.get("photo");
@@ -284,37 +298,57 @@ export default function AnalyticsPage() {
 
   if (loading) return <AnalyticsSkeleton />;
 
-  if (privateMode) {
-    return (
-      <AnimatePresence>
+  const galleryAlbum = analytics
+    ? {
+        id: analytics.id,
+        title: analytics.title,
+        description: analytics.description,
+        creator: analytics.creator,
+        creator_id: analytics.creator_id,
+        is_public: analytics.is_public,
+        photos: analytics.photos || [],
+      }
+    : null;
+
+  const overlay = privateMode ? (
+    <AnimatePresence>
+      {!dismissed && (
         <LockedCommentSheet
           key="locked"
           photoId={photoId ?? initialPhotoId}
           photoUrl={photoUrl}
           initialComments={threadComments}
-          onBack={() => navigate("/dashboard")}
+          commentId={initialCommentId}
+          onBack={dismissToDashboard}
         />
-      </AnimatePresence>
-    );
-  }
-
-  const galleryAlbum = {
-    id: analytics.id,
-    title: analytics.title,
-    description: analytics.description,
-    creator: analytics.creator,
-    creator_id: analytics.creator_id,
-    is_public: analytics.is_public,
-    photos: analytics.photos || [],
-  };
+      )}
+    </AnimatePresence>
+  ) : (
+    <AnimatePresence>
+      {!dismissed && (
+        <AlbumGallery
+          key="gallery"
+          album={galleryAlbum}
+          startPhotoId={initialPhotoId}
+          initialAnalytics={analytics}
+          initialTab={initialTab}
+          initialCommentId={initialCommentId}
+          manageHistory={false}
+          onClose={dismissToDashboard}
+        />
+      )}
+    </AnimatePresence>
+  );
 
   return (
-    <AlbumGallery
-      album={galleryAlbum}
-      startPhotoId={initialPhotoId}
-      initialAnalytics={analytics}
-      initialTab={initialTab}
-      onClose={() => navigate("/dashboard")}
-    />
+    <>
+      {/* Dashboard mounted underneath the gallery/sheet so dismissing reveals
+          it instantly — fully loaded, no remount, no skeleton flash. Hidden
+          from assistive tech only while the overlay covers it. */}
+      <div className="contents" aria-hidden={dismissed ? undefined : "true"}>
+        <Dashboard />
+      </div>
+      <div className="fixed inset-0">{overlay}</div>
+    </>
   );
 }

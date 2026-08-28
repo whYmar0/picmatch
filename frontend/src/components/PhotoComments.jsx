@@ -8,6 +8,62 @@ import { CommentSkeleton } from "./Skeleton";
 import { UserAvatar } from "./Navbar";
 import { useLang } from "../contexts/LangContext";
 
+// Scrolls the notification's target comment into view and flashes a highlight
+// around it. Only scrolls the sheet's own scroll container (never the
+// page underneath), so the dashboard underlay keeps its position. Each target
+// is highlighted at most once per mount — a later comment reload (e.g. after
+// a delete) must not re-flash it.
+//
+// When `onHighlight` is provided (tabbed public sheet), the stripe is rendered
+// by the parent at the SHEET level (full sheet width, unclipped); here we only
+// report the row's position inside the scroll container. Without it (private
+// thread sheet), the stripe stays a ::before on the row itself.
+function useHighlightComment(comments, highlightCommentId, containerRef, onHighlight = null) {
+  const doneRef = useRef(new Set());
+  useEffect(() => {
+    if (!highlightCommentId || !comments?.length) return undefined;
+    if (doneRef.current.has(highlightCommentId)) return undefined;
+    const timers = [];
+    const timer = setTimeout(() => {
+      const root = containerRef.current;
+      if (!root) return;
+      // data-comment-id lives on the comment's own row (not on the block that
+      // also wraps its nested replies), so exactly ONE comment is highlighted.
+      const el = root.querySelector(`[data-comment-id="${highlightCommentId}"]`);
+      if (!el) return;
+      doneRef.current.add(highlightCommentId);
+      const content = root.closest("[data-bottom-sheet-content], [data-comment-scroll]");
+      if (content) {
+        const cRect = content.getBoundingClientRect();
+        const eRect = el.getBoundingClientRect();
+        content.scrollBy({ top: eRect.top - cRect.top - cRect.height / 2, behavior: "smooth" });
+        if (onHighlight) {
+          // Sheet-level stripe: report the row's offset within the scroll
+          // container; the parent positions a full-width bar at this spot.
+          onHighlight({ top: eRect.top - cRect.top, height: eRect.height, key: highlightCommentId });
+          timers.push(setTimeout(() => onHighlight(null), 2600));
+          return;
+        }
+        // Full-width stripe around exactly this row: measure the gaps to the
+        // sheet edges so the bar spans edge-to-edge regardless of the reply
+        // indent or the sheet padding.
+        el.style.setProperty("--hl-left", `${eRect.left - cRect.left}px`);
+        el.style.setProperty("--hl-right", `${cRect.right - eRect.right}px`);
+      } else {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+      el.classList.add("comment-highlight");
+      timers.push(setTimeout(() => {
+        el.classList.remove("comment-highlight");
+        el.style.removeProperty("--hl-left");
+        el.style.removeProperty("--hl-right");
+      }, 2600));
+    }, 550);
+    timers.push(timer);
+    return () => timers.forEach(clearTimeout);
+  }, [comments, highlightCommentId, containerRef, onHighlight]);
+}
+
 // ─── Single comment row ───────────────────────────────────────────────────────
 function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = false, rootComment = null }) {
   const { user } = useAuth();
@@ -37,7 +93,7 @@ function CommentItem({ comment, onDelete, onReply, depth = 0, isAlbumOwner = fal
       exit={{ opacity: 0, height: 0 }}
       className={depth > 0 ? "ml-[38px] mt-3" : "mt-4 first:mt-2"}
     >
-      <div className="flex items-start gap-2.5">
+      <div data-comment-id={comment.id} className="flex items-start gap-2.5">
         <UserAvatar user={comment.author} size={32} className="mt-0.5 flex-shrink-0" />
 
         <div className="flex-1 min-w-0">
@@ -181,12 +237,14 @@ export function CommentInput({ photoId, replyTarget, onCancelReply, onCommentCre
 }
 
 // ─── Comments list only (for scrollable BottomSheet content) ──────────────────
-export function PhotoCommentsList({ photoId, initialComments, onReplyTrigger, apiRef, albumCreatorId }) {
+export function PhotoCommentsList({ photoId, initialComments, onReplyTrigger, apiRef, albumCreatorId, highlightCommentId = null, onHighlight = null }) {
   const { user } = useAuth();
   const { lang } = useLang();
   const isAlbumOwner = !!(user && albumCreatorId && String(user.id) === String(albumCreatorId));
   const [comments, setComments] = useState(() => initialComments ?? []);
   const [loading, setLoading] = useState(initialComments == null);
+  const listRef = useRef(null);
+  useHighlightComment(comments, highlightCommentId, listRef, onHighlight);
 
   const load = useCallback(() => {
     if (!photoId) return;
@@ -226,7 +284,7 @@ export function PhotoCommentsList({ photoId, initialComments, onReplyTrigger, ap
   if (loading) return <CommentSkeleton count={4} />;
 
   return (
-    <div className="flex-1">
+    <div ref={listRef} className="flex-1">
       {comments.length === 0
         ? <p className="text-center text-gray-400 text-sm py-6">
           {lang === "ru" ? "Комментариев пока нет. Будьте первым!" : "No comments yet. Be the first!"}
@@ -253,7 +311,7 @@ export function PhotoCommentsList({ photoId, initialComments, onReplyTrigger, ap
 }
 
 // ─── Full PhotoComments (backwards-compatible, list + input together) ──────────
-export default function PhotoComments({ photoId, albumCreatorId, initialComments = null }) {
+export default function PhotoComments({ photoId, albumCreatorId, initialComments = null, highlightCommentId = null }) {
   const { user } = useAuth();
   const { lang, t } = useLang();
   const isAlbumOwner = !!(user && albumCreatorId && String(user.id) === String(albumCreatorId));
@@ -263,6 +321,8 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
   const [replyTo, setReplyTo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef(null);
+  const rootRef = useRef(null);
+  useHighlightComment(comments, highlightCommentId, rootRef);
 
   const startReply = (targetComment, rootComment) => {
     setReplyTo({
@@ -340,7 +400,7 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
   if (loading) return <CommentSkeleton count={4} />;
 
   return (
-    <div className="flex flex-col flex-1 min-h-full">
+    <div ref={rootRef} className="flex flex-col flex-1 min-h-full">
       {comments.length === 0
         ? <p className="text-center text-gray-400 text-sm py-6">
           {lang === "ru" ? "Комментариев пока нет. Будьте первым!" : "No comments yet. Be the first!"}

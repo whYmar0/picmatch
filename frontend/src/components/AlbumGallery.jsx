@@ -633,6 +633,7 @@ export default function AlbumGallery({
   initialAnalytics = null,
   initialTab = "stats",
   manageHistory = true,
+  initialCommentId = null,
 }) {
   const { t } = useLang();
   const { user } = useAuth();
@@ -974,6 +975,27 @@ export default function AlbumGallery({
     setSortOpen(true);
   }, [pushHistoryLayer]);
 
+  // Arriving from a comment notification (?tab=comments&comment=...): open the
+  // primary sheet on the comments tab right after the gallery entrance, so the
+  // target comment is presented immediately instead of leaving the user staring
+  // at a bare photo. Deps are stable after mount (initialTab comes from the URL
+  // and openPrimarySheet is a memoized callback), so the effect fires exactly
+  // once per mount — the timer is safely cleared on unmount.
+  //
+  // The sheet opens FULLY expanded (sheetGestureY = 0): the comment list may
+  // be taller than the partial snap, and its lower part sits below the screen
+  // edge with no internal overflow to scroll into — a target comment down the
+  // thread would stay hidden. A full expansion guarantees the highlight lands
+  // on a visible comment.
+  useEffect(() => {
+    if (initialTab !== "comments") return undefined;
+    const timer = setTimeout(() => {
+      sheetGestureY.set(0);
+      openPrimarySheet();
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [initialTab, openPrimarySheet, sheetGestureY]);
+
   useEffect(() => {
     const handlePopState = (event) => {
       const pending = pendingHistoryBackRef.current;
@@ -1014,6 +1036,9 @@ export default function AlbumGallery({
   );
 
   const animateToTab = useCallback((nextTab) => {
+    // The highlight bar belongs to the comments panel; drop it when the user
+    // leaves the tab so it never lingers over the stats panel.
+    setHighlightBar(null);
     const width = tabViewportRef.current?.clientWidth || tabWidthRef.current;
     if (!canViewStats) {
       tabCommittedRef.current = "comments";
@@ -1102,13 +1127,28 @@ export default function AlbumGallery({
 
   useEffect(() => {
     const width = tabViewportRef.current?.clientWidth || tabWidthRef.current;
-    if (!width || tabGestureActiveRef.current) return;
+    if (!width) return;
+    tabWidthRef.current = width;
+    // Without stats access there is no two-panel track — the comments list
+    // is the single w-full panel and must stay at x=0. Translating it by
+    // -width would push the whole list off-screen (blank comments tab), so
+    // never touch the track in that layout.
+    if (!canViewStats) {
+      tabTrackX.set(0);
+      return;
+    }
+    if (tabGestureActiveRef.current) return;
     // React tab state and the compositor track must never diverge after a
     // click or completed gesture. During a release animation the animation
     // callback is authoritative; do not cancel it from this effect.
     if (tabAnimationRef.current) return;
     tabTrackX.set(tabCommittedRef.current === "comments" ? -width : 0);
-  }, [sheetTab, tabTrackX]);
+    // The BottomSheet content only mounts once the sheet is open, so the
+    // viewport width is unavailable on gallery mount. Re-run whenever the
+    // sheet opens/closes so a deep-linked tab (e.g. ?tab=comments from a
+    // notification) is positioned on first open instead of showing the
+    // first panel while the header claims the second is active.
+  }, [sheetTab, sheetExpanded, canViewStats, tabTrackX]);
 
   const handleSheetSwipeStart = useCallback(() => {
     if (sheetExpanded || sheetGestureActive) return;
@@ -1647,6 +1687,11 @@ export default function AlbumGallery({
 
   // ── Comment state for split layout (list in scrollable area, input in footer) ──
   const [replyTarget, setReplyTarget] = useState(null);
+  // Full-width highlight bar for the notification's target comment. Rendered at
+  // the SHEET level (not inside the clipped tab viewport) so it can span the
+  // whole sheet width while the comment content itself stays within the gutters.
+  const [highlightBar, setHighlightBar] = useState(null);
+  const handleHighlight = useCallback((bar) => setHighlightBar(bar), []);
   const replyTriggerRef = useRef({});
   // Wire replyTrigger so PhotoCommentsList can signal CommentInput to start a reply
   replyTriggerRef.current._onReply = (comment, root) => {
@@ -1669,6 +1714,8 @@ export default function AlbumGallery({
         onReplyTrigger={replyTriggerRef.current}
         apiRef={listApiRef}
         albumCreatorId={album.creator_id ? String(album.creator_id) : null}
+        highlightCommentId={initialCommentId}
+        onHighlight={handleHighlight}
       />
     );
   };
@@ -1948,6 +1995,18 @@ export default function AlbumGallery({
           )
         }
       >
+        {/* Sheet-level full-width highlight bar: sibling of the tab viewport,
+            anchored to the scrollable sheet content so it scrolls with the
+            comments, spans the full sheet width, and is never clipped by the
+            tab viewport (whose overflow:hidden box matches the padded content
+            area — keeping comment text/avatars inside the gutters). */}
+        {highlightBar && (
+          <div
+            key={highlightBar.key}
+            className="comment-highlight-bar"
+            style={{ top: highlightBar.top, height: highlightBar.height }}
+          />
+        )}
         <div ref={tabViewportRef} className="overflow-hidden w-full min-h-full">
           <motion.div
             data-testid="stats-comments-tab-track"
@@ -1970,7 +2029,7 @@ export default function AlbumGallery({
                 />
               </div>
             )}
-            <div className={canViewStats ? "w-1/2 flex-shrink-0 min-h-full" : "w-full min-h-full"}>
+            <div className={`${canViewStats ? "w-1/2 flex-shrink-0" : "w-full"} min-h-full`}>
               {renderComments()}
             </div>
           </motion.div>

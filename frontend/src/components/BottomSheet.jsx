@@ -649,7 +649,7 @@ export default function BottomSheet({
 
             {/* Scrollable content */}
             <div
-              className={`flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 ${footer
+              className={`flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-5 relative ${footer
                 ? "pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+6rem)]"
                 : "pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+4rem)]"}`}
               style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}

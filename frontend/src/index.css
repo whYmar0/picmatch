@@ -276,6 +276,54 @@ button,
   animation: crownBounce 1.5s ease-in-out infinite;
 }
 
+/* ─── Comment highlight flash (notification deep-link) ────────────────────────
+ * A single full-width stripe over the notification's comment row. The stripe is
+ * a ::before bar whose horizontal reach is driven by --hl-left/--hl-right
+ * (measured in JS against the sheet edges), so it always spans the sheet edge
+ * to edge around exactly one comment — even for indented replies. z-index -1
+ * keeps it behind the comment text. */
+@keyframes commentHighlight {
+  0% {
+    background-color: rgba(153, 102, 204, 0.24);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.comment-highlight {
+  position: relative;
+}
+
+.comment-highlight::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: calc(-1 * var(--hl-left, 16px));
+  right: calc(-1 * var(--hl-right, 16px));
+  z-index: -1;
+  background-color: rgba(153, 102, 204, 0.24);
+  animation: commentHighlight 2.4s ease-out forwards;
+  pointer-events: none;
+}
+
+/* Full-width highlight bar (tabbed public sheet): rendered by AlbumGallery at
+ * the SHEET level — a sibling of the tab viewport, anchored to the scrollable
+ * sheet content (position: relative) so it scrolls with the comments and spans
+ * the entire sheet width. Unlike a ::before on the row it is not clipped by
+ * the tab viewport, so it can reach the sheet edges while the comment rows
+ * themselves stay inside the gutters. z-index -1 keeps it behind the text. */
+.comment-highlight-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: -1;
+  background-color: rgba(153, 102, 204, 0.24);
+  animation: commentHighlight 2.4s ease-out forwards;
+  pointer-events: none;
+}
+
 /* ─── Animations ─────────────────────────────────────────────────────────────── */
 @keyframes fadeUp {
   from {
