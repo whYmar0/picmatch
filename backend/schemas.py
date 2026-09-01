@@ -208,6 +208,7 @@ class CommentCreate(BaseModel):
     photo_id:  AnyUUID
     text:      str = Field(..., min_length=1, max_length=2000)
     parent_id: Optional[AnyUUID] = None
+    reply_to_id: Optional[AnyUUID] = None
 
 class CommentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

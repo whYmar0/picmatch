@@ -302,9 +302,9 @@ async def create_comment(
         if not has_access:
             raise HTTPException(403, detail="Access denied. This album is private.")
 
-    # Verify parent exists and belongs to the same photo. This prevents replies
-    # from being attached to a comment belonging to another photo.
+    # Validate the thread root and the exact comment being addressed.
     parent = None
+    reply_target = None
     if body.parent_id:
         parent_result = await db.execute(
             select(Comment)
@@ -316,6 +316,19 @@ async def create_comment(
             raise HTTPException(404, detail="Parent comment not found")
         if _s(parent.photo_id) != _s(photo_obj.id):
             raise HTTPException(400, detail="Parent comment belongs to another photo")
+
+        if body.reply_to_id:
+            target_result = await db.execute(
+                select(Comment)
+                .options(selectinload(Comment.author))
+                .where(Comment.id == _s(body.reply_to_id))
+            )
+            reply_target = target_result.scalar_one_or_none()
+            if not reply_target or _s(reply_target.photo_id) != _s(photo_obj.id):
+                raise HTTPException(400, detail="Reply target is invalid")
+            target_root_id = _s(reply_target.parent_id) if reply_target.parent_id else _s(reply_target.id)
+            if target_root_id != _s(parent.id):
+                raise HTTPException(400, detail="Reply target belongs to another thread")
 
     comment = Comment(
         photo_id=_s(body.photo_id),
@@ -339,10 +352,12 @@ async def create_comment(
         notifications_to_create = []
 
         if body.parent_id:
-            root_author_id = _s(parent.user_id) if parent else None
-            if root_author_id and root_author_id != uid:
+            # Notify the exact addressed author only when this is a genuine reply.
+            target_author_id = _s(reply_target.user_id) if reply_target else _s(parent.user_id)
+            is_reply = target_author_id != uid
+            if is_reply:
                 notifications_to_create.append(Notification(
-                    user_id=root_author_id,
+                    user_id=target_author_id,
                     actor_id=uid,
                     type=NotificationType.REPLY,
                     album_id=_s(album.id) if album else None,
@@ -351,9 +366,11 @@ async def create_comment(
                     text=new_comment_text[:100],
                 ))
 
+            # The album owner is notified for every comment/reply, unless already
+            # notified as the addressed recipient or they are the actor.
             if (album_creator_id
                     and album_creator_id != uid
-                    and album_creator_id != root_author_id):
+                    and album_creator_id != target_author_id):
                 notifications_to_create.append(Notification(
                     user_id=album_creator_id,
                     actor_id=uid,

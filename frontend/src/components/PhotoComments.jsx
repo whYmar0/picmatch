@@ -184,12 +184,13 @@ export function CommentInput({ photoId, replyTarget, onCancelReply, onCommentCre
     if (!text.trim()) return;
     setSubmitting(true);
     try {
-      // Always attach replies to the thread root, even when replying to a reply.
+      // Store the thread root while preserving the exact comment being addressed.
       const rootId = replyTarget?.parent_id ?? replyTarget?.id ?? null;
       const created = await commentsApi.create({
         photo_id: photoId,
         text: text.trim(),
         parent_id: rootId,
+        reply_to_id: replyTarget?.id ?? null,
       });
       setText("");
       if (onCancelReply) onCancelReply();
@@ -379,6 +380,7 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
         photo_id: photoId,
         text: text.trim(),
         parent_id: replyTo?.parent_id ?? replyTo?.id ?? null,
+        reply_to_id: replyTo?.id ?? null,
       });
       setText("");
       setReplyTo(null);
