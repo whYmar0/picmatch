@@ -11,7 +11,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { LogOut, LayoutDashboard, Camera, Bell, MessageCircle, BarChart2, Sun, Moon, Languages, AtSign } from "lucide-react";
 import FilledHeart from "./FilledHeart";
-import topBarHeartIcon from "../../Screenshot_20260820_120332_Instagram.png";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
@@ -215,16 +214,10 @@ export default function Navbar() {
                   onClick={() => navigate("/inbox")}
                   className="btn-ghost relative flex items-center justify-center w-11 h-11 rounded-2xl"
                 >
-                  <span className="relative flex items-center justify-center w-8 h-7">
-                    <img
-                      src={topBarHeartIcon}
-                      alt="Notifications"
-                      className="w-8 h-7 object-contain"
-                    />
-                    {unreadNotifs.length > 0 && (
-                      <span className="absolute top-1 right-0 w-[5.5px] h-[5.6px] aspect-square rounded-[50%] bg-[#ff1f46] outline outline-2 outline-card-light dark:outline-card-dark" />
-                    )}
-                  </span>
+                  <FilledHeart size={24} className="text-gray-900 dark:text-gray-100" />
+                  {unreadNotifs.length > 0 && (
+                    <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(255,255,255,1)] dark:shadow-[0_0_0_2px_rgba(30,41,59,1)]" />
+                  )}
                 </button>
 
                 {/* Mini notification bubble (TikTok/Instagram style) */}
@@ -325,9 +318,9 @@ export default function Navbar() {
                   <AnimatePresence>
                     {menuOpen && (
                       <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
                         transition={{ duration: 0.2, ease: "easeOut" }}
                         className="absolute top-full right-0 mt-2 w-48 bg-card-light dark:bg-card-dark 
                                    rounded-2xl shadow-xl border border-border-light dark:border-border-dark 
@@ -349,7 +342,7 @@ export default function Navbar() {
                                        hover:bg-primary-50 dark:hover:bg-primary-900/20 text-gray-700 dark:text-gray-200 transition-colors"
                           >
                             <Camera size={16} className="text-primary-400" />
-                            {user.avatar_url ? "Update Photo" : "Add Photo"}
+                            {user.avatar_url ? t("updatePhoto") : t("addPhoto")}
                           </button>
 
                           {user.avatar_url && (
@@ -361,7 +354,7 @@ export default function Navbar() {
                               <div className="w-4 h-4 flex items-center justify-center">
                                 <div className="w-3.5 h-0.5 bg-current rounded-full" />
                               </div>
-                              Remove Photo
+                              {t("removePhoto")}
                             </button>
                           )}
 

@@ -119,6 +119,7 @@ export default function RecentAlbumCard({ album, index, onOpen, onVote }) {
             <Globe size={9} /> {lang === "ru" ? "Открытый" : "Public"}
           </span>
         )}
+
       </div>
 
       {/* Info area (1/3) */}
@@ -134,12 +135,16 @@ export default function RecentAlbumCard({ album, index, onOpen, onVote }) {
           </span>
         </div>
 
-        {/* Single voting action — Vote / Re-vote */}
+
+        {/* Service action row — kept below the cover and aligned right. */}
         {canVote && onVote && (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-end mt-2">
             <button
               type="button"
-              onClick={() => onVote(voteUrl)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onVote(voteUrl);
+              }}
               className="flex items-center justify-center p-2.5 rounded-xl btn-rounded-square
                          bg-gray-100 dark:bg-gray-800
                          text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
