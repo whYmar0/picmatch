@@ -65,6 +65,17 @@ function createId() {
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function formatVideoDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "";
+  const totalSeconds = Math.floor(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`
+    : `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
 function CircularProgress({ progress, error }) {
   const radius = 17;
   const circumference = 2 * Math.PI * radius;
@@ -175,6 +186,7 @@ export default function CreateAlbum() {
           status: "uploading",
           uploadToken: null,
           error: null,
+          duration: null,
         },
       ]);
       void uploadFile(id, file);
@@ -356,15 +368,30 @@ export default function CreateAlbum() {
                   className="relative group aspect-square rounded-2xl overflow-hidden bg-border-light dark:bg-border-dark"
                 >
                   {(item.mediaType === "video" || item.file.type.startsWith("video/") || /\.(mp4|webm|mov|avi)$/i.test(item.file.name)) ? (
-                    <video
-                      src={item.preview}
-                      className="w-full h-full object-cover"
-                      preload="auto"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                    />
+                    <>
+                      <video
+                        src={item.preview}
+                        className="w-full h-full object-cover"
+                        preload="metadata"
+                        loop
+                        muted
+                        playsInline
+                        onLoadedMetadata={(event) => {
+                          const duration = formatVideoDuration(event.currentTarget.duration);
+                          if (duration && item.duration !== duration) {
+                            updateFile(item.id, { duration });
+                          }
+                        }}
+                      />
+                      {item.duration && (
+                        <span
+                          data-testid="video-duration"
+                          className="absolute bottom-1 left-1 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white"
+                        >
+                          {item.duration}
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <img
                       src={item.preview}
