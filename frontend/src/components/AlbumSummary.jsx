@@ -11,7 +11,7 @@ import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Users, LayoutGrid, List,
-  SlidersHorizontal, Filter, Share2, MessageCircle, Check,
+  SlidersHorizontal, Filter, Share, MessageCircle, Check,
 } from "lucide-react";
 import FilledHeart   from "./FilledHeart";
 import BrokenHeart   from "./BrokenHeart";
@@ -336,7 +336,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
                 className="w-10 h-10 rounded-2xl flex items-center justify-center
                            bg-gray-100 dark:bg-gray-800 text-primary-500
                            hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
-                <Share2 size={18} />
+                <Share size={20} strokeWidth={2.2} />
               </button>
             )}
           </div>

@@ -152,6 +152,10 @@ class AlbumAnalytics(BaseModel):
     creator_id:       AnyUUID
     creator:          Optional[UserOut] = None
     is_public:        bool = True
+    # Only populated for PUBLIC albums — lets stats viewers reach the voting
+    # page from "Recently visited". Never leaked for private albums.
+    invite_code:      Optional[str] = None
+    invite_url:       Optional[str] = None
     total_photos:     int
     total_votes:      int
     unique_voters:    int

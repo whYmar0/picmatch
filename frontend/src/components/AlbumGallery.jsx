@@ -20,7 +20,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import {
-  MessageCircle, BarChart2, SlidersHorizontal, Filter, Share2, Check,
+  MessageCircle, BarChart2, SlidersHorizontal, Filter, Share, Check,
   List, LayoutGrid,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -429,7 +429,7 @@ function StatisticsTab({
                      hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
         aria-label={t("share")}
       >
-        {shareDone ? <Check size={15} /> : <Share2 size={15} />}
+        {shareDone ? <Check size={15} /> : <Share size={18} strokeWidth={2.2} />}
       </button>
       <div data-testid="stats-views" className="ml-auto flex items-center gap-2 text-sm font-semibold
                         text-gray-600 dark:text-gray-300" aria-label={t("votes")}>
@@ -707,11 +707,15 @@ export default function AlbumGallery({
   const fetchedPhotoIdRef = useRef(null);
   const fetchedAlbumIdRef = useRef(null);
 
-  // Owner-only token share — Dashboard opens this gallery from the user's own
-  // album cards, so the creator comparison is mostly defensive (in case the
-  // wrapper is reused for shared-with-me albums in the future).
-  const isOwner = !!user && !!album?.creator_id &&
-    String(user.id) === String(album.creator_id);
+  // Owner-only token share. The album object can carry the creator as
+  // `creator_id`, a nested `creator` (Dashboard's AlbumOut shape), or via the
+  // already-loaded analytics payload — check all three so an owner opening
+  // their own album is never mistaken for a visitor (which would make the
+  // stats Share hand out the voting invite instead of the analytics link).
+  const albumCreatorId =
+    album?.creator_id ?? album?.creator?.id ?? analytics?.creator_id ?? null;
+  const isOwner = !!user && albumCreatorId != null &&
+    String(user.id) === String(albumCreatorId);
   const canViewStats = analytics
     ? Boolean(analytics.can_view_stats)
     : (album.is_public !== false || isOwner);
@@ -1629,19 +1633,26 @@ export default function AlbumGallery({
   }, []);
 
   // ── Share handler ────────────────────────────────────────────────────────
-  // Owners get the AnalyticsShareSheet flow (token-protected URL that grants
-  // analytics access to anyone who opens it after login). Non-owners get the
-  // voting invite link so they can pass the album around for more votes.
-  // The old behavior — copying `window.location.href` (= `/dashboard`) — was
-  // reported as a placeholder that gave recipients a dead URL. Removed.
+  // The Share control lives in the statistics sheet, so it always shares a
+  // link to VIEW THE STATISTICS — never the voting invite.
+  //   Owner:   AnalyticsShareSheet (token-protected /share/<token> URL that
+  //            grants analytics access to anyone who opens it after login).
+  //   Visitor: public albums are reachable by id for any authenticated user,
+  //            so share that stats page; private albums have nothing
+  //            shareable here (only the owner can mint tokens).
   const handleShare = async () => {
     if (isOwner) {
       pushHistoryLayer("share");
       setShareSheetOpen(true);
       return;
     }
-    const url = album?.invite_url;
-    if (!url) return;
+    const isPublic = album?.is_public !== false && analytics?.is_public !== false;
+    const albumId = album?.id ?? analytics?.id;
+    if (!isPublic || !albumId) {
+      toast.error(t("shareLinkError"));
+      return;
+    }
+    const url = `${window.location.origin}/analytics/${albumId}`;
     if (/Mobi|Android/i.test(navigator.userAgent) && navigator.share) {
       try {
         await navigator.share({ title: t("appName"), url });

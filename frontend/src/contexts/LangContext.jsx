@@ -54,6 +54,7 @@ const T = {
     viewAnalytics: "Results",
     deleteAlbum: "Delete",
     albumDeleted: "Deleted",
+    albumNotFound: "Album not found",
     sharedWithMe: "Shared with me",
     sharedBy: "Shared by",
     shareAlbum: "Share album",
@@ -148,6 +149,8 @@ const T = {
     noNewNotifs: "No new notifications right now.",
     Comments: "Comments",
     recentlyVisited: "Recently Visited",
+    vote: "Vote",
+    revote: "Vote again",
     noRecentAlbums: "Albums you visit will appear here",
     viewMyComments: "my thread",
     // Dashboard carousel / expanded view
@@ -251,6 +254,7 @@ const T = {
     viewAnalytics: "Результаты",
     deleteAlbum: "Удалить",
     albumDeleted: "Удалено",
+    albumNotFound: "Альбом не найден",
     sharedWithMe: "Поделились со мной",
     sharedBy: "Поделился",
     shareAlbum: "Поделиться альбомом",
@@ -337,6 +341,8 @@ const T = {
     noNewNotifs: "Сейчас нет новых уведомлений.",
     Comments: "Комментарии",
     recentlyVisited: "Недавно посещённые",
+    vote: "Голосовать",
+    revote: "Переголосовать",
     noRecentAlbums: "Здесь появятся альбомы, которые вы посещали",
     viewMyComments: "мои комментарии",
     // Dashboard carousel / expanded view

@@ -901,6 +901,10 @@ async def _build_analytics(
         creator_id=album.creator_id,
         creator=album.creator,
         is_public=album.is_public,
+        # Voting invite is shareable only for public albums — private-album
+        # invite codes must stay with the owner/shared links.
+        invite_code=album.invite_code if album.is_public else None,
+        invite_url=f"{FRONTEND_URL}/vote/{album.invite_code}" if album.is_public else None,
         total_photos=len(photos),
         total_votes=response_total_votes, unique_voters=response_unique_voters,
         global_like_rate=response_global_like_rate,

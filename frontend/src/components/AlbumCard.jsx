@@ -95,7 +95,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
   };
 
   return (
-    <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card hover:shadow-card-hover transition-shadow duration-200 flex flex-col w-full min-w-0">
+    <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card hover:shadow-card-hover-compact transition-shadow duration-200 flex flex-col w-full min-w-0">
       {/* Photo area */}
       <div
         data-testid="album-card-photo"

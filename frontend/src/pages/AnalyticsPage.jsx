@@ -14,7 +14,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from "framer-motion";
 import { ChevronLeft, Lock } from "lucide-react";
 import toast from "react-hot-toast";
-import { albumsApi, commentsApi } from "../api";
+import { albumsApi, commentsApi, votesApi } from "../api";
 import { useLang } from "../contexts/LangContext";
 import AlbumGallery from "../components/AlbumGallery";
 import PhotoComments from "../components/PhotoComments";
@@ -197,14 +197,34 @@ export default function AnalyticsPage() {
         if (storedUser?.id) {
           const { recordAlbumVisit } = await import("../hooks/useRecentAlbums.js");
           const coverUrl = data.photos?.[0]?.url ?? null;
-          recordAlbumVisit(storedUser.id, {
-            id: albumId,
+          const visitMeta = {
+            id: data.id || albumId,
             title: data.title,
             coverUrl,
+            creator_id: data.creator_id,
             creatorUsername: data.creator?.username ?? null,
             is_public: data.is_public,
             hasAccess: data.can_view_stats || data.is_public,
-          });
+            invite_code: data.invite_code,
+            invite_url: data.invite_url,
+            hasVoted: false,
+          };
+          const isViewerOwner =
+            data.creator_id != null && String(data.creator_id) === String(storedUser.id);
+          if (isViewerOwner) {
+            // Own albums never belong in "Recently visited".
+            recordAlbumVisit(storedUser.id, visitMeta);
+          } else {
+            // Refresh the voter state so recent cards show "Vote" vs
+            // "Re-vote" accurately (do not block the page on this call).
+            votesApi
+              .getMyVotes(data.id)
+              .then((myVotes) => recordAlbumVisit(storedUser.id, {
+                ...visitMeta,
+                hasVoted: myVotes.length > 0,
+              }))
+              .catch(() => recordAlbumVisit(storedUser.id, visitMeta));
+          }
         }
       } catch (err) {
         if (cancelled) return;
@@ -262,6 +282,8 @@ export default function AnalyticsPage() {
                 creatorUsername: existingEntry?.creatorUsername ?? null,
                 is_public: false,
                 hasAccess: false,
+                invite_code: existingEntry?.invite_code,
+                invite_url: existingEntry?.invite_url,
               });
             }
 

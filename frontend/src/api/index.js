@@ -143,6 +143,7 @@ export const votesApi = {
   castVote:  (photoId, isLike) => api.post("/votes/", { photo_id: photoId, is_like: isLike }),
   getSession:(inviteCode)      => api.get(`/votes/session/${inviteCode}`),
   getMyVotes:(albumId)         => api.get(`/votes/album/${albumId}/my-votes`),
+  deleteMyVotes:(albumId)      => api.delete(`/votes/album/${albumId}/my-votes`),
 };
 
 export const sharedApi = {

@@ -78,6 +78,7 @@ export default {
       boxShadow: {
         "card": "0 4px 24px -4px rgba(0,0,0,0.08), 0 1px 4px -1px rgba(0,0,0,0.04)",
         "card-hover": "0 12px 40px -8px rgba(0,0,0,0.14), 0 4px 12px -4px rgba(0,0,0,0.06)",
+        "card-hover-compact": "0 8px 28px -8px rgba(0,0,0,0.14), 0 3px 8px -4px rgba(0,0,0,0.06)",
         "orange": "0 8px 32px -4px rgba(153,102,204,0.4)",
         "swipe": "0 24px 64px -12px rgba(0,0,0,0.28)",
       },

@@ -10,7 +10,7 @@
  *     (no staircase/ladder offset — all cards share the same Y position)
  */
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue } from "framer-motion";
 import toast from "react-hot-toast";
 import { albumsApi, votesApi } from "../api";
@@ -56,6 +56,10 @@ export default function VotePage() {
   const { inviteCode } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  // „Переголосовать“ (?revote=1) — the voter chose to redo their decisions:
+  // previous votes are annulled and the whole album is reviewed from scratch.
+  const isRevote = searchParams.get("revote") === "1";
   const { t } = useLang();
   const { user, loading: authLoading } = useAuth();
   const [viewportHeight, setViewportHeight] = useState(() => (
@@ -157,13 +161,27 @@ export default function VotePage() {
         setAllPhotos(photos);
         setAlbum(albumData);
 
+        // „Переголосовать“ (?revote=1): wipe the previous decisions BEFORE the
+        // pass starts so the owner's statistics drop the old votes and only
+        // count the new ones the voter casts on this run.
+        if (isRevote && user?.id) {
+          try {
+            await votesApi.deleteMyVotes(albumData.id);
+          } catch {
+            /* non-fatal — the run continues with the photos already decided */
+          }
+        }
+
         // Fire myVotes in parallel with recording visit — no sequential wait
         let myVotesPromise = Promise.resolve([]);
-        if (sessionData.voted_photo_ids?.length > 0) {
+        if (!isRevote && sessionData.voted_photo_ids?.length > 0) {
           myVotesPromise = votesApi.getMyVotes(albumData.id).catch(() => []);
         }
 
-        // Record visit for the "Recently Visited" feature on Dashboard
+        let map = {};
+        const myVotes = await myVotesPromise;
+        myVotes.forEach((v) => { map[String(v.photo_id)] = v.is_like; });
+
         if (user?.id) {
           import("../hooks/useRecentAlbums.js").then(({ recordAlbumVisit }) => {
             recordAlbumVisit(user.id, {
@@ -171,15 +189,15 @@ export default function VotePage() {
               title: albumData.title,
               coverUrl: photos[0]?.url ?? null,
               creatorUsername: albumData.creator?.username ?? null,
+              creator_id: albumData.creator_id,
+              invite_code: albumData.invite_code,
+              invite_url: albumData.invite_url,
               is_public: albumData.is_public,
               hasAccess: albumData.is_public !== false,
+              hasVoted: Object.keys(map).length > 0,
             });
           });
         }
-
-        let map = {};
-        const myVotes = await myVotesPromise;
-        myVotes.forEach((v) => { map[String(v.photo_id)] = v.is_like; });
 
         if (cancelled) return;
 
@@ -198,7 +216,29 @@ export default function VotePage() {
 
     load();
     return () => { cancelled = true; };
-  }, [inviteCode, shouldLoad, user]);
+  }, [inviteCode, shouldLoad, user, isRevote, searchParams]);
+
+  // Once the session is complete (every photo decided), refresh the
+  // "Recently visited" record so the card shows "Переголосовать" right away
+  // instead of "Голосовать" from the pre-vote record.
+  useEffect(() => {
+    if (!finished || !album || !user?.id) return;
+    const photo = album.photos?.[0];
+    import("../hooks/useRecentAlbums.js").then(({ recordAlbumVisit }) => {
+      recordAlbumVisit(user.id, {
+        id: album.id,
+        title: album.title,
+        coverUrl: photo?.url ?? null,
+        creator_id: album.creator_id ?? album.creator?.id,
+        creatorUsername: album.creator?.username ?? null,
+        invite_code: album.invite_code,
+        invite_url: album.invite_url,
+        is_public: album.is_public,
+        hasAccess: album.is_public !== false,
+        hasVoted: true,
+      });
+    });
+  }, [finished, album, user]);
 
   // Auto-scroll thumbnail strip
   useEffect(() => {
@@ -224,6 +264,8 @@ export default function VotePage() {
     }, 3000);
 
     const pid = String(photoId);
+    // The backend upserts this photo's vote; re-voting therefore replaces,
+    // rather than duplicates, the previous decision.
     const newMap = { ...votesMapRef.current, [pid]: isLike };
     votesMapRef.current = newMap;
     setVotesMap(newMap);

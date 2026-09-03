@@ -221,3 +221,73 @@ async def get_my_votes(
     )
     votes = result.scalars().all()
     return [VoteOut.model_validate(v) for v in votes]
+
+
+@router.delete("/album/{album_id}/my-votes")
+@limiter.limit(_get_limit("RATE_LIMIT_VOTE", "60/minute"))
+async def delete_my_votes(
+    request: Request,
+    album_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Annuls the current user's votes in an album. Used by the
+    "Переголосовать" flow: a re-vote must start from a clean slate so the
+    owner's statistics reflect only the voter's LATEST decisions (old votes
+    are removed, new ones count).
+
+    Access mirrors voting rules — private albums only for the owner, a
+    SharedAccess holder, or someone who already voted there. Missing or
+    inaccessible albums answer 404 (no existence oracle for private data).
+    """
+    voter_id_str = _str(current_user.id)
+
+    result = await db.execute(
+        select(Photo.id).where(Photo.album_id == album_id)
+    )
+    photo_ids = result.scalars().all()
+
+    result = await db.execute(
+        select(Album).where(Album.id == album_id)
+    )
+    album = result.scalar_one_or_none()
+    if not album:
+        raise HTTPException(404, detail="Album not found")
+
+    if not album.is_public and _str(album.creator_id) != voter_id_str:
+        sa_res = await db.execute(
+            select(SharedAccess).where(
+                and_(
+                    SharedAccess.user_id == voter_id_str,
+                    SharedAccess.album_id == _str(album.id),
+                )
+            )
+        )
+        has_shared = sa_res.scalar_one_or_none() is not None
+        has_voted_here = False
+        if photo_ids:
+            vote_res = await db.execute(
+                select(Vote.id).where(
+                    and_(Vote.voter_id == voter_id_str, Vote.photo_id.in_(photo_ids))
+                ).limit(1)
+            )
+            has_voted_here = vote_res.scalar_one_or_none() is not None
+        if not (has_shared or has_voted_here):
+            raise HTTPException(404, detail="Album not found")
+
+    if not photo_ids:
+        return {"deleted": 0}
+
+    result = await db.execute(
+        select(Vote.id).where(
+            and_(Vote.voter_id == voter_id_str, Vote.photo_id.in_(photo_ids))
+        )
+    )
+    vote_ids = result.scalars().all()
+    if vote_ids:
+        from sqlalchemy import delete as sa_delete
+
+        await db.execute(sa_delete(Vote).where(Vote.id.in_(vote_ids)))
+        await db.commit()
+    return {"deleted": len(vote_ids)}

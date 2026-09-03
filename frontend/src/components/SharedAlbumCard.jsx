@@ -4,7 +4,7 @@
  */
 import { motion } from "framer-motion";
 import { Link }   from "react-router-dom";
-import { BarChart2, Image, Share2 } from "lucide-react";
+import { BarChart2, Image, Share } from "lucide-react";
 import { useLang } from "../contexts/LangContext";
 import { isVideo } from "../utils/media";
 
@@ -24,7 +24,7 @@ export default function SharedAlbumCard({ album, index }) {
     >
       {/* Shared-by badge */}
       <div className="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
-        <Share2 size={11} className="text-primary-400 flex-shrink-0" />
+        <Share size={14} strokeWidth={2.2} className="text-primary-400 flex-shrink-0" />
         <span className="truncate">{t("sharedBy")} {album.creator?.username}</span>
       </div>
 

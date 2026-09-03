@@ -1,11 +1,15 @@
 /**
- * RecentAlbumCard.jsx — v2
+ * RecentAlbumCard.jsx — v3
  *
- * Same grid layout as AlbumCard v4 (2/3 photo, 1/3 info).
- * Privacy badge kept. Single-line truncation for titles.
- * "Results" button stays as is.
+ * Card for recently visited albums (people's albums — own ones are excluded).
+ * - Cover tap opens the album (statistics when the viewer has access,
+ *   otherwise the comment thread for limited-access albums).
+ * - A single compact icon action: "Голосовать" (Vote) for public albums the
+ *   user hasn't voted in yet, or "Переголосовать" (Re-vote) after they have.
+ * - No dedicated statistics button — stats are one cover tap away, same as
+ *   the owner's own albums.
  */
-import { Image, Lock, Globe, BarChart2, MessageCircle, Play } from "lucide-react";
+import { Image, Lock, Globe, Play, BarChart2, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext";
@@ -31,16 +35,34 @@ function timeAgo(dateStr, lang) {
     : `${Math.floor(s / 86400)} d ago`;
 }
 
-export default function RecentAlbumCard({ album, index, onOpen }) {
+export default function RecentAlbumCard({ album, index, onOpen, onVote }) {
   const { t, lang } = useLang();
   const [imgLoaded, setImgLoaded] = useState(false);
 
   const hasAccess = album.hasAccess !== false;
   const isPrivate = album.is_public === false;
+  // Public albums always expose the vote action, including after voting.
+  const canVote = Boolean(album.invite_code || album.invite_url) && !isPrivate;
+  // Prefer the code (short client route); fall back to the stored invite URL
+  // path for legacy records that only saved the full link. Re-voting appends
+  // ?revote=1 so VotePage annuls the previous decisions first.
+  const baseVoteUrl = album.invite_code
+    ? `/vote/${album.invite_code}`
+    : (() => {
+        try {
+          const u = new URL(album.invite_url, window.location.origin);
+          return `${u.pathname}${u.search}`;
+        } catch {
+          return album.invite_url || "";
+        }
+      })();
+  const voteUrl = album.hasVoted
+    ? `${baseVoteUrl}${baseVoteUrl.includes("?") ? "&" : "?"}revote=1`
+    : baseVoteUrl;
 
   return (
-    <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card hover:shadow-card-hover transition-shadow duration-200 flex flex-col w-full min-w-0">
-      {/* Photo area (2/3) — same as AlbumCard */}
+    <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card hover:shadow-card-hover-compact transition-shadow duration-200 flex flex-col w-full min-w-0">
+      {/* Photo area (2/3) — cover tap opens the album (stats / comments) */}
       <div
         onClick={() => onOpen?.(album, hasAccess ? "stats" : "comments")}
         className="relative w-full aspect-[4/3] bg-border-light dark:bg-border-dark overflow-hidden rounded-t-3xl cursor-pointer"
@@ -112,21 +134,22 @@ export default function RecentAlbumCard({ album, index, onOpen }) {
           </span>
         </div>
 
-        {/* Results button or no-access indicator */}
-        <button
-          type="button"
-          onClick={() => onOpen?.(album, hasAccess ? "stats" : "comments")}
-          className={`w-full text-xs py-2 flex items-center justify-center gap-1.5 rounded-2xl font-semibold transition-colors
-            ${hasAccess
-              ? "btn-primary"
-              : "bg-primary-50 dark:bg-primary-900/20 text-primary-500 hover:bg-primary-100 dark:hover:bg-primary-900/30"
-            }`}
-        >
-          {hasAccess
-            ? <><BarChart2 size={13} /> {t("viewAnalytics")}</>
-            : <span className="inline-flex items-center gap-1.5"><MessageCircle size={14} className="flex-shrink-0" />{t("Comments")}</span>
-          }
-        </button>
+        {/* Single voting action — Vote / Re-vote */}
+        {canVote && onVote && (
+          <div className="flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => onVote(voteUrl)}
+              className="flex items-center justify-center p-2.5 rounded-xl btn-rounded-square
+                         bg-gray-100 dark:bg-gray-800
+                         text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+              title={album.hasVoted ? t("revote") : t("vote")}
+              aria-label={album.hasVoted ? t("revote") : t("vote")}
+            >
+              {album.hasVoted ? <RotateCcw size={15} /> : <BarChart2 size={15} />}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

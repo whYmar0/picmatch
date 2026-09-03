@@ -19,7 +19,7 @@ import RecentAlbumCard from "../components/RecentAlbumCard";
 import AlbumGallery from "../components/AlbumGallery";
 import BottomSheet from "../components/BottomSheet";
 import { DashboardSkeleton } from "../components/Skeleton";
-import { getRecentAlbums } from "../hooks/useRecentAlbums.js";
+import { getRecentAlbums, removeRecentAlbum, purgeOwnRecentAlbums } from "../hooks/useRecentAlbums.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -87,10 +87,13 @@ export default function Dashboard() {
           photoId: request.photo?.id,
           initialTab: request.initialTab || "stats",
           manageHistory: request.manageHistory !== false,
+          initialAnalytics: request.initialAnalytics || null,
         }
       : null;
   });
   const [galleryKey, setGalleryKey] = useState(0);
+  // Bumped after pruning stale recent entries so the derived lists refresh.
+  const [recentEpoch, setRecentEpoch] = useState(0);
 
   // View state
   const [activeView, setActiveView] = useState("home"); // "home" | "my-albums" | "recent-albums"
@@ -102,9 +105,11 @@ export default function Dashboard() {
   const [recentSortOpen, setRecentSortOpen] = useState(false);
 
   // Recently visited — filtered to exclude albums the user owns
+  // (id comparison is string-normalized because visits are recorded from both
+  // API responses and URL params, which can carry the id as different types)
   const recentAll = user ? getRecentAlbums(user.id) : [];
-  const ownIds = useMemo(() => new Set(albums.map((a) => a.id)), [albums]);
-  const recent = useMemo(() => recentAll.filter((a) => !ownIds.has(a.id)), [recentAll, ownIds]);
+  const ownIds = useMemo(() => new Set(albums.map((a) => String(a.id))), [albums]);
+  const recent = useMemo(() => recentAll.filter((a) => !ownIds.has(String(a.id))), [recentAll, ownIds]);
 
   // Carousel overflow detection (must come after `recent` is defined)
   const [myCarouselRef, myCarouselNode, myOverflows] = useCarouselOverflow(albums);
@@ -152,36 +157,98 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Keep "Recently visited" free of albums the current user created: own albums
+  // belong under "My albums", and a stale record would resurface in Recent once
+  // the album is deleted (and removed from the owned list above).
+  useEffect(() => {
+    if (user?.id) purgeOwnRecentAlbums(user.id, user.username);
+  }, [user]);
+
+  // Drop recently-visited albums that no longer exist server-side (their owner
+  // deleted them). Runs once per Dashboard mount, so a plain page refresh also
+  // cleans the list for every other user who still has the stale record.
+  useEffect(() => {
+    if (!user?.id) return;
+    const entries = getRecentAlbums(user.id);
+    if (entries.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.all(
+        entries.map((entry) =>
+          albumsApi.getAnalytics(entry.id)
+            .then(() => false)
+            .catch((err) => {
+              const msg = String(err?.message || "").toLowerCase();
+              return msg.includes("not found") || msg.includes("404");
+            })
+        )
+      );
+      if (cancelled) return;
+      const removed = entries.filter((_, i) => results[i]).map((e) => e.id);
+      if (removed.length === 0) return;
+      removed.forEach((id) => removeRecentAlbum(user.id, id));
+      setRecentEpoch((e) => e + 1);
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
   const handleDelete = async (albumId) => {
     try {
       await albumsApi.delete(albumId);
       setAlbums((prev) => prev.filter((a) => a.id !== albumId));
+      // A deleted album must not linger in "Recently visited".
+      removeRecentAlbum(user?.id, albumId);
       toast.success(t("albumDeleted"));
     } catch (err) {
       toast.error(err.message);
     }
   };
 
-  const handlePhotoClick = useCallback((album, photo, initialTab = "stats", manageHistory = true) => {
+  const handlePhotoClick = useCallback((album, photo, initialTab = "stats", manageHistory = true, initialAnalytics = null) => {
     closeProgressAnimRef.current?.stop();
     closeProgressAnimRef.current = null;
     dragProgressMV.set(0);
     setGalleryKey((k) => k + 1);
-    setGalleryAlbum({ album, photoId: photo?.id, initialTab, manageHistory });
+    setGalleryAlbum({ album, photoId: photo?.id, initialTab, manageHistory, initialAnalytics });
   }, [dragProgressMV]);
 
-  const handleRecentOpen = useCallback((album, initialTab = "stats") => {
-    const photo = album.photos?.[0] || (album.coverUrl ? { id: null, url: album.coverUrl } : null);
+  // Opening a recently visited album runs a deletion check first: if its owner
+  // removed the album, the stale entry is dropped from "Recently visited"
+  // (locally, for every user who still has it) instead of opening a broken
+  // gallery. When the probe succeeds its analytics payload is handed straight
+  // to the gallery so it renders without a second fetch.
+  const handleRecentOpen = useCallback(async (album, initialTab = "stats") => {
+    let analytics = null;
+    try {
+      analytics = await albumsApi.getAnalytics(album.id);
+    } catch (err) {
+      const msg = String(err?.message || "").toLowerCase();
+      if (msg.includes("not found") || msg.includes("404")) {
+        removeRecentAlbum(user?.id, album.id);
+        setRecentEpoch((e) => e + 1);
+        toast.error(t("albumNotFound"));
+        return;
+      }
+      // Non-deletion failures (403/temporary) fall through — the gallery
+      // surfaces its own error state.
+    }
+
+    const photos = analytics?.photos?.length
+      ? analytics.photos
+      : (album.photos || []);
+    const photo = photos[0]
+      || (album.coverUrl ? { id: null, url: album.coverUrl } : null);
     handlePhotoClick({
       id: album.id,
       title: album.title,
+      description: album.description || analytics?.description || null,
       creator: album.creatorUsername ? { username: album.creatorUsername } : null,
-      creator_id: album.creator_id,
-      is_public: album.is_public,
-      photos: photo ? [photo] : [],
-      invite_url: album.invite_url,
-    }, photo, initialTab);
-  }, [handlePhotoClick]);
+      creator_id: album.creator_id ?? analytics?.creator_id,
+      is_public: album.is_public ?? analytics?.is_public,
+      photos: photos.length ? photos : (photo ? [photo] : []),
+      invite_url: album.invite_url ?? analytics?.invite_url,
+    }, photo, initialTab, true, analytics);
+  }, [handlePhotoClick, user, t]);
 
   useEffect(() => {
     const request = location.state?.openGallery;
@@ -307,7 +374,7 @@ export default function Dashboard() {
                       aria-label={t("myAlbums")}
                       aria-roledescription="carousel"
                       className={`
-                        flex overflow-x-auto gap-4 py-5 pl-4 scrollbar-none
+                        flex overflow-x-auto gap-4 pt-5 pb-16 pl-4 scrollbar-none
                         ${myOverflows ? "mask-fade-edges" : ""}
                       `}
                       data-scrolled-left={myOverflows ? myScrolledLeft : undefined}
@@ -353,7 +420,7 @@ export default function Dashboard() {
                     role="region"
                     aria-label={t("recentlyVisited")}                      aria-roledescription="carousel"
                       className={`
-                      flex overflow-x-auto gap-4 py-5 pl-4 scrollbar-none
+                      flex overflow-x-auto gap-4 pt-5 pb-16 pl-4 scrollbar-none
                       ${recentOverflows ? "mask-fade-edges" : ""}
                     `}
                     data-scrolled-left={recentOverflows ? recentScrolledLeft : undefined}
@@ -362,7 +429,7 @@ export default function Dashboard() {
                       <div
                         key={album.id} className="w-[180px] sm:w-[210px] flex-shrink-0"
                       >
-                        <RecentAlbumCard album={album} index={i} onOpen={handleRecentOpen} />
+                        <RecentAlbumCard album={album} index={i} onOpen={handleRecentOpen} onVote={(url) => navigate(url)} />
                       </div>
                     ))}
                   </div>                    {recentOverflows && (
@@ -477,7 +544,13 @@ export default function Dashboard() {
               ) : (
                 <div className="grid grid-cols-2 gap-4 pb-20 px-4">
                   {filteredRecent.map((album, i) => (
-                    <RecentAlbumCard key={album.id} album={album} index={i} onOpen={handleRecentOpen} />
+                    <RecentAlbumCard
+                      key={album.id}
+                      album={album}
+                      index={i}
+                      onOpen={handleRecentOpen}
+                      onVote={(url) => navigate(url)}
+                    />
                   ))}
                 </div>
               )}
@@ -540,6 +613,7 @@ export default function Dashboard() {
             <AlbumGallery
               album={galleryAlbum.album}
               startPhotoId={galleryAlbum.photoId}
+              initialAnalytics={galleryAlbum.initialAnalytics}
               onClose={handleGalleryClose}
               dragProgressMV={dragProgressMV}
               initialTab={galleryAlbum.initialTab || "stats"}
