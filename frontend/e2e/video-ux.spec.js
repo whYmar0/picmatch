@@ -403,8 +403,8 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
   await pointer(timeline, "pointerup", endX, startY);
   await expect.poll(() => video.evaluate((node) => node.paused)).toBe(false);
 
-  // Long-press must pause and resume the master and its blurred mirror as one
-  // unit. A delayed background play() must not escape the hold and drift away.
+  // Long-press must pause and resume the master and its exact-frame backdrop as
+  // one unit. The backdrop is a canvas snapshot, not an independent clock.
   const holdBox = await player.boundingBox();
   expect(holdBox).not.toBeNull();
   const holdX = holdBox.x + holdBox.width / 2;
@@ -422,9 +422,12 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
     backdrop: root.querySelector('[data-video-backdrop="true"]')?.currentTime,
     mainPaused: root.querySelector('[data-video-main="true"]')?.paused,
     backdropPaused: root.querySelector('[data-video-backdrop="true"]')?.paused,
+    backdropTag: root.querySelector('[data-video-backdrop="true"]')?.tagName,
   }));
   expect(resumedTimes.mainPaused).toBe(false);
   expect(resumedTimes.backdropPaused).toBe(false);
+  expect(resumedTimes.backdropTag).toBe("CANVAS");
+  expect(Math.abs(resumedTimes.main - resumedTimes.backdrop)).toBeLessThan(0.05);
 
   await page.waitForTimeout(250);
   await expect(page.locator('[data-video-player="true"]')).toHaveCount(1);

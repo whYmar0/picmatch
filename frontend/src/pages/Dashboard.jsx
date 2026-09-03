@@ -83,12 +83,12 @@ export default function Dashboard() {
     const request = location.state?.openGallery;
     return request?.album
       ? {
-          album: request.album,
-          photoId: request.photo?.id,
-          initialTab: request.initialTab || "stats",
-          manageHistory: request.manageHistory !== false,
-          initialAnalytics: request.initialAnalytics || null,
-        }
+        album: request.album,
+        photoId: request.photo?.id,
+        initialTab: request.initialTab || "stats",
+        manageHistory: request.manageHistory !== false,
+        initialAnalytics: request.initialAnalytics || null,
+      }
       : null;
   });
   const [galleryKey, setGalleryKey] = useState(0);
@@ -347,215 +347,215 @@ export default function Dashboard() {
         }}
       >
         {activeView === "home" && (
-            <div className="space-y-3">
-              {/* My Albums */}
-              <section>
-                <div className="flex items-center justify-between mb-4 px-4">
-                  <h1 className="font-display font-bold text-2xl">{t("myAlbums")}</h1>
-                  <Link
-                    to="/create"
-                    className="btn-primary w-10 h-10 p-0 flex items-center justify-center rounded-2xl"
-                    aria-label={t("createAlbum")}
-                    title={t("createAlbum")}
-                  >
-                    <Plus size={20} strokeWidth={2.5} />
-                  </Link>
-                </div>
+          <div className="space-y-3">
+            {/* My Albums */}
+            <section>
+              <div className="flex items-center justify-between mb-4 px-4">
+                <h1 className="font-display font-bold text-2xl">{t("myAlbums")}</h1>
+                <Link
+                  to="/create"
+                  className="btn-primary w-10 h-10 p-0 flex items-center justify-center rounded-2xl"
+                  aria-label={t("createAlbum")}
+                  title={t("createAlbum")}
+                >
+                  <Plus size={20} strokeWidth={2.5} />
+                </Link>
+              </div>
 
-                {albums.length === 0 ? (
-                  <div className="flex min-h-[160px] items-center justify-center px-6 text-center">
-                    <p className="text-gray-400 text-sm">{t("noAlbums")}</p>
-                  </div>
-                ) : (
-                  <div>
-                    <div
-                      ref={myCarouselRef}
-                      role="region"
-                      aria-label={t("myAlbums")}
-                      aria-roledescription="carousel"
-                      className={`
+              {albums.length === 0 ? (
+                <div className="flex min-h-[160px] items-center justify-center px-6 text-center">
+                  <p className="text-gray-400 text-sm">{t("noAlbums")}</p>
+                </div>
+              ) : (
+                <div>
+                  <div
+                    ref={myCarouselRef}
+                    role="region"
+                    aria-label={t("myAlbums")}
+                    aria-roledescription="carousel"
+                    className={`
                         flex overflow-x-auto gap-4 pt-5 pb-16 pl-4 scrollbar-none
                         ${myOverflows ? "mask-fade-edges" : ""}
                       `}
-                      data-scrolled-left={myOverflows ? myScrolledLeft : undefined}
-                    >
-                      {albums.map((album, i) => (
-                        <div
-                          key={album.id}
-                          className="w-[180px] sm:w-[210px] flex-shrink-0"
-                        >
-                          <AlbumCard
-                            album={album}
-                            onDelete={handleDelete}
-                            index={i}
-                            onPhotoClick={handlePhotoClick}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    {myOverflows && (
-                      <div className="flex justify-end mt-1 px-4">
-                        <button
-                          onClick={() => goToView("my-albums")}
-                          className="text-primary-500 hover:text-primary-600 font-semibold text-sm transition-colors"
-                        >
-                          {t("seeAll")} →
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-
-              {/* Recent Albums */}
-              {recent.length > 0 && (
-                <section>
-                  <div className="flex items-center justify-between mb-1.5 px-4">
-                    <h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200">
-                      {t("recentlyVisited")}
-                    </h2>
-                  </div>
-                  <div
-                    ref={recentCarouselRef}
-                    role="region"
-                    aria-label={t("recentlyVisited")}                      aria-roledescription="carousel"
-                      className={`
-                      flex overflow-x-auto gap-4 pt-5 pb-16 pl-4 scrollbar-none
-                      ${recentOverflows ? "mask-fade-edges" : ""}
-                    `}
-                    data-scrolled-left={recentOverflows ? recentScrolledLeft : undefined}
+                    data-scrolled-left={myOverflows ? myScrolledLeft : undefined}
                   >
-                    {recent.map((album, i) => (
+                    {albums.map((album, i) => (
                       <div
-                        key={album.id} className="w-[180px] sm:w-[210px] flex-shrink-0"
+                        key={album.id}
+                        className="w-[180px] sm:w-[210px] flex-shrink-0"
                       >
-                        <RecentAlbumCard album={album} index={i} onOpen={handleRecentOpen} onVote={(url) => navigate(url)} />
+                        <AlbumCard
+                          album={album}
+                          onDelete={handleDelete}
+                          index={i}
+                          onPhotoClick={handlePhotoClick}
+                        />
                       </div>
                     ))}
-                  </div>                    {recentOverflows && (
-                    <div className="flex justify-end mt-1 px-4">
+                  </div>
+                  {myOverflows && (
+                    <div className="flex justify-end -mt-9 px-4">
                       <button
-                        onClick={() => goToView("recent-albums")}
+                        onClick={() => goToView("my-albums")}
                         className="text-primary-500 hover:text-primary-600 font-semibold text-sm transition-colors"
                       >
-                        {t("seeAll")} →
+                        {t("seeAll")}
                       </button>
                     </div>
                   )}
-                </section>
-              )}
-            </div>
-          )}
-
-          {activeView === "my-albums" && (
-            <div className="min-h-screen">
-              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-1 px-3 flex items-center gap-3">
-                <button
-                  onClick={() => setActiveView("home")}
-                  className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
-                  aria-label="Back"
-                >
-                  <ChevronLeft size={24} />
-                </button>
-                <h1 className="font-display font-bold text-2xl">{t("myAlbums")}</h1>
-              </div>
-
-              <div className="mt-2 mb-6 flex flex-wrap items-center gap-3 px-4">
-                <div className="relative flex-1 min-w-[180px]">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={mySearch}
-                    onChange={(e) => setMySearch(e.target.value)}
-                    placeholder={t("searchAlbums")}
-                    className="input-field pl-9 pr-4 py-2.5 text-sm w-full rounded-full"
-                  />
                 </div>
-                <button
-                  onClick={() => setMySortOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm whitespace-nowrap
+              )}
+            </section>
+
+            {/* Recent Albums */}
+            {recent.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-1.5 px-4">
+                  <h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200">
+                    {t("recentlyVisited")}
+                  </h2>
+                </div>
+                <div
+                  ref={recentCarouselRef}
+                  role="region"
+                  aria-label={t("recentlyVisited")} aria-roledescription="carousel"
+                  className={`
+                      flex overflow-x-auto gap-4 pt-5 pb-16 pl-4 scrollbar-none
+                      ${recentOverflows ? "mask-fade-edges" : ""}
+                    `}
+                  data-scrolled-left={recentOverflows ? recentScrolledLeft : undefined}
+                >
+                  {recent.map((album, i) => (
+                    <div
+                      key={album.id} className="w-[180px] sm:w-[210px] flex-shrink-0"
+                    >
+                      <RecentAlbumCard album={album} index={i} onOpen={handleRecentOpen} onVote={(url) => navigate(url)} />
+                    </div>
+                  ))}
+                </div>                    {recentOverflows && (
+                  <div className="flex justify-end -mt-5 px-4">
+                    <button
+                      onClick={() => goToView("recent-albums")}
+                      className="text-primary-500 hover:text-primary-600 font-semibold text-sm transition-colors"
+                    >
+                      {t("seeAll")}
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+        )}
+
+        {activeView === "my-albums" && (
+          <div className="min-h-screen">
+            <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-1 px-3 flex items-center gap-3">
+              <button
+                onClick={() => setActiveView("home")}
+                className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
+                aria-label="Back"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <h1 className="font-display font-bold text-2xl">{t("myAlbums")}</h1>
+            </div>
+
+            <div className="mt-2 mb-6 flex flex-wrap items-center gap-3 px-4">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={mySearch}
+                  onChange={(e) => setMySearch(e.target.value)}
+                  placeholder={t("searchAlbums")}
+                  className="input-field pl-9 pr-4 py-2.5 text-sm w-full rounded-full"
+                />
+              </div>
+              <button
+                onClick={() => setMySortOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm whitespace-nowrap
                              bg-border-light dark:bg-border-dark
                              hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
-                >
-                  <SlidersHorizontal size={15} />
-                  {mySort === "newest" ? t("sortNewest") : mySort === "alphabetical" ? t("sortAlphabetical") : t("sortMostVotes")}
-                </button>
-              </div>
-
-              {filteredMyAlbums.length === 0 ? (
-                <div className="text-center py-16 px-3">
-                  <p className="text-gray-400 text-sm">{t("noSearchResults")}</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4 pb-20 px-4">
-                  {filteredMyAlbums.map((album, i) => (
-                    <AlbumCard
-                      key={album.id}
-                      album={album}
-                      onDelete={handleDelete}
-                      index={i}
-                      onPhotoClick={handlePhotoClick}
-                    />
-                  ))}
-                </div>
-              )}
+              >
+                <SlidersHorizontal size={15} />
+                {mySort === "newest" ? t("sortNewest") : mySort === "alphabetical" ? t("sortAlphabetical") : t("sortMostVotes")}
+              </button>
             </div>
-          )}
 
-          {activeView === "recent-albums" && (
-            <div className="min-h-screen">
-              <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-1 px-1 flex items-center gap-3">
-                <button
-                  onClick={() => setActiveView("home")}
-                  className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
-                  aria-label="Back"
-                >
-                  <ChevronLeft size={24} />
-                </button>
-                <h1 className="font-display font-bold text-2xl">{t("recentlyVisited")}</h1>
+            {filteredMyAlbums.length === 0 ? (
+              <div className="text-center py-16 px-3">
+                <p className="text-gray-400 text-sm">{t("noSearchResults")}</p>
               </div>
-
-              <div className="mt-2 mb-6 flex flex-wrap items-center gap-3 px-4">
-                <div className="relative flex-1 min-w-[180px]">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={recentSearch}
-                    onChange={(e) => setRecentSearch(e.target.value)}
-                    placeholder={t("searchAlbums")}
-                    className="input-field pl-9 pr-4 py-2.5 text-sm w-full rounded-full"
+            ) : (
+              <div className="grid grid-cols-2 gap-4 pb-20 px-4">
+                {filteredMyAlbums.map((album, i) => (
+                  <AlbumCard
+                    key={album.id}
+                    album={album}
+                    onDelete={handleDelete}
+                    index={i}
+                    onPhotoClick={handlePhotoClick}
                   />
-                </div>
-                <button
-                  onClick={() => setRecentSortOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm whitespace-nowrap
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeView === "recent-albums" && (
+          <div className="min-h-screen">
+            <div className="sticky top-0 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md z-30 py-1 px-1 flex items-center gap-3">
+              <button
+                onClick={() => setActiveView("home")}
+                className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
+                aria-label="Back"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <h1 className="font-display font-bold text-2xl">{t("recentlyVisited")}</h1>
+            </div>
+
+            <div className="mt-2 mb-6 flex flex-wrap items-center gap-3 px-4">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={recentSearch}
+                  onChange={(e) => setRecentSearch(e.target.value)}
+                  placeholder={t("searchAlbums")}
+                  className="input-field pl-9 pr-4 py-2.5 text-sm w-full rounded-full"
+                />
+              </div>
+              <button
+                onClick={() => setRecentSortOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-medium text-sm whitespace-nowrap
                              bg-border-light dark:bg-border-dark
                              hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
-                >
-                  <SlidersHorizontal size={15} />
-                  {recentSort === "recent" ? t("sortMostRecent") : t("sortAlphabetical")}
-                </button>
-              </div>
-
-              {filteredRecent.length === 0 ? (
-                <div className="text-center py-16 px-3">
-                  <p className="text-gray-400 text-sm">{t("noSearchResults")}</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4 pb-20 px-4">
-                  {filteredRecent.map((album, i) => (
-                    <RecentAlbumCard
-                      key={album.id}
-                      album={album}
-                      index={i}
-                      onOpen={handleRecentOpen}
-                      onVote={(url) => navigate(url)}
-                    />
-                  ))}
-                </div>
-              )}
+              >
+                <SlidersHorizontal size={15} />
+                {recentSort === "recent" ? t("sortMostRecent") : t("sortAlphabetical")}
+              </button>
             </div>
-          )}
+
+            {filteredRecent.length === 0 ? (
+              <div className="text-center py-16 px-3">
+                <p className="text-gray-400 text-sm">{t("noSearchResults")}</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 pb-20 px-4">
+                {filteredRecent.map((album, i) => (
+                  <RecentAlbumCard
+                    key={album.id}
+                    album={album}
+                    index={i}
+                    onOpen={handleRecentOpen}
+                    onVote={(url) => navigate(url)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
 
       {/* Sort BottomSheets — sit outside scaled wrapper so fixed positioning works */}
@@ -572,8 +572,8 @@ export default function Dashboard() {
             className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
                         text-sm font-medium transition-colors mb-2
                         ${mySort === key
-                          ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-                          : "hover:bg-border-light dark:hover:bg-border-dark"}`}
+                ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
+                : "hover:bg-border-light dark:hover:bg-border-dark"}`}
           >
             {label}
             {mySort === key && <Check size={16} className="text-primary-400" />}
@@ -593,8 +593,8 @@ export default function Dashboard() {
             className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl
                         text-sm font-medium transition-colors mb-2
                         ${recentSort === key
-                          ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
-                          : "hover:bg-border-light dark:hover:bg-border-dark"}`}
+                ? "bg-primary-50 dark:bg-primary-900/20 text-primary-500"
+                : "hover:bg-border-light dark:hover:bg-border-dark"}`}
           >
             {label}
             {recentSort === key && <Check size={16} className="text-primary-400" />}

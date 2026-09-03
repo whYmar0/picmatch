@@ -47,7 +47,8 @@ export default function VideoPlayer({
   const containerRef = useRef(null);
   const mediaFrameRef = useRef(null);
   const videoRef = useRef(null);
-  const backgroundVideoRef = useRef(null);
+  const backgroundCanvasRef = useRef(null);
+  const backgroundFrameRef = useRef(null);
   const pointerScrubRef = useRef(false);
   const animationFrameRef = useRef(null);
   const endProgressLockRef = useRef(false);
@@ -63,7 +64,6 @@ export default function VideoPlayer({
   const touchHandledRef = useRef(false);
   const pointerTapStartRef = useRef(null);
   const isMutedRef = useRef(muted);
-  const backgroundPlaybackRequestRef = useRef(0);
 
   const [aspectRatio, setAspectRatio] = useState(null);
   const [duration, setDuration] = useState(0);
@@ -110,8 +110,10 @@ export default function VideoPlayer({
   useEffect(() => () => {
     clearHoldTimer();
     clearControlsTimer();
-    backgroundPlaybackRequestRef.current += 1;
-    backgroundVideoRef.current?.pause();
+    if (backgroundFrameRef.current) {
+      window.cancelAnimationFrame(backgroundFrameRef.current);
+      backgroundFrameRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -214,13 +216,13 @@ export default function VideoPlayer({
       setDuration(video.duration);
       setProgressPercent(clamp((video.currentTime / video.duration) * 100, 0, 100));
     }
-    syncBackgroundTime(video.currentTime);
+    drawBackgroundFrame();
   };
 
   const syncTime = (event) => {
     const video = event.currentTarget;
     const nextTime = video.currentTime || 0;
-    syncBackgroundTime(nextTime);
+    drawBackgroundFrame();
     if (isScrubbingRef.current) return;
     if (Number.isFinite(video.duration)) {
       setDuration(video.duration);
@@ -243,68 +245,81 @@ export default function VideoPlayer({
     }
   };
 
-  // The blurred layer is a rendering mirror, not an independent player. A
-  // play() promise may resolve after a long-press has already paused the main
-  // video, so every request gets a generation that is invalidated on pause.
-  const playBackgroundVideo = () => {
-    const backgroundVideo = backgroundVideoRef.current;
+  // Render the current frame of the real video into a canvas below it. A second
+  // <video> element drifts because its decoder has a separate clock; the canvas
+  // uses the exact frame currently shown by the main player instead.
+  function drawBackgroundFrame() {
+    if (!blurredBackdrop) return;
     const video = videoRef.current;
-    if (
-      !backgroundVideo ||
-      !video ||
-      video.paused ||
-      video.ended
-    ) return;
+    const canvas = backgroundCanvasRef.current;
+    if (!video || !canvas || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
 
-    const requestId = ++backgroundPlaybackRequestRef.current;
-    syncBackgroundTime(video.currentTime, true);
-    const promise = backgroundVideo.play();
-    promise?.then?.(() => {
-      // An old play() promise may resolve after a newer release/play request.
-      // It must not pause the media belonging to that newer request.
-      if (requestId !== backgroundPlaybackRequestRef.current) return;
-      if (videoRef.current?.paused || videoRef.current?.ended) {
-        backgroundVideo.pause();
-        return;
-      }
-      // A seek can become available only after play has opened the media
-      // pipeline. Align once more after the promise resolves so a delayed
-      // backdrop never resumes from an old frame.
-      syncBackgroundTime(video.currentTime, true);
-    }).catch?.(() => {});
-  };
-
-  const pauseBackgroundVideo = () => {
-    backgroundPlaybackRequestRef.current += 1;
-    backgroundVideoRef.current?.pause();
-  };
-
-  const syncBackgroundTime = (time, force = false) => {
-    const backgroundVideo = backgroundVideoRef.current;
-    if (!backgroundVideo || !Number.isFinite(time)) return;
-    try {
-      if (force || Math.abs(backgroundVideo.currentTime - time) > 0.08) {
-        backgroundVideo.currentTime = time;
-      }
-    } catch {
-      // The background can still be loading metadata; the next timeupdate will sync it.
+    // Use the untransformed layout size. The CSS scale is deliberately applied
+    // after drawing so the backdrop fills the card without being scaled twice.
+    const widthCss = canvas.clientWidth || canvas.offsetWidth;
+    const heightCss = canvas.clientHeight || canvas.offsetHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.max(1, Math.round(widthCss * dpr));
+    const height = Math.max(1, Math.round(heightCss * dpr));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
     }
-  };
+
+    // Keep the backdrop's media-like state observable for callers that inspect
+    // the shared player surface. The canvas itself never owns playback.
+    canvas.muted = true;
+    canvas.paused = video.paused;
+    canvas.currentTime = video.currentTime;
+
+    const context = canvas.getContext("2d");
+    if (!context || !widthCss || !heightCss) return;
+    const scale = Math.max(widthCss / video.videoWidth, heightCss / video.videoHeight);
+    const drawWidth = video.videoWidth * scale * dpr;
+    const drawHeight = video.videoHeight * scale * dpr;
+    context.clearRect(0, 0, width, height);
+    try {
+      context.drawImage(video, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    } catch {
+      // A media frame can be unavailable for one tick during source changes.
+      // Keep the last rendered frame instead of interrupting the card gesture.
+    }
+  }
+
+  useEffect(() => {
+    if (!blurredBackdrop) return undefined;
+    const canvas = backgroundCanvasRef.current;
+    if (canvas) {
+      canvas.muted = true;
+      canvas.paused = true;
+      canvas.currentTime = 0;
+    }
+    let cancelled = false;
+    const renderFrame = () => {
+      if (cancelled) return;
+      drawBackgroundFrame();
+      if (isPlaying) backgroundFrameRef.current = window.requestAnimationFrame(renderFrame);
+    };
+    renderFrame();
+    return () => {
+      cancelled = true;
+      if (backgroundFrameRef.current) {
+        window.cancelAnimationFrame(backgroundFrameRef.current);
+        backgroundFrameRef.current = null;
+      }
+    };
+  }, [blurredBackdrop, isPlaying, src]);
 
   const playVideo = () => {
     const video = videoRef.current;
     if (!video) return;
     const promise = video.play();
     promise?.catch?.(() => setIsPlaying(false));
-    if (blurredBackdrop) playBackgroundVideo();
   };
 
   const pauseVideo = () => {
-    // Pause the mirror first so a pending backdrop play cannot outlive a hold.
-    if (blurredBackdrop) pauseBackgroundVideo();
-    const video = videoRef.current;
-    video?.pause();
-    syncBackgroundTime(video?.currentTime, true);
+    videoRef.current?.pause();
+    drawBackgroundFrame();
   };
 
   const togglePlayback = () => {
@@ -324,17 +339,17 @@ export default function VideoPlayer({
 
   const handlePlay = () => {
     setIsPlaying(true);
-    if (blurredBackdrop) playBackgroundVideo();
+    if (backgroundCanvasRef.current) backgroundCanvasRef.current.paused = false;
   };
   const handlePause = () => {
     setIsPlaying(false);
-    if (blurredBackdrop) pauseBackgroundVideo();
+    drawBackgroundFrame();
   };
   const handleEnded = () => {
     endProgressLockRef.current = false;
     endProgressSeekPendingRef.current = false;
     setIsPlaying(false);
-    if (blurredBackdrop) pauseBackgroundVideo();
+    drawBackgroundFrame();
     setCurrentTime(duration || 0);
     setProgressPercent(100);
     showControls(true);
@@ -403,7 +418,7 @@ export default function VideoPlayer({
     endProgressLockRef.current = atEnd;
     endProgressSeekPendingRef.current = atEnd;
     video.currentTime = nextTime;
-    syncBackgroundTime(nextTime);
+    drawBackgroundFrame();
     setCurrentTime(percentage >= 1 ? duration : nextTime);
     setProgressPercent(percentage * 100);
     setScrubPercent(percentage * 100);
@@ -548,6 +563,9 @@ export default function VideoPlayer({
   // Framer Motion's parent card listens for pointerdown to start the voting
   // drag. Claim the bottom scrub zone before that listener sees the gesture.
   const handlePointerDownCapture = (event) => {
+    // Controls and the timeline stop their own pointer events in the bubble
+    // phase. Do not stop them here: capture-phase cancellation prevents the
+    // button from receiving the event in some mobile browsers.
     const isBottomScrub = isolateScrubGesture && isInBottomArea(event.clientY);
     pointerScrubRef.current = isBottomScrub;
     const startedOnTimeline = event.target?.closest?.('[data-video-timeline="true"]');
@@ -597,7 +615,7 @@ export default function VideoPlayer({
     endProgressLockRef.current = atEnd;
     endProgressSeekPendingRef.current = atEnd;
     videoRef.current.currentTime = nextTime;
-    syncBackgroundTime(nextTime);
+    drawBackgroundFrame();
     setCurrentTime(atEnd ? duration : nextTime);
     const nextPercent = atEnd || duration <= 0
       ? (atEnd ? 100 : 0)
@@ -687,6 +705,10 @@ export default function VideoPlayer({
       onPointerDownCapture={handlePointerDownCapture}
       onPointerMoveCapture={handlePointerMoveCapture}
       onPointerUpCapture={handlePointerUpCapture}
+      onPointerCancelCapture={() => {
+        pointerScrubRef.current = false;
+        pointerTapStartRef.current = null;
+      }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -695,21 +717,11 @@ export default function VideoPlayer({
       aria-label={isPlaying ? "Playing video" : "Paused video"}
     >
       {blurredBackdrop && (
-        <video
-          ref={backgroundVideoRef}
-          src={src}
-          muted
-          autoPlay={false}
-          loop
-          playsInline
-          preload={preload}
+        <canvas
+          ref={backgroundCanvasRef}
           className="absolute inset-0 w-full h-full max-w-none max-h-none object-cover scale-110 blur-2xl opacity-60 pointer-events-none select-none"
           style={{ zIndex: 0 }}
           data-video-backdrop="true"
-          onLoadedMetadata={() => syncBackgroundTime(videoRef.current?.currentTime || 0)}
-          onCanPlay={() => {
-            if (!videoRef.current?.paused) playBackgroundVideo();
-          }}
           aria-hidden="true"
         />
       )}
@@ -731,7 +743,7 @@ export default function VideoPlayer({
         style={videoStyle}
         onLoadedMetadata={syncMetadata}
         onCanPlay={() => {
-          if (blurredBackdrop && !videoRef.current?.paused) playBackgroundVideo();
+          drawBackgroundFrame();
         }}
         onDurationChange={syncMetadata}
         onTimeUpdate={syncTime}
@@ -743,6 +755,14 @@ export default function VideoPlayer({
       />
 
           <div
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerMove={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onPointerCancel={(event) => event.stopPropagation()}
+            onTouchStart={(event) => event.stopPropagation()}
+            onTouchMove={(event) => event.stopPropagation()}
+            onTouchEnd={(event) => event.stopPropagation()}
+            onTouchCancel={(event) => event.stopPropagation()}
             className={`absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center ${
               controlsShown ? "visible pointer-events-auto" : "invisible pointer-events-none"
             }`}

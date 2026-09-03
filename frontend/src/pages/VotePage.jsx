@@ -584,7 +584,6 @@ export default function VotePage() {
                       enablePinchZoom
                       videoScrubBottomRatio={0.2}
                       blurredVideoBackdrop
-                      sharedLayoutId={isTop && !isVideo(photo) ? `vote-photo-${photo.id}` : null}
                     />
                     {isTop && (
                       <button
@@ -667,7 +666,6 @@ export default function VotePage() {
                 />
               ) : (
                 <motion.img
-                  layoutId={`vote-photo-${commentSheet.id}`}
                   src={commentSheet.url}
                   className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl border border-white/10"
                   alt=""
