@@ -301,7 +301,22 @@ export default function VotePage() {
   const triggerSwipe = useCallback((isLike) => {
     if (votingRef.current) return;
     const photo = allPhotosRef.current.find((p) => String(p.id) === currentPhotoId);
-    if (photo) handleSwipe(photo.id, isLike);
+    if (!photo) return;
+    if (topCardRef.current?.swipeTo) {
+      votingRef.current = true;
+      setVoting(true);
+      topCardRef.current.swipeTo(isLike).then(() => {
+        votingRef.current = false;
+        setVoting(false);
+        handleSwipe(photo.id, isLike);
+      }).catch(() => {
+        votingRef.current = false;
+        setVoting(false);
+        handleSwipe(photo.id, isLike);
+      });
+    } else {
+      handleSwipe(photo.id, isLike);
+    }
   }, [currentPhotoId, handleSwipe]);
 
   // ── Heart burst ─────────────────────────────────────────────────────────────
@@ -335,12 +350,39 @@ export default function VotePage() {
   const total = allPhotos.length;
 
   const stackPhotos = useMemo(() => {
-    if (!currentPhoto) return [];
-    const rest = allPhotos
-      .filter((p) => !(String(p.id) in votesMap) && String(p.id) !== currentPhotoId)
-      .slice(0, STACK_SIZE - 1);
+    if (!currentPhoto || allPhotos.length === 0) return [];
+    const curIdx = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
+    if (curIdx < 0) return [currentPhoto];
+
+    const rest = [];
+    // 1. Forward scan from currentIdx + 1 (matches handleSwipe next card sequence)
+    for (let i = curIdx + 1; i < allPhotos.length && rest.length < STACK_SIZE - 1; i++) {
+      const p = allPhotos[i];
+      const pid = String(p.id);
+      if (!(pid in votesMap) && pid !== currentPhotoId) {
+        rest.push(p);
+      }
+    }
+    // 2. Wrap-around from 0 to curIdx if needed
+    if (rest.length < STACK_SIZE - 1) {
+      for (let i = 0; i < curIdx && rest.length < STACK_SIZE - 1; i++) {
+        const p = allPhotos[i];
+        const pid = String(p.id);
+        if (!(pid in votesMap) && pid !== currentPhotoId && !rest.some((r) => r.id === p.id)) {
+          rest.push(p);
+        }
+      }
+    }
     return [currentPhoto, ...rest];
-  }, [currentPhoto, allPhotos, votesMap, currentPhotoId]);
+  }, [currentPhoto, currentPhotoId, allPhotos, votesMap]);
+
+  // Preload next card image into browser cache so it appears instantly with no blank box
+  useEffect(() => {
+    if (stackPhotos[1]?.url) {
+      const img = new Image();
+      img.src = stackPhotos[1].thumb_url || stackPhotos[1].url;
+    }
+  }, [stackPhotos]);
 
   const title = album?.title || "";
   const titleLong = title.length > TITLE_LIMIT;
@@ -531,7 +573,7 @@ export default function VotePage() {
                         </div>
                       </div>
                     ) : (
-                      <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
                     )}
                     {hasVote && (
                       <div className={`absolute bottom-[3px] right-[3px] w-[18px] h-[18px] rounded-full

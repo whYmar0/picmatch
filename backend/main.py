@@ -7,8 +7,9 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -230,6 +231,55 @@ app.include_router(shared_access.router, prefix="/api")
 app.include_router(share_links.router, prefix="/api")
 app.include_router(comments.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
+
+
+THUMB_DIR = UPLOAD_DIR / "thumbnails"
+THUMB_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@app.get("/api/thumbnail/{filename}", tags=["System"])
+async def get_thumbnail(filename: str):
+    """Serve a lightweight webp thumbnail (max 480px), generating and caching it on the fly."""
+    safe_name = Path(filename).name
+    if not safe_name or safe_name != filename:
+        raise HTTPException(400, "Invalid filename")
+
+    thumb_path = THUMB_DIR / f"thumb_{safe_name}.webp"
+    if thumb_path.exists():
+        return FileResponse(
+            thumb_path,
+            media_type="image/webp",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
+
+    original_path = UPLOAD_DIR / safe_name
+    if not original_path.exists():
+        raise HTTPException(404, "File not found")
+
+    ext = original_path.suffix.lower()
+    if ext in {".mp4", ".webm", ".mov", ".avi"}:
+        return FileResponse(original_path)
+
+    def _create():
+        try:
+            from PIL import Image, ImageOps
+            with Image.open(original_path) as img:
+                img = ImageOps.exif_transpose(img)
+                img.thumbnail((480, 480), Image.Resampling.LANCZOS)
+                img.save(thumb_path, format="WEBP", quality=80, method=4)
+            return True
+        except Exception as e:
+            logger.warning("Failed to generate thumbnail for %s: %s", safe_name, e)
+            return False
+
+    success = await asyncio.to_thread(_create)
+    if success and thumb_path.exists():
+        return FileResponse(
+            thumb_path,
+            media_type="image/webp",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
+    return FileResponse(original_path)
 
 
 @app.get("/api/health", tags=["System"])

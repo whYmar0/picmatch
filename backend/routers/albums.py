@@ -101,11 +101,28 @@ def photo_url(stored: str, media_type: str = "image") -> str:
         return _cloudinary_url(stored, resource_type="video" if media_type == "video" else "image")
     return f"{BASE_URL}/uploads/{stored}"
 
+def photo_thumb_url(stored: str, media_type: str = "image") -> str:
+    if media_type == "video":
+        return photo_url(stored, media_type="video")
+    if _cloudinary_enabled():
+        try:
+            from cloudinary_utils import get_thumb_url as _cloud_thumb
+            return _cloud_thumb(stored, resource_type="image")
+        except Exception:
+            return photo_url(stored, media_type="image")
+    return f"{BASE_URL}/api/thumbnail/{stored}"
+
 def photo_to_out(p: Photo) -> PhotoOut:
-    return PhotoOut(id=p.id, filename=p.filename,
-                    url=photo_url(p.stored_filename, media_type=p.media_type or "image"),
-                    media_type=p.media_type or "image",
-                    order=p.order, created_at=p.created_at)
+    media = p.media_type or "image"
+    return PhotoOut(
+        id=p.id,
+        filename=p.filename,
+        url=photo_url(p.stored_filename, media_type=media),
+        thumb_url=photo_thumb_url(p.stored_filename, media_type=media),
+        media_type=media,
+        order=p.order,
+        created_at=p.created_at,
+    )
 
 def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0) -> AlbumOut:
     resolved_creator = album.creator or creator
@@ -826,6 +843,7 @@ async def _build_analytics(
             photo_stats.append(PhotoStats(
                 id=p.id, filename=p.filename,
                 url=photo_url(p.stored_filename, media_type=p.media_type or "image"),
+                thumb_url=photo_thumb_url(p.stored_filename, media_type=p.media_type or "image"),
                 media_type=p.media_type or "image",
                 order=p.order,
                 like_count=likes, dislike_count=dislikes,
@@ -837,6 +855,7 @@ async def _build_analytics(
             photo_stats.append(PhotoStats(
                 id=p.id, filename=p.filename,
                 url=photo_url(p.stored_filename, media_type=p.media_type or "image"),
+                thumb_url=photo_thumb_url(p.stored_filename, media_type=p.media_type or "image"),
                 media_type=p.media_type or "image",
                 order=p.order,
                 like_count=0, dislike_count=0,

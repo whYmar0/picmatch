@@ -89,6 +89,27 @@ def get_image_url(public_id: str, resource_type: str = "image") -> str:
     return url
 
 
+def get_thumb_url(public_id: str, resource_type: str = "image") -> str:
+    """Generate a Cloudinary thumbnail URL with width=500 limit and auto optimization."""
+    import cloudinary.utils
+    if resource_type == "video":
+        url, _ = cloudinary.utils.cloudinary_url(
+            public_id,
+            secure=True,
+            resource_type="video",
+        )
+        return url
+    url, _ = cloudinary.utils.cloudinary_url(
+        public_id,
+        secure=True,
+        width=500,
+        crop="limit",
+        fetch_format="auto",
+        quality="auto",
+    )
+    return url
+
+
 def delete_image(public_id_or_url: str, resource_type: str = "image") -> None:
     """
     Delete an image or video from Cloudinary by its public_id or full URL.

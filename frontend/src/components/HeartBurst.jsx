@@ -35,6 +35,8 @@ function HeartBurst({ x, y, onComplete }) {
   const gradientId = useRef(`heart-gradient-${Math.random().toString(36).slice(2, 8)}`).current;
   const gradient = useRef(GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)]).current;
 
+  const filterId = useRef(`heart-glow-${Math.random().toString(36).slice(2, 8)}`).current;
+
   const handleComplete = useCallback(() => {
     if (completedRef.current) return;
     completedRef.current = true;
@@ -89,7 +91,7 @@ function HeartBurst({ x, y, onComplete }) {
           viewBox="0 0 100 100"
           width={HEART_SIZE}
           height={HEART_SIZE}
-          className="block select-none"
+          className="block select-none overflow-visible"
           aria-hidden="true"
           initial={{ scale: 0, rotate: 0 }}
           animate={{
@@ -114,8 +116,6 @@ function HeartBurst({ x, y, onComplete }) {
           }}
           style={{
             transformOrigin: "50% 50%",
-            // Static, low-cost glow; the filter itself is never animated.
-            filter: `drop-shadow(0 4px 10px ${gradient.glow})`,
             willChange: "transform",
           }}
         >
@@ -136,8 +136,11 @@ function HeartBurst({ x, y, onComplete }) {
                 stopColor={gradient.stops[gradient.stops.length - 1]}
               />
             </linearGradient>
+            <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="4" stdDeviation="5" floodColor={gradient.glow} floodOpacity="1" />
+            </filter>
           </defs>
-          <path d={HEART_PATH} fill={`url(#${gradientId})`} />
+          <path d={HEART_PATH} fill={`url(#${gradientId})`} filter={`url(#${filterId})`} />
         </motion.svg>
       </motion.div>
     </div>

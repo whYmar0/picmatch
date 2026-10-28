@@ -311,9 +311,9 @@ const SwipeCard = forwardRef(function SwipeCard(
               onError={() => setImageFailed(true)}
               className={`w-full h-full ${objectFit} select-none pointer-events-none`}
               draggable={false}
-              loading={isTop ? "eager" : "lazy"}
+              loading={stackIndex <= 1 ? "eager" : "lazy"}
               decoding="async"
-              fetchpriority={isTop ? "high" : "low"}
+              fetchpriority={isTop ? "high" : (stackIndex <= 1 ? "auto" : "low")}
               style={{
                 transform: `translate3d(${pinchTransform.x}px, ${pinchTransform.y}px, 0) scale(${pinchTransform.scale})`,
                 transformOrigin: "center center",

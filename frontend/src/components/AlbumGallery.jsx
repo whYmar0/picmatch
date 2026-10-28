@@ -56,8 +56,10 @@ function PillBar({
   };
 
   const handlePointerMove = (e) => {
-    const dy = (e.clientY ?? e.touches?.[0]?.clientY) - dragStartY.current;
-    if (dy >= -8) return;
+    const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+    if (clientY === undefined) return;
+    const dy = clientY - dragStartY.current;
+    if (dy >= -4) return;
     didDrag.current = true;
     if (!swipeStarted.current) {
       swipeStarted.current = true;
@@ -110,35 +112,39 @@ function PillBar({
         data-testid="gallery-pill-bar"
         aria-label="Open statistics"
         whileTap={{ scale: 0.96 }}
-        className="flex items-center gap-8 px-8 py-4 rounded-full
-                   bg-gray-900
-                   text-white shadow-lg cursor-pointer"
+        className="relative flex flex-col items-center pt-2.5 pb-3.5 px-8 rounded-full
+                   bg-gray-900 text-white shadow-lg cursor-pointer touch-none select-none
+                   before:absolute before:-inset-x-8 before:-inset-y-6 before:content-['']"
       >
-        {canViewStats && (
-          <>
-            <span className="flex items-center gap-2.5 text-base font-semibold">
-              <span className="flex items-center justify-center w-[22px] h-[22px]">
-                <Heart size={22} className="text-white" />
+        {/* Swipe affordance handle */}
+        <div className="w-9 h-[3px] rounded-full bg-white/40 mb-2 -mt-0.5" aria-hidden="true" />
+        <div className="flex items-center gap-8">
+          {canViewStats && (
+            <>
+              <span className="flex items-center gap-2.5 text-base font-semibold">
+                <span className="flex items-center justify-center w-[22px] h-[22px]">
+                  <Heart size={22} className="text-white" />
+                </span>
+                {likeCount}
               </span>
-              {likeCount}
-            </span>
-            <span className="flex items-center gap-2.5 text-base font-semibold">
-              <span className="flex items-center justify-center w-[22px] h-[22px]">
-                <HeartBreak size={22} className="text-white" />
+              <span className="flex items-center gap-2.5 text-base font-semibold">
+                <span className="flex items-center justify-center w-[22px] h-[22px]">
+                  <HeartBreak size={22} className="text-white" />
+                </span>
+                {dislikeCount}
               </span>
-              {dislikeCount}
+            </>
+          )}
+          <span className="flex items-center gap-2.5 text-base font-semibold">
+            <span className="flex items-center justify-center w-[22px] h-[22px]">
+              <ChatCircle
+                size={20}
+                className="text-white"
+              />
             </span>
-          </>
-        )}
-        <span className="flex items-center gap-2.5 text-base font-semibold">
-          <span className="flex items-center justify-center w-[22px] h-[22px]">
-            <ChatCircle
-              size={20}
-              className="text-white"
-            />
+            {commentCount}
           </span>
-          {commentCount}
-        </span>
+        </div>
       </motion.button>
     </div>
   );
@@ -178,7 +184,7 @@ function ThumbItem({ photo, index, activeIdx, onSelect, isDraggingRef }) {
         />
       ) : (
         <img
-          src={photo.url}
+          src={photo.thumb_url || photo.url}
           alt=""
           className="w-full h-full object-cover rounded-xl select-none pointer-events-none"
           loading="lazy"
@@ -1173,7 +1179,7 @@ export default function AlbumGallery({
   const handleSheetSwipeEnd = useCallback((distance) => {
     if (!sheetGestureActive) return;
     const normalizedDistance = Math.max(0, distance);
-    const openThreshold = Math.max(48, vh * 0.12);
+    const openThreshold = Math.max(30, vh * 0.05);
     const settle = (targetY, close = false) => {
       animate(sheetGestureY, targetY, {
         duration: 0.3,
@@ -1825,6 +1831,7 @@ export default function AlbumGallery({
               // opening from a non-first photo, skip the entrance animation so
               // the off-screen shared element does not fly in from the card.
               const isSharedElement = i === 0;
+              const isNearby = isSharedElement || Math.abs(currentIdx - i) <= 2;
               const isEager = isSharedElement || Math.abs(currentIdx - i) <= 1;
               // Statistics mode must preserve the complete photo from the first
               // frame; the sheet geometry, not object-cover, controls the stage.
@@ -1845,7 +1852,7 @@ export default function AlbumGallery({
                   data-active={i === currentIdx ? "true" : "false"}
                   className="relative flex-shrink-0 w-full h-full flex items-center justify-center py-8"
                 >
-                  {photo?.url ? (
+                  {photo?.url && isNearby ? (
                     isSharedElement ? (
                       photoIsVideo ? (
                         <motion.div
