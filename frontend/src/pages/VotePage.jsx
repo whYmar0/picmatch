@@ -19,9 +19,7 @@ import { useAuth } from "../contexts/AuthContext";
 import SwipeCard, { SwipeButtons } from "../components/SwipeCard";
 import HeartBurst from "../components/HeartBurst";
 import { VotePageSkeleton } from "../components/Skeleton";
-import { LogIn, MessageCircle, Check, Play } from "lucide-react";
-import FilledHeart from "../components/FilledHeart";
-import BrokenHeart from "../components/BrokenHeart";
+import { SignIn, ChatCircle, Check, Play, Heart, HeartBreak } from "@phosphor-icons/react";
 import BottomSheet from "../components/BottomSheet";
 import { PhotoCommentsList, CommentInput } from "../components/PhotoComments";
 import { isVideo } from "../utils/media";
@@ -373,7 +371,7 @@ export default function VotePage() {
             onClick={() => navigate("/login", { state: { from: location } })}
             className="btn-primary w-full"
           >
-            <LogIn size={16} /> Sign in
+            <SignIn size={16} /> Sign in
           </button>
           <button
             onClick={() => navigate("/register", { state: { from: location } })}
@@ -405,7 +403,7 @@ export default function VotePage() {
                     bg-surface-light dark:bg-surface-dark">
       <div className="card p-10 text-center max-w-[360px] w-full mx-auto">
         <div className="w-20 h-20 bg-green-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-green">
-          <Check size={40} className="text-white" />
+          <Check size={40} weight="bold" className="text-white" />
         </div>
         <h2 className="font-display font-bold text-2xl mb-6">{t("allDone")}</h2>
         <div className="flex flex-col gap-2">
@@ -488,15 +486,23 @@ export default function VotePage() {
         {/* ─── Thumbnail strip ─────────────────────────────────────────────── */}
         <div className="relative flex-shrink-0 w-full max-w-[410px] min-w-0 mx-auto">
           {/* Wide edge fades cover the strip boundary without changing its width. */}
-          <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
-          <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
+          {allPhotos.length > 1 && (
+            <>
+              <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
+              <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
+            </>
+          )}
 
           <div
             ref={thumbStripRef}
-            className="w-full min-w-0 py-2 px-[3px] flex justify-start overflow-x-auto"
+            className={`w-full min-w-0 py-2 px-[3px] flex overflow-x-auto ${
+              allPhotos.length <= 1 ? "justify-center" : "justify-start"
+            }`}
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
-            <div className="flex gap-2 items-center min-w-max">
+            <div className={`flex gap-2 items-center min-w-max ${
+              allPhotos.length <= 1 ? "justify-center w-full" : ""
+            }`}>
               {allPhotos.map((photo) => {
                 const pid = String(photo.id);
                 const isCur = pid === currentPhotoId;
@@ -535,8 +541,8 @@ export default function VotePage() {
                           className="absolute left-1/2 top-1/2 w-[10px] h-[10px] flex items-center justify-center -translate-x-1/2 -translate-y-[calc(50%-1px)]"
                         >
                           {reaction
-                            ? <FilledHeart size={10} className="block text-white" />
-                            : <BrokenHeart size={10} strokeWidth={2} className="block text-white" />
+                            ? <Heart size={10} className="block text-white" />
+                            : <HeartBreak size={10} className="block text-white" />
                           }
                         </span>
                       </div>
@@ -594,7 +600,7 @@ export default function VotePage() {
                         title={t("Comments")}
                         data-testid="vote-comment-button"
                       >
-                        <MessageCircle size={20} />
+                        <ChatCircle size={20} />
                       </button>
                     )}
                   </div>

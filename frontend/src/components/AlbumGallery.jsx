@@ -20,9 +20,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import {
-  MessageCircle, BarChart2, SlidersHorizontal, Filter, Share, Check,
-  List, LayoutGrid,
-} from "lucide-react";
+  ChatCircle, TrendUp, SlidersHorizontal, Funnel, Export, Check,
+  Rows, SquaresFour, Heart, HeartBreak,
+} from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { albumsApi, commentsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
@@ -31,10 +31,7 @@ import { isVideo } from "../utils/media";
 import BottomSheet from "./BottomSheet";
 import { PhotoCommentsList, CommentInput } from "./PhotoComments";
 import AnalyticsShareSheet from "./AnalyticsShareSheet";
-import FilledHeart from "./FilledHeart";
-import BrokenHeart from "./BrokenHeart";
 import VideoPlayer from "./VideoPlayer";
-
 // ─── PillBar v8 — no border, larger monochrome icons, ChevronUp affordance ──
 function PillBar({
   likeCount,
@@ -121,13 +118,13 @@ function PillBar({
           <>
             <span className="flex items-center gap-2.5 text-base font-semibold">
               <span className="flex items-center justify-center w-[22px] h-[22px]">
-                <FilledHeart size={22} className="text-white" />
+                <Heart size={22} className="text-white" />
               </span>
               {likeCount}
             </span>
             <span className="flex items-center gap-2.5 text-base font-semibold">
               <span className="flex items-center justify-center w-[22px] h-[22px]">
-                <BrokenHeart size={22} className="text-white" />
+                <HeartBreak size={22} className="text-white" />
               </span>
               {dislikeCount}
             </span>
@@ -135,9 +132,8 @@ function PillBar({
         )}
         <span className="flex items-center gap-2.5 text-base font-semibold">
           <span className="flex items-center justify-center w-[22px] h-[22px]">
-            <MessageCircle
+            <ChatCircle
               size={20}
-              strokeWidth={1.75}
               className="text-white"
             />
           </span>
@@ -415,7 +411,7 @@ function StatisticsTab({
                       ${selectedVotersSize > 0
             ? "bg-primary-400 text-white"
             : "bg-border-light dark:bg-border-dark hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}>
-        <Filter size={15} /> {t("filterBy")}
+        <Funnel size={15} /> {t("filterBy")}
         {selectedVotersSize > 0 && (
           <span className="bg-white/30 text-white text-xs font-bold px-1.5 rounded-md">
             {selectedVotersSize}
@@ -429,11 +425,11 @@ function StatisticsTab({
                      hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
         aria-label={t("share")}
       >
-        {shareDone ? <Check size={15} /> : <Share size={18} strokeWidth={2.2} />}
+        {shareDone ? <Check size={15} /> : <Export size={18} />}
       </button>
       <div data-testid="stats-views" className="ml-auto flex items-center gap-2 text-sm font-semibold
                         text-gray-600 dark:text-gray-300" aria-label={t("votes")}>
-        <BarChart2 size={16} />
+        <TrendUp size={16} />
         <span className="tabular-nums">{analytics.total_votes}</span>
       </div>
     </div>
@@ -506,10 +502,10 @@ function StatisticsTab({
                 <div className="flex items-center gap-3 mt-1.5 text-sm font-semibold tabular-nums
                               text-gray-600 dark:text-gray-300">
                   <span className="flex items-center gap-1.5">
-                    <FilledHeart size={14} /> {photo.like_count}
+                    <Heart size={14} /> {photo.like_count}
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <BrokenHeart size={14} strokeWidth={2} /> {photo.dislike_count}
+                    <HeartBreak size={14} /> {photo.dislike_count}
                   </span>
                   <span className="ml-auto mr-4 text-gray-500 dark:text-gray-400 font-normal">
                     {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
@@ -532,8 +528,8 @@ function GallerySortSheet({ open, onClose, sortKey, setSortKey, viewMode, setVie
     <BottomSheet open={open} onClose={onClose} title={t("sort")} zIndex={60}>
       <div className="flex gap-2 mb-5">
         {[
-          { key: "list", icon: <List size={15} />, label: t("listView") },
-          { key: "grid", icon: <LayoutGrid size={15} />, label: t("gridView") },
+          { key: "list", icon: <Rows size={15} />, label: t("listView") },
+          { key: "grid", icon: <SquaresFour size={15} />, label: t("gridView") },
         ].map(({ key, icon, label }) => (
           <button
             key={key}
@@ -1985,7 +1981,7 @@ export default function AlbumGallery({
                   : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
                   }`}
               >
-                <BarChart2 size={14} />
+                <TrendUp size={14} />
                 {t("statistics")}
               </button>
               <button
@@ -1997,7 +1993,7 @@ export default function AlbumGallery({
                   : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400"
                   }`}
               >
-                <MessageCircle size={14} />
+                <ChatCircle size={14} />
                 {t("Comments")}
               </button>
             </div>

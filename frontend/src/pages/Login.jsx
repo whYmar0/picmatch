@@ -1,10 +1,10 @@
-/**
+﻿/**
  * pages/Login.jsx — Clean, fully translated, inline error banner.
  */
 import { useState } from "react";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle } from "lucide-react";
+import { EnvelopeSimple, LockSimple, Eye, EyeSlash, SignIn, WarningCircle } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
@@ -77,7 +77,7 @@ export default function Login() {
                        text-red-600 dark:text-red-400 text-sm
                        rounded-2xl px-4 py-3 mb-4"
           >
-            <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+            <WarningCircle size={15} className="mt-0.5 flex-shrink-0" />
             <span className="break-words">{error}</span>
           </motion.div>
         )}
@@ -89,7 +89,7 @@ export default function Login() {
                 {t("email")}
               </label>
               <div className="relative">
-                <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <EnvelopeSimple size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="email" required autoComplete="email"
                   value={form.email}
                   onChange={(e) => { setError(""); setForm({ ...form, email: e.target.value }); }}
@@ -103,7 +103,7 @@ export default function Login() {
                 {t("password")}
               </label>
               <div className="relative">
-                <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <LockSimple size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type={showPwd ? "text" : "password"} required autoComplete="current-password"
                   value={form.password}
                   onChange={(e) => { setError(""); setForm({ ...form, password: e.target.value }); }}
@@ -113,7 +113,7 @@ export default function Login() {
                   onClick={() => setShowPwd(!showPwd)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2
                              text-gray-400 hover:text-gray-600 transition-colors p-1">
-                  {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {showPwd ? <EyeSlash size={14} /> : <Eye size={14} />}
                 </button>
               </div>
             </div>
@@ -139,7 +139,7 @@ export default function Login() {
                 ? <motion.div animate={{ rotate: 360 }}
                   transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
                   className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
-                : <><LogIn size={16} /> {t("login")}</>
+                : <><SignIn size={16} /> {t("login")}</>
               }
             </motion.button>
           </form>

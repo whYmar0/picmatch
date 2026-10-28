@@ -1,9 +1,9 @@
-/**
+﻿/**
  * ShareModal.jsx — Simplified Link Sharing modal
  */
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Copy, Check, Info } from "lucide-react";
+import { LinkSimple, Check, Info } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { useLang } from "../contexts/LangContext";
 import BottomSheet from "./BottomSheet";
@@ -38,7 +38,7 @@ export default function ShareModal({ album, open, onClose }) {
               copied ? "bg-green-500 text-white" : "bg-primary-500 text-white"
             }`}
           >
-            {copied ? <Check size={18} /> : <Copy size={18} />}
+            {copied ? <Check size={18} /> : <LinkSimple size={18} />}
           </motion.button>
         </div>
 

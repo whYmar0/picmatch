@@ -24,7 +24,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           "vendor-motion": ["framer-motion"],
-          "vendor-icons": ["lucide-react"],
+          "vendor-icons": ["@phosphor-icons/react"],
           "vendor-router": ["react-router-dom"],
           "vendor-ui": ["react-dropzone", "react-easy-crop", "react-hot-toast"],
         },

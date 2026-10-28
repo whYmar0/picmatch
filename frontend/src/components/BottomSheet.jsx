@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
-import { X } from "lucide-react";
+import { X } from "@phosphor-icons/react";
 
 const CLOSE_EASE_OUT = [0.22, 1, 0.36, 1];
 

@@ -1,11 +1,11 @@
-/**
+﻿/**
  * AvatarCropModal.jsx
  * Circular avatar cropper with drag + zoom support.
  * Uses HTML Canvas — no extra dependencies needed.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ZoomIn, ZoomOut, Check } from "lucide-react";
+import { X, MagnifyingGlassPlus, MagnifyingGlassMinus, Check } from "@phosphor-icons/react";
 
 const CANVAS_SIZE = 300; // output square size (px)
 const MIN_ZOOM    = 1;
@@ -28,7 +28,7 @@ export default function AvatarCropModal({ src, onConfirm, onCancel }) {
   // ── Load image ──
   useEffect(() => {
     if (!src) return;
-    const img = new Image();
+    const img = new ImageSquare();
     img.onload = () => {
       imgRef.current = img;
       setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
@@ -178,7 +178,7 @@ export default function AvatarCropModal({ src, onConfirm, onCancel }) {
 
           {/* Zoom slider */}
           <div className="flex items-center gap-3 px-1">
-            <ZoomOut size={15} className="text-gray-400 flex-shrink-0" />
+            <MagnifyingGlassMinus size={15} className="text-gray-400 flex-shrink-0" />
             <input
               type="range"
               min={MIN_ZOOM}
@@ -188,7 +188,7 @@ export default function AvatarCropModal({ src, onConfirm, onCancel }) {
               onChange={(e) => setZoom(parseFloat(e.target.value))}
               className="flex-1 accent-primary-400 h-1.5 rounded-full cursor-pointer"
             />
-            <ZoomIn size={15} className="text-gray-400 flex-shrink-0" />
+            <MagnifyingGlassPlus size={15} className="text-gray-400 flex-shrink-0" />
           </div>
 
           <p className="text-center text-xs text-gray-400">

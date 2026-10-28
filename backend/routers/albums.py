@@ -217,8 +217,8 @@ async def _process_upload(f: UploadFile, idx: int) -> dict:
         ext = _safe_extension(f.filename) or _ext_for_mime(base_content_type)
         stored_ext = ext or ".mp4"
     else:
-        content = compress_image(content)
-        stored_ext = ".jpg"
+        ext = _safe_extension(f.filename) or _ext_for_mime(base_content_type)
+        stored_ext = ext or ".jpg"
 
     if _cloudinary_enabled():
         stored = f"picmatch/{uuid.uuid4()}"

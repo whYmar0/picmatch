@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
+import { EnvelopeSimple, WarningCircle, CheckCircle, ArrowsClockwise } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { authApi } from "../api";
 import { useLang } from "../contexts/LangContext";
@@ -83,7 +83,7 @@ export default function VerifyEmail() {
       >
         <div className="text-center mb-7">
           <div className="flex items-center justify-center mx-auto mb-4 w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full">
-            <Mail className="text-primary-500" size={32} />
+            <EnvelopeSimple className="text-primary-500" size={32} />
           </div>
           <h1 className="font-display font-bold text-3xl">{t("verifyEmailTitle")}</h1>
           <p className="text-gray-400 text-sm mt-2">
@@ -101,7 +101,7 @@ export default function VerifyEmail() {
               exit={{ opacity: 0, height: 0 }}
               className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm rounded-2xl px-4 py-3 mb-4"
             >
-              <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+              <WarningCircle size={15} className="mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </motion.div>
           )}
@@ -114,7 +114,7 @@ export default function VerifyEmail() {
               exit={{ opacity: 0, height: 0 }}
               className="flex items-start gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 text-sm rounded-2xl px-4 py-3 mb-4"
             >
-              <CheckCircle size={15} className="mt-0.5 flex-shrink-0" />
+              <CheckCircle size={15} weight="fill" className="mt-0.5 flex-shrink-0" />
               <span>{t("emailVerifiedSuccess")}</span>
             </motion.div>
           )}
@@ -160,9 +160,9 @@ export default function VerifyEmail() {
               className="text-sm text-gray-500 hover:text-primary-500 flex items-center justify-center gap-2 mx-auto transition-colors disabled:opacity-50"
             >
               {resendLoading ? (
-                <RefreshCw size={14} className="animate-spin" />
+                <ArrowsClockwise size={14} className="animate-spin" />
               ) : (
-                <RefreshCw size={14} />
+                <ArrowsClockwise size={14} />
               )}
               {countdown > 0 ? `${t("resendCodeTimer")}${countdown}s` : t("resendCode")}
             </button>

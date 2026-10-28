@@ -1,4 +1,4 @@
-/**
+﻿/**
  * RecentAlbumCard.jsx — v3
  *
  * Card for recently visited albums (people's albums — own ones are excluded).
@@ -9,7 +9,7 @@
  * - No dedicated statistics button — stats are one cover tap away, same as
  *   the owner's own albums.
  */
-import { Image, Lock, Globe, Play, BarChart2, RotateCcw } from "lucide-react";
+import { ImageSquare, LockSimple, Globe, Play, TrendUp, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useLang } from "../contexts/LangContext";
@@ -98,7 +98,7 @@ export default function RecentAlbumCard({ album, index, onOpen, onVote }) {
           )
         ) : (
           <div className="flex h-full items-center justify-center">
-            <Image size={32} className="text-gray-300 dark:text-gray-600" />
+            <ImageSquare size={32} className="text-gray-300 dark:text-gray-600" />
           </div>
         )}
 
@@ -110,7 +110,7 @@ export default function RecentAlbumCard({ album, index, onOpen, onVote }) {
             title={lang === "ru" ? "Приватный альбом" : "Private album"}
             aria-label={lang === "ru" ? "Приватный альбом" : "Private album"}
           >
-            <Lock size={13} />
+            <LockSimple size={13} />
           </span>
         ) : (
           <span className="absolute top-2 left-2 flex items-center gap-1
@@ -151,7 +151,7 @@ export default function RecentAlbumCard({ album, index, onOpen, onVote }) {
               title={album.hasVoted ? t("revote") : t("vote")}
               aria-label={album.hasVoted ? t("revote") : t("vote")}
             >
-              {album.hasVoted ? <RotateCcw size={15} /> : <BarChart2 size={15} />}
+              {album.hasVoted ? <ArrowCounterClockwise size={15} /> : <TrendUp size={15} />}
             </button>
           </div>
         )}

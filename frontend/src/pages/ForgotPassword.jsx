@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, AlertCircle, CheckCircle, ArrowLeft } from "lucide-react";
+import { EnvelopeSimple, WarningCircle, CheckCircle, ArrowLeft } from "@phosphor-icons/react";
 import { authApi } from "../api";
 import { useLang } from "../contexts/LangContext";
 
@@ -62,7 +62,7 @@ export default function ForgotPassword() {
               exit={{ opacity: 0, height: 0 }}
               className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm rounded-2xl px-4 py-3 mb-4"
             >
-              <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+              <WarningCircle size={15} className="mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </motion.div>
           )}
@@ -75,7 +75,7 @@ export default function ForgotPassword() {
               exit={{ opacity: 0, height: 0 }}
               className="flex items-start gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 text-sm rounded-2xl px-4 py-3 mb-4"
             >
-              <CheckCircle size={15} className="mt-0.5 flex-shrink-0" />
+              <CheckCircle size={15} weight="fill" className="mt-0.5 flex-shrink-0" />
               <span>{t("resetLinkSent")}</span>
             </motion.div>
           )}
@@ -88,7 +88,7 @@ export default function ForgotPassword() {
                 {t("email")}
               </label>
               <div className="relative">
-                <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <EnvelopeSimple size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input 
                   type="email" 
                   required 

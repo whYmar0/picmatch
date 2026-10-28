@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { notificationsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import { UserAvatar } from "../components/Navbar";
 import { isVideoUrl } from "../utils/media";
-import { Bell, MessageSquare, BarChart2, CheckCircle, ChevronLeft, AtSign, MessageCircle } from "lucide-react";
+import { Bell, TrendUp, CheckCircle, CaretLeft, At, ChatCircle } from "@phosphor-icons/react";
 import { formatDistanceToNow, isToday, isYesterday, differenceInDays } from "date-fns";
 import { ru, enUS } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
@@ -60,9 +60,9 @@ export default function Notifications() {
 
   const getIcon = (type) => {
     switch(type) {
-      case "reply":   return <AtSign size={12} strokeWidth={3} className="text-white" />;
-      case "comment": return <MessageCircle size={12} fill="white" className="text-white" />;
-      case "vote":    return <BarChart2 size={12} fill="white" className="text-white" />;
+      case "reply":   return <At size={12} weight="bold" className="text-white" />;
+      case "comment": return <ChatCircle size={12} weight="fill" className="text-white" />;
+      case "vote":    return <TrendUp size={12} weight="fill" className="text-white" />;
       default:        return <Bell size={12} className="text-white" />;
     }
   };
@@ -185,7 +185,7 @@ export default function Notifications() {
     <div className="max-w-xl mx-auto px-4 py-6">
       <div className="flex items-center gap-4 mb-8">
         <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-          <ChevronLeft size={24} />
+          <CaretLeft size={24} />
         </button>
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">
           {t("notifications")}

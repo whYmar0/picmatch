@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from "framer-motion";
-import { ChevronLeft, Lock } from "lucide-react";
+import { CaretLeft, LockSimple } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { albumsApi, commentsApi, votesApi } from "../api";
 import { useLang } from "../contexts/LangContext";
@@ -125,11 +125,11 @@ function LockedCommentSheet({ photoId, photoUrl, initialComments, commentId, onB
             onClick={handleBack}
             className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            <ChevronLeft size={22} />
+            <CaretLeft size={22} />
           </button>
           <span className="font-bold text-xl ml-1">{t("Comments")}</span>
           <div className="ml-auto w-10 h-10 rounded-2xl flex items-center justify-center bg-amber-50 dark:bg-amber-900/20 text-amber-500">
-            <Lock size={18} />
+            <LockSimple size={18} />
           </div>
         </div>
 

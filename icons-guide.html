@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pickmatch — Phosphor Icons Design System Guide</title>
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Phosphor Icons Web CDN (Regular, Bold, Duotone) -->
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css"/>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css"/>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css"/>
+  <style>
+    :root {
+      --bg-dark: #121114;
+      --surface-dark: #1A181D;
+      --card-dark: #221F26;
+      --card-hover: #2B2732;
+      --border-dark: #34303C;
+      --primary: #9966CC;
+      --primary-light: #B88CE0;
+      --primary-glow: rgba(153, 102, 204, 0.25);
+      --text-main: #F3F1F5;
+      --text-muted: #9E9AA7;
+      --accent-green: #34D399;
+      --accent-red: #F87171;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 2.5rem 1.5rem 5rem;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(153, 102, 204, 0.12) 0%, transparent 45%),
+        radial-gradient(circle at 85% 85%, rgba(117, 69, 163, 0.08) 0%, transparent 40%);
+      background-attachment: fixed;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      margin-bottom: 2.5rem;
+      border-bottom: 1px solid var(--border-dark);
+      padding-bottom: 2rem;
+    }
+
+    .badge-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--primary-glow);
+      color: var(--primary-light);
+      border: 1px solid rgba(153, 102, 204, 0.4);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      letter-spacing: 0.02em;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(135deg, #FFFFFF 30%, #C2A3E0 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      max-width: 700px;
+      line-height: 1.6;
+    }
+
+    /* Stats bar */
+    .stats-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .stat-pill {
+      background: var(--surface-dark);
+      border: 1px solid var(--border-dark);
+      padding: 0.6rem 1.2rem;
+      border-radius: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.95rem;
+    }
+
+    .stat-pill strong {
+      color: var(--primary-light);
+      font-size: 1.15rem;
+    }
+
+    /* Controls Bar: Search & Filter Tabs */
+    .controls-wrapper {
+      position: sticky;
+      top: 1rem;
+      z-index: 50;
+      background: rgba(26, 24, 29, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-dark);
+      border-radius: 1.5rem;
+      padding: 1rem;
+      margin-bottom: 2.5rem;
+      box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .search-box {
+      position: relative;
+      width: 100%;
+    }
+
+    .search-box i {
+      position: absolute;
+      left: 1.1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 1.25rem;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--card-dark);
+      border: 1px solid var(--border-dark);
+      color: var(--text-main);
+      padding: 0.85rem 1rem 0.85rem 3rem;
+      border-radius: 1rem;
+      font-size: 1rem;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+
+    .filters-row {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.25rem;
+      scrollbar-width: thin;
+    }
+
+    .filter-btn {
+      background: transparent;
+      border: 1px solid var(--border-dark);
+      color: var(--text-muted);
+      padding: 0.55rem 1.1rem;
+      border-radius: 9999px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .filter-btn:hover {
+      color: var(--text-main);
+      background: var(--card-dark);
+    }
+
+    .filter-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #FFFFFF;
+      box-shadow: 0 4px 14px rgba(153, 102, 204, 0.4);
+    }
+
+    /* Category Section */
+    .category-section {
+      margin-bottom: 3.5rem;
+    }
+
+    .category-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--text-main);
+    }
+
+    .category-title i {
+      color: var(--primary);
+      font-size: 1.6rem;
+    }
+
+    .category-count {
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: var(--surface-dark);
+      border: 1px solid var(--border-dark);
+      padding: 0.2rem 0.65rem;
+      border-radius: 9999px;
+      color: var(--text-muted);
+    }
+
+    /* Icon Grid */
+    .icons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.25rem;
+    }
+
+    /* Icon Card */
+    .icon-card {
+      background: var(--card-dark);
+      border: 1px solid var(--border-dark);
+      border-radius: 1.25rem;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      position: relative;
+    }
+
+    .icon-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(153, 102, 204, 0.6);
+      box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.4), 0 0 16px var(--primary-glow);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .icon-avatar {
+      width: 52px;
+      height: 52px;
+      background: var(--surface-dark);
+      border: 1px solid rgba(153, 102, 204, 0.3);
+      border-radius: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.85rem;
+      color: var(--primary-light);
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .icon-card:hover .icon-avatar {
+      background: var(--primary);
+      color: #FFFFFF;
+      transform: scale(1.05);
+      border-color: var(--primary);
+    }
+
+    .icon-meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .icon-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0.25rem;
+      border-radius: 0.4rem;
+      font-size: 0.95rem;
+      transition: color 0.15s;
+    }
+
+    .copy-btn:hover {
+      color: var(--primary-light);
+    }
+
+    .icon-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      display: inline-block;
+      margin-top: 0.2rem;
+    }
+
+    .card-desc {
+      font-size: 0.9rem;
+      color: #D1CFD7;
+      line-height: 1.5;
+    }
+
+    .card-files {
+      margin-top: auto;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .files-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .files-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .file-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      background: rgba(153, 102, 204, 0.12);
+      color: var(--primary-light);
+      border: 1px solid rgba(153, 102, 204, 0.25);
+      padding: 0.15rem 0.5rem;
+      border-radius: 0.45rem;
+      white-space: nowrap;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #2A2533;
+      border: 1px solid var(--primary);
+      color: #FFFFFF;
+      padding: 0.8rem 1.4rem;
+      border-radius: 1rem;
+      font-weight: 500;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(12px);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 9999;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 1rem;
+      color: var(--text-muted);
+      display: none;
+    }
+
+    .empty-state i {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="badge-brand">
+        <i class="ph ph-sparkle"></i> Design System Artifact
+      </div>
+      <h1>Каталог иконок Phosphor в Picmatch</h1>
+      <p class="subtitle">
+        Полный интерактивный реестр всех иконок библиотеки <code>@phosphor-icons/react</code>, интегрированных в проект. Нажмите на иконку или кнопку копирования для получения React-компонента.
+      </p>
+
+      <div class="stats-row">
+        <div class="stat-pill">
+          <i class="ph ph-squares-four" style="color:var(--primary);"></i>
+          <span>Всего иконок: <strong id="total-count">0</strong></span>
+        </div>
+        <div class="stat-pill">
+          <i class="ph ph-folder" style="color:var(--accent-green);"></i>
+          <span>Категорий: <strong>6</strong></span>
+        </div>
+        <div class="stat-pill">
+          <i class="ph ph-package" style="color:var(--primary-light);"></i>
+          <span>Библиотека: <strong>@phosphor-icons/react (v2.1.10)</strong></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Interactive Filter & Search Bar -->
+    <div class="controls-wrapper">
+      <div class="search-box">
+        <i class="ph ph-magnifying-glass"></i>
+        <input 
+          type="text" 
+          id="search-input" 
+          class="search-input" 
+          placeholder="Поиск по названию (например, Lock, ChartBar) или компоненту..."
+          autocomplete="off"
+        >
+      </div>
+
+      <div class="filters-row">
+        <button class="filter-btn active" data-cat="all">
+          <i class="ph ph-grid-four"></i> Все иконки
+        </button>
+        <button class="filter-btn" data-cat="nav">
+          <i class="ph ph-navigation-arrow"></i> Навигация и система
+        </button>
+        <button class="filter-btn" data-cat="albums">
+          <i class="ph ph-images"></i> Альбомы и управление
+        </button>
+        <button class="filter-btn" data-cat="voting">
+          <i class="ph ph-chart-bar"></i> Голосование и аналитика
+        </button>
+        <button class="filter-btn" data-cat="modals">
+          <i class="ph ph-sliders-horizontal"></i> Фильтры и модалки
+        </button>
+        <button class="filter-btn" data-cat="video">
+          <i class="ph ph-video-camera"></i> Видеоплеер
+        </button>
+        <button class="filter-btn" data-cat="auth">
+          <i class="ph ph-shield-check"></i> Авторизация и доступ
+        </button>
+      </div>
+    </div>
+
+    <!-- Empty search result -->
+    <div id="empty-state" class="empty-state">
+      <i class="ph ph-magnifying-glass"></i>
+      <h3>Ничего не найдено</h3>
+      <p>Попробуйте изменить поисковый запрос или выбрать категорию "Все иконки".</p>
+    </div>
+
+    <!-- 1. Навигация и система -->
+    <section class="category-section" data-section="nav">
+      <h2 class="category-title">
+        <i class="ph ph-navigation-arrow"></i>
+        Навигация, профиль и темы
+        <span class="category-count">7 иконок</span>
+      </h2>
+      <div class="icons-grid">
+
+        <div class="icon-card" data-name="SquaresFour" data-search="squaresfour сетка дашборд плитка">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-squares-four"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>SquaresFour</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('SquaresFour')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;SquaresFour /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка перехода в дашборд «Мои альбомы» в навбаре, а также переключатель отображения галереи в виде сетки.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Navbar.jsx</span>
+              <span class="file-badge">AlbumSummary.jsx</span>
+              <span class="file-badge">AlbumGallery.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Camera" data-search="camera аватар фото камера профиль">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-camera"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Camera</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Camera')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Camera /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Индикатор быстрой смены и загрузки фото аватара пользователя в шапке профиля.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Navbar.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="SignOut" data-search="signout logout выход профиль">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-sign-out"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>SignOut</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('SignOut')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;SignOut /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка выхода из аккаунта (Logout) в выпадающем меню профиля пользователя.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Navbar.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Sun" data-search="sun светлая тема день">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-sun"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Sun</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Sun')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Sun /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Индикатор и переключатель для активации светлой темы оформления.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Navbar.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Moon" data-search="moon темная тема ночь">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-moon"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Moon</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Moon')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Moon /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Индикатор и переключатель для активации тёмной темы интерфейса.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Navbar.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Translate" data-search="translate язык локализация переключение ru en">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-translate"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Translate</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Translate')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Translate /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка быстрого переключения языка интерфейса (RU / EN) в шапке приложения.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Navbar.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Bell" data-search="bell колокольчик уведомления notifications">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-bell"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Bell</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Bell')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Bell /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Центр уведомлений: иконка страницы уведомлений, бейдж новых голосов и комментариев.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Notifications.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="At" data-search="at собачка username никнейм">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-at"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>At</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('At')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;At /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Символ юзернейма пользователя в навигационной панели и в карточках упоминаний в уведомлениях.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Navbar.jsx</span>
+              <span class="file-badge">Notifications.jsx</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 2. Альбомы и управление -->
+    <section class="category-section" data-section="albums">
+      <h2 class="category-title">
+        <i class="ph ph-images"></i>
+        Альбомы, медиафайлы и карточки
+        <span class="category-count">8 иконок</span>
+      </h2>
+      <div class="icons-grid">
+
+        <div class="icon-card" data-name="Plus" data-search="plus плюс создать новый альбом">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-plus"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Plus</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Plus')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Plus /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Главная кнопка создания нового фотоальбома в дашборде.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Dashboard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Upload" data-search="upload загрузка фото дропзона">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-upload"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Upload</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Upload')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Upload /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Обозначение drag & drop зоны загрузки фото/видео при создании альбома и 1-й шаг на лендинге.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Landing.jsx</span>
+              <span class="file-badge">CreateAlbum.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Trash" data-search="trash корзина удалить альбом">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-trash"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Trash</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Trash')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Trash /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка удаления альбома с подтверждением действия в карточке альбома.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">AlbumCard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Globe" data-search="globe глобус публичный альбом доступ">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-globe"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Globe</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Globe')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Globe /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Индикатор публичного доступа к альбому (результаты голосования открыты для всех участников).</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">RecentAlbumCard.jsx</span>
+              <span class="file-badge">AlbumCard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Lock" data-search="lock замок приватный закрытый доступ">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-lock"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Lock</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Lock')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Lock /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Индикатор закрытого приватного альбома (результаты видит только владелец) и экран «Доступ ограничен».</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">RecentAlbumCard.jsx</span>
+              <span class="file-badge">AlbumCard.jsx</span>
+              <span class="file-badge">NeedAccessEmptyState.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Image" data-search="image фото картинка изображение количество">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-image"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Image</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Image')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Image /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Иконка счётчика количества фотографий в карточке альбома и плейсхолдер при отсутствии обложки.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">SharedAlbumCard.jsx</span>
+              <span class="file-badge">RecentAlbumCard.jsx</span>
+              <span class="file-badge">AlbumCard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="ImageBroken" data-search="imagebroken ошибка фото битое изображение">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-image-broken"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>ImageBroken</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('ImageBroken')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;ImageBroken /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Плейсхолдер ошибки загрузки картинки или видеофайла в карточке свайпа.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">SwipeCard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="MagnifyingGlass" data-search="magnifyingglass поиск search альбомы">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-magnifying-glass"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>MagnifyingGlass</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('MagnifyingGlass')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;MagnifyingGlass /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Поле поиска в списке созданных и недавно просмотренных альбомов в Dashboard.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Dashboard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 3. Голосование и аналитика -->
+    <section class="category-section" data-section="voting">
+      <h2 class="category-title">
+        <i class="ph ph-chart-bar"></i>
+        Голосование, реакции и аналитика
+        <span class="category-count">8 иконок</span>
+      </h2>
+      <div class="icons-grid">
+
+        <div class="icon-card" data-name="ChartBar" data-search="chartbar график аналитика статистика результаты">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-chart-bar"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>ChartBar</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('ChartBar')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;ChartBar /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Переход к экрану статистики голосов, графиков реакций и детальной аналитики альбома.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Navbar.jsx</span>
+              <span class="file-badge">AlbumGallery.jsx</span>
+              <span class="file-badge">SharedAlbumCard.jsx</span>
+              <span class="file-badge">RecentAlbumCard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Chats" data-search="chats комментарии отзывы чат обсуждение">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-chats"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Chats</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Chats')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Chats /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Открытие шторки комментариев под фотографией, счётчик веток комментариев и уведомления об ответах.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">VotePage.jsx</span>
+              <span class="file-badge">Notifications.jsx</span>
+              <span class="file-badge">AlbumSummary.jsx</span>
+              <span class="file-badge">AlbumGallery.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="PaperPlaneTilt" data-search="paperplanetilt отправка комментария самолетик">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-paper-plane-tilt"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>PaperPlaneTilt</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('PaperPlaneTilt')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;PaperPlaneTilt /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка отправки нового комментария или ответа в треде обсуждения кадра.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">PhotoComments.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Trophy" data-search="trophy кубок победитель лучшее фото">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-trophy"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Trophy</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Trophy')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Trophy /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Шаг «Победа / Результат» на главной странице лендинга (определение лучшего кадра).</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Landing.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="ShareNetwork" data-search="sharenetwork поделиться шаринг ссылка">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-share-network"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>ShareNetwork</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('ShareNetwork')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;ShareNetwork /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка вызова модального окна шеринга ссылки на голосование или аналитику.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Landing.jsx</span>
+              <span class="file-badge">SharedAlbumCard.jsx</span>
+              <span class="file-badge">AlbumSummary.jsx</span>
+              <span class="file-badge">AlbumGallery.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Copy" data-search="copy скопировать ссылку буфер">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-copy"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Copy</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Copy')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Copy /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Копирование ссылки приглашения в буфер обмена в шторках и карточках.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">ShareModal.jsx</span>
+              <span class="file-badge">AnalyticsShareSheet.jsx</span>
+              <span class="file-badge">AlbumCard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="LinkSimple" data-search="linksimple ссылка URL доступ">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-link-simple"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>LinkSimple</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('LinkSimple')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;LinkSimple /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Иконка поля публичной ссылки доступа к аналитике альбома.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">AnalyticsShareSheet.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="ArrowCounterClockwise" data-search="arrowcounterclockwise переголосовать сброс голосов заново">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-arrow-counter-clockwise"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>ArrowCounterClockwise</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('ArrowCounterClockwise')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;ArrowCounterClockwise /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка «Переголосовать» — позволяет избирателю заново пройти голосование по альбому.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">RecentAlbumCard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 4. Фильтры и модалки -->
+    <section class="category-section" data-section="modals">
+      <h2 class="category-title">
+        <i class="ph ph-sliders-horizontal"></i>
+        Фильтры, сортировка и модальные окна
+        <span class="category-count">10 иконок</span>
+      </h2>
+      <div class="icons-grid">
+
+        <div class="icon-card" data-name="SlidersHorizontal" data-search="slidershorizontal сортировка порядок фильтры">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-sliders-horizontal"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>SlidersHorizontal</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('SlidersHorizontal')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;SlidersHorizontal /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Открытие шторки сортировки карточек (по дате, популярности, количеству голосов).</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Dashboard.jsx</span>
+              <span class="file-badge">AlbumSummary.jsx</span>
+              <span class="file-badge">AlbumGallery.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Funnel" data-search="funnel воронка фильтрация реакций">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-funnel"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Funnel</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Funnel')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Funnel /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Фильтрация результатов в сводке альбома (только лайки, только дизлайки, все).</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">AlbumSummary.jsx</span>
+              <span class="file-badge">AlbumGallery.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Users" data-search="users избиратели голосующие список">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-users"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Users</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Users')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Users /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Фильтрация реакций по конкретным голосующим пользователям в аналитике альбома.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">AlbumSummary.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Rows" data-search="rows список вид строки режим">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-rows"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Rows</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Rows')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Rows /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Переключатель отображения фотографий в альбоме в подробный вид списком (Rows).</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">AlbumSummary.jsx</span>
+              <span class="file-badge">AlbumGallery.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Check" data-search="check галочка выбор подтверждение скопировано">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-check"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Check</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Check')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Check /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Индикатор выбранного пункта в меню сортировки/фильтрации и статус успешного копирования ссылки.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">VotePage.jsx</span>
+              <span class="file-badge">Dashboard.jsx</span>
+              <span class="file-badge">ShareModal.jsx</span>
+              <span class="file-badge">AvatarCropModal.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="X" data-search="x крестик закрыть отмена удалить">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-x"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>X</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('X')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;X /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Закрытие шторки, полноэкранного лайтбокса фото, модалок и удаление фото из очереди загрузки.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">BottomSheet.jsx</span>
+              <span class="file-badge">ImageLightbox.jsx</span>
+              <span class="file-badge">CreateAlbum.jsx</span>
+              <span class="file-badge">PhotoComments.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="CaretLeft" data-search="caretleft назад стрелка вернуться">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-caret-left"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>CaretLeft</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('CaretLeft')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;CaretLeft /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка навигации «Назад» в шапках расширенных списков, уведомлений и тредов комментариев.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Dashboard.jsx</span>
+              <span class="file-badge">Notifications.jsx</span>
+              <span class="file-badge">CommentThreadPage.jsx</span>
+              <span class="file-badge">AnalyticsPage.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="ArrowLeft" data-search="arrowleft назад стрелка">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-arrow-left"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>ArrowLeft</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('ArrowLeft')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;ArrowLeft /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Возврат на предыдущую страницу в формах создания альбома и сброса пароля.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">CreateAlbum.jsx</span>
+              <span class="file-badge">ForgotPassword.jsx</span>
+              <span class="file-badge">AlbumSummary.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="MagnifyingGlassPlus" data-search="magnifyingglassplus приблизить зум zoom in lightbox">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-magnifying-glass-plus"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>MagnifyingGlassPlus</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('MagnifyingGlassPlus')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;MagnifyingGlassPlus /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Увеличение масштаба фотографии в полноэкранном режиме (Lightbox) и в модалке обрезки аватара.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">ImageLightbox.jsx</span>
+              <span class="file-badge">AvatarCropModal.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="MagnifyingGlassMinus" data-search="magnifyingglassminus отдалить зум zoom out">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-magnifying-glass-minus"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>MagnifyingGlassMinus</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('MagnifyingGlassMinus')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;MagnifyingGlassMinus /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Уменьшение масштаба изображения при кадрировании аватара пользователя.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">AvatarCropModal.jsx</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 5. Видеоплеер -->
+    <section class="category-section" data-section="video">
+      <h2 class="category-title">
+        <i class="ph ph-video-camera"></i>
+        Медиаплеер и видео
+        <span class="category-count">4 иконки</span>
+      </h2>
+      <div class="icons-grid">
+
+        <div class="icon-card" data-name="Play" data-search="play плей воспроизведение видео">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-play"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Play</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Play')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Play /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Запуск воспроизведения видеоролика и бейдж видео-медиа на обложках карточек.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">VideoPlayer.jsx</span>
+              <span class="file-badge">VotePage.jsx</span>
+              <span class="file-badge">AlbumCard.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Pause" data-search="pause пауза остановить видео">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-pause"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Pause</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Pause')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Pause /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Приостановка воспроизведения текущего видеоролика в плеере.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">VideoPlayer.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="SpeakerHigh" data-search="speakerhigh звук громкость включить">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-speaker-high"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>SpeakerHigh</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('SpeakerHigh')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;SpeakerHigh /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Индикатор включенного звука в плеере свайп-карты.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">VideoPlayer.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="SpeakerSlash" data-search="speakerslash без звука mute выключить">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-speaker-slash"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>SpeakerSlash</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('SpeakerSlash')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;SpeakerSlash /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Индикатор беззвучного режима (Mute) по умолчанию при просмотре видео-карточек.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">VideoPlayer.jsx</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 6. Авторизация и доступ -->
+    <section class="category-section" data-section="auth">
+      <h2 class="category-title">
+        <i class="ph ph-shield-check"></i>
+        Авторизация, формы и безопасность
+        <span class="category-count">10 иконок</span>
+      </h2>
+      <div class="icons-grid">
+
+        <div class="icon-card" data-name="SignIn" data-search="signin логин вход войти">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-sign-in"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>SignIn</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('SignIn')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;SignIn /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка входа в аккаунт на странице авторизации и быстрый вход на экране голосования.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Login.jsx</span>
+              <span class="file-badge">VotePage.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="UserPlus" data-search="userplus регистрация создать аккаунт">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-user-plus"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>UserPlus</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('UserPlus')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;UserPlus /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка подтверждения регистрации нового пользователя в системе.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Register.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="User" data-search="user пользователь логин имя юзер">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-user"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>User</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('User')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;User /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Иконка поля ввода логина/имени пользователя в регистрационной форме.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Register.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="EnvelopeSimple" data-search="envelopesimple email почта письмо e-mail">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-envelope-simple"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>EnvelopeSimple</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('EnvelopeSimple')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;EnvelopeSimple /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Иконка инпута электронной почты на страницах входа, регистрации и восстановления пароля.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Login.jsx</span>
+              <span class="file-badge">Register.jsx</span>
+              <span class="file-badge">VerifyEmail.jsx</span>
+              <span class="file-badge">ForgotPassword.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="Eye" data-search="eye показать пароль глаз пароли">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-eye"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>Eye</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('Eye')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;Eye /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка показа скрытого пароля в полях ввода.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Login.jsx</span>
+              <span class="file-badge">Register.jsx</span>
+              <span class="file-badge">ResetPassword.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="EyeSlash" data-search="eyeslash скрыть пароль закрытый глаз">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-eye-slash"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>EyeSlash</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('EyeSlash')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;EyeSlash /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Кнопка скрытия пароля (маскировка символов).</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Login.jsx</span>
+              <span class="file-badge">Register.jsx</span>
+              <span class="file-badge">ResetPassword.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="CheckCircle" data-search="checkcircle успех валидация пароля галочка в круге">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-check-circle" style="color:var(--accent-green);"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>CheckCircle</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('CheckCircle')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;CheckCircle /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Индикатор выполненного требования к надёжности пароля и успешной верификации email.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Register.jsx</span>
+              <span class="file-badge">ResetPassword.jsx</span>
+              <span class="file-badge">VerifyEmail.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="WarningCircle" data-search="warningcircle ошибка предупреждение валидация">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-warning-circle" style="color:var(--accent-red);"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>WarningCircle</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('WarningCircle')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;WarningCircle /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Баннер ошибки авторизации, несовпадения паролей или сбоя отправки запроса.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Login.jsx</span>
+              <span class="file-badge">Register.jsx</span>
+              <span class="file-badge">ResetPassword.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="ArrowsClockwise" data-search="arrowsclockwise обновить перезагрузить код повтор">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-arrows-clockwise"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>ArrowsClockwise</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('ArrowsClockwise')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;ArrowsClockwise /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Повторная отправка кода подтверждения email и перегенерация токена публичной ссылки.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">VerifyEmail.jsx</span>
+              <span class="file-badge">AnalyticsShareSheet.jsx</span>
+              <span class="file-badge">CreateAlbum.jsx</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-card" data-name="ArrowRight" data-search="arrowright начать регистрация стрелка вправо">
+          <div class="card-top">
+            <div class="icon-avatar"><i class="ph ph-arrow-right"></i></div>
+            <div class="icon-meta">
+              <div class="icon-name">
+                <span>ArrowRight</span>
+                <button class="copy-btn" title="Скопировать компонент" onclick="copySnippet('ArrowRight')"><i class="ph ph-copy"></i></button>
+              </div>
+              <span class="icon-tag">&lt;ArrowRight /&gt;</span>
+            </div>
+          </div>
+          <p class="card-desc">Стрелка перехода на основной CTA-кнопке «Начать» на главной странице.</p>
+          <div class="card-files">
+            <span class="files-label">Используется в:</span>
+            <div class="files-list">
+              <span class="file-badge">Landing.jsx</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Toast Element -->
+  <div id="toast" class="toast">
+    <i class="ph ph-check-circle" style="color: var(--accent-green); font-size: 1.25rem;"></i>
+    <span id="toast-text">Скопировано в буфер!</span>
+  </div>
+
+  <script>
+    // Update Total Counter
+    const allCards = document.querySelectorAll('.icon-card');
+    document.getElementById('total-count').textContent = allCards.length;
+
+    // Search & Filter Logic
+    const searchInput = document.getElementById('search-input');
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const sections = document.querySelectorAll('.category-section');
+    const emptyState = document.getElementById('empty-state');
+
+    let currentCategory = 'all';
+
+    function applyFilter() {
+      const query = searchInput.value.toLowerCase().trim();
+      let visibleCardsCount = 0;
+
+      sections.forEach(section => {
+        const sectionCat = section.getAttribute('data-section');
+        const cards = section.querySelectorAll('.icon-card');
+        let sectionVisibleCards = 0;
+
+        cards.forEach(card => {
+          const name = card.getAttribute('data-name').toLowerCase();
+          const searchKeywords = (card.getAttribute('data-search') || '').toLowerCase();
+          const files = Array.from(card.querySelectorAll('.file-badge')).map(f => f.textContent.toLowerCase()).join(' ');
+
+          const matchesQuery = !query || name.includes(query) || searchKeywords.includes(query) || files.includes(query);
+          const matchesCat = (currentCategory === 'all' || currentCategory === sectionCat);
+
+          if (matchesQuery && matchesCat) {
+            card.style.display = 'flex';
+            sectionVisibleCards++;
+            visibleCardsCount++;
+          } else {
+            card.style.display = 'none';
+          }
+        });
+
+        // Hide entire section if no cards match
+        if (sectionVisibleCards === 0) {
+          section.style.display = 'none';
+        } else {
+          section.style.display = 'block';
+        }
+      });
+
+      emptyState.style.display = visibleCardsCount === 0 ? 'block' : 'none';
+    }
+
+    searchInput.addEventListener('input', applyFilter);
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCategory = btn.getAttribute('data-cat');
+        applyFilter();
+      });
+    });
+
+    // Copy to clipboard helper
+    function copySnippet(iconName) {
+      const code = `<${iconName} size={20} />`;
+      navigator.clipboard.writeText(code).then(() => {
+        showToast(`Скопировано: ${code}`);
+      }).catch(() => {
+        showToast(`Скопировано: ${iconName}`);
+      });
+    }
+
+    function showToast(text) {
+      const toast = document.getElementById('toast');
+      const toastText = document.getElementById('toast-text');
+      toastText.textContent = text;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2200);
+    }
+  </script>
+</body>
+</html>

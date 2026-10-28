@@ -4,7 +4,7 @@
  * Bottom sheet that owns the analytics share-link flow:
  *   - On open: lazily generate (or fetch) the album's share token via
  *     POST /api/albums/<id>/share-token.
- *   - Copy the public URL with smartShare (mobile share sheet → clipboard
+ *   - LinkSimple the public URL with smartShare (mobile share sheet → clipboard
  *     → textarea fallback), mirroring AlbumSummary's helper.
  *   - Regenerate the token with a confirm step that warns about invalidating
  *     the previous link.
@@ -15,7 +15,7 @@
  */
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Copy, Check, Link2, RefreshCw, Loader2, Info } from "lucide-react";
+import { LinkSimple, Check, ArrowsClockwise, SpinnerGap, Info } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 
 import { albumsApi } from "../api";
@@ -112,14 +112,14 @@ export default function AnalyticsShareSheet({ open, onClose, albumId, zIndex = 5
           {t("shareAnalyticsHint")}
         </p>
 
-        {/* URL display + Copy — maximally rounded pill */}
+        {/* URL display + LinkSimple — maximally rounded pill */}
         <div className="flex items-center gap-2 pl-4 pr-1.5 py-1.5
                         bg-gray-100 dark:bg-gray-800 rounded-full
                         border border-gray-200 dark:border-gray-700">
-          <Link2 size={16} className="text-gray-400 flex-shrink-0" />
+          <LinkSimple size={16} className="text-gray-400 flex-shrink-0" />
           {loading || !url ? (
             <div className="flex-1 flex items-center gap-2 text-sm text-gray-400 min-w-0">
-              <Loader2 size={14} className="animate-spin" />
+              <SpinnerGap size={14} className="animate-spin" />
               <span>…</span>
             </div>
           ) : (
@@ -143,7 +143,7 @@ export default function AnalyticsShareSheet({ open, onClose, albumId, zIndex = 5
             }`}
             aria-label={t("copyLink")}
           >
-            {copied ? <Check size={18} /> : <Copy size={18} />}
+            {copied ? <Check size={18} /> : <LinkSimple size={18} />}
           </motion.button>
         </div>
 
@@ -162,7 +162,7 @@ export default function AnalyticsShareSheet({ open, onClose, albumId, zIndex = 5
                        dark:hover:bg-red-900/15 dark:hover:text-red-400
                        transition-colors disabled:opacity-50"
           >
-            <RefreshCw size={15} />
+            <ArrowsClockwise size={15} />
             {t("regenerateLink")}
           </motion.button>
         )}
@@ -194,7 +194,7 @@ export default function AnalyticsShareSheet({ open, onClose, albumId, zIndex = 5
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold
                            bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-70"
               >
-                {rotating && <Loader2 size={14} className="animate-spin" />}
+                {rotating && <SpinnerGap size={14} className="animate-spin" />}
                 {t("regenerateLink")}
               </button>
             </div>

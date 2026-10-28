@@ -9,7 +9,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
-import { Plus, ChevronLeft, Search, SlidersHorizontal, ChevronDown, Check } from "lucide-react";
+import { Plus, CaretLeft, MagnifyingGlass, SlidersHorizontal, Check } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { albumsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
@@ -358,7 +358,7 @@ export default function Dashboard() {
                   aria-label={t("createAlbum")}
                   title={t("createAlbum")}
                 >
-                  <Plus size={20} strokeWidth={2.5} />
+                  <Plus size={20} weight="bold" />
                 </Link>
               </div>
 
@@ -455,14 +455,14 @@ export default function Dashboard() {
                 className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
                 aria-label="Back"
               >
-                <ChevronLeft size={24} />
+                <CaretLeft size={24} />
               </button>
               <h1 className="font-display font-bold text-2xl">{t("myAlbums")}</h1>
             </div>
 
             <div className="mt-2 mb-6 flex flex-wrap items-center gap-3 px-4">
               <div className="relative flex-1 min-w-[180px]">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={mySearch}
@@ -510,14 +510,14 @@ export default function Dashboard() {
                 className="p-2 rounded-2xl hover:bg-border-light dark:hover:bg-border-dark transition-colors text-gray-600 dark:text-gray-300"
                 aria-label="Back"
               >
-                <ChevronLeft size={24} />
+                <CaretLeft size={24} />
               </button>
               <h1 className="font-display font-bold text-2xl">{t("recentlyVisited")}</h1>
             </div>
 
             <div className="mt-2 mb-6 flex flex-wrap items-center gap-3 px-4">
               <div className="relative flex-1 min-w-[180px]">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={recentSearch}

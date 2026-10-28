@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, Eye, EyeOff, AlertCircle, CheckCircle } from "lucide-react";
+import { LockSimple, Eye, EyeSlash, WarningCircle, CheckCircle } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { authApi, authStorage } from "../api";
 import { useLang } from "../contexts/LangContext";
@@ -90,7 +90,7 @@ export default function ResetPassword() {
               exit={{ opacity: 0, height: 0 }}
               className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm rounded-2xl px-4 py-3 mb-4"
             >
-              <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+              <WarningCircle size={15} className="mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </motion.div>
           )}
@@ -103,7 +103,7 @@ export default function ResetPassword() {
               exit={{ opacity: 0, height: 0 }}
               className="flex items-start gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 text-sm rounded-2xl px-4 py-3 mb-4"
             >
-              <CheckCircle size={15} className="mt-0.5 flex-shrink-0" />
+              <CheckCircle size={15} weight="fill" className="mt-0.5 flex-shrink-0" />
               <span>{t("passwordResetSuccess")}</span>
             </motion.div>
           )}
@@ -117,7 +117,7 @@ export default function ResetPassword() {
                 {t("newPassword")}
               </label>
               <div className="relative">
-                <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <LockSimple size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input 
                   type={showPwd ? "text" : "password"} 
                   required 
@@ -133,7 +133,7 @@ export default function ResetPassword() {
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
                   disabled={success}
                 >
-                  {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {showPwd ? <EyeSlash size={14} /> : <Eye size={14} />}
                 </button>
               </div>
               
@@ -167,21 +167,21 @@ export default function ResetPassword() {
                   <div className="space-y-1.5 text-xs">
                     <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.length ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
                       {pwdStrength.length 
-                        ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
+                        ? <CheckCircle size={13} weight="fill" className="text-green-500 flex-shrink-0" /> 
                         : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">1</div>
                       }
                       <span className="truncate">{t("reqMinLength")}</span>
                     </div>
                     <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.uppercase ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
                       {pwdStrength.uppercase 
-                        ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
+                        ? <CheckCircle size={13} weight="fill" className="text-green-500 flex-shrink-0" /> 
                         : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">2</div>
                       }
                       <span className="truncate">{t("reqUppercase")}</span>
                     </div>
                     <div className={`flex items-center gap-2 transition-colors duration-200 ${pwdStrength.special ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
                       {pwdStrength.special 
-                        ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" /> 
+                        ? <CheckCircle size={13} weight="fill" className="text-green-500 flex-shrink-0" /> 
                         : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-700 flex-shrink-0 flex items-center justify-center text-[9px] font-bold">3</div>
                       }
                       <span className="truncate">{t("reqSpecial")}</span>

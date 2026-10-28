@@ -9,8 +9,7 @@
 import { useRef, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LogOut, LayoutDashboard, Camera, Bell, MessageCircle, BarChart2, Sun, Moon, Languages, AtSign } from "lucide-react";
-import FilledHeart from "./FilledHeart";
+import { SignOut, SquaresFour, Camera, ChatCircle, TrendUp, Sun, Moon, Translate, At, Heart } from "@phosphor-icons/react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
@@ -214,7 +213,7 @@ export default function Navbar() {
                   onClick={() => navigate("/inbox")}
                   className="btn-ghost relative flex items-center justify-center w-11 h-11 rounded-2xl"
                 >
-                  <FilledHeart size={24} className="text-gray-900 dark:text-gray-100" />
+                  <Heart size={24} className="text-gray-900 dark:text-gray-100" />
                   {unreadNotifs.length > 0 && (
                     <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(255,255,255,1)] dark:shadow-[0_0_0_2px_rgba(30,41,59,1)]" />
                   )}
@@ -250,19 +249,19 @@ export default function Navbar() {
                         <div className="absolute top-0 right-[40px] z-10 w-max h-[46px] bg-[#ef4444] rounded-full py-2 px-3 overflow-hidden flex items-center justify-center shadow-2xl gap-2.5 text-white">
                         {repliesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <AtSign size={16} strokeWidth={3} className="text-white" />
+                            <At size={16} weight="bold" className="text-white" />
                             <span className="font-bold text-[14px] leading-none mb-[1px]" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" }}>{repliesCount > 999 ? "999+" : repliesCount}</span>
                           </div>
                         )}
                         {commentsCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <MessageCircle size={16} fill="white" className="text-white" />
+                            <ChatCircle size={16} weight="fill" className="text-white" />
                             <span className="font-bold text-[14px] leading-none mb-[1px]" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" }}>{commentsCount > 999 ? "999+" : commentsCount}</span>
                           </div>
                         )}
                         {votesCount > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <BarChart2 size={17} strokeWidth={3} className="text-white" />
+                            <TrendUp size={17} weight="bold" className="text-white" />
                             <span className="font-bold text-[14px] leading-none mb-[1px]" style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" }}>{votesCount}</span>
                           </div>
                         )}
@@ -280,7 +279,7 @@ export default function Navbar() {
             {user ? (
               <>
                 <Link to="/dashboard" className="btn-ghost hidden sm:flex text-sm">
-                  <LayoutDashboard size={15} /> {t("dashboard")}
+                  <SquaresFour size={15} /> {t("dashboard")}
                 </Link>
 
                 <div className="flex items-center gap-2 pl-2 relative"
@@ -329,7 +328,7 @@ export default function Navbar() {
                         <div className="p-2 space-y-1">
                           {/* Username header */}
                           <div className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                            <AtSign size={16} className="text-primary-400" />
+                            <At size={16} className="text-primary-400" />
                             {user.username}
                           </div>
 
@@ -377,7 +376,7 @@ export default function Navbar() {
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm 
                                        hover:bg-primary-50 dark:hover:bg-primary-900/20 text-gray-700 dark:text-gray-200 transition-colors"
                           >
-                            <Languages size={16} className="text-primary-400" />
+                            <Translate size={16} className="text-primary-400" />
                             <span className="flex-1 text-left">{t("language")}</span>
                             <span className="text-[10px] font-bold bg-primary-100 dark:bg-primary-900/60 text-primary-700 dark:text-primary-300 px-2 py-0.5 rounded-md">
                               {lang.toUpperCase()}
@@ -389,7 +388,7 @@ export default function Navbar() {
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm 
                                        hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 transition-colors"
                           >
-                            <LogOut size={16} />
+                            <SignOut size={16} />
                             {t("logout")}
                           </button>
                         </div>

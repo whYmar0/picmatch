@@ -1,0 +1,9 @@
+image - image-square
+lock - lock-simple
+upload - upload-simple
+trash - trash-simple
+chartbar - trend-up
+chats - chat-circle
+paper-plane-tilt - paper-plane-right
+copy - link-simple
+sharenetwork - export

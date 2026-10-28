@@ -10,11 +10,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, Users, LayoutGrid, List,
-  SlidersHorizontal, Filter, Share, MessageCircle, Check,
-} from "lucide-react";
-import FilledHeart   from "./FilledHeart";
-import BrokenHeart   from "./BrokenHeart";
+  ArrowLeft, Users, SquaresFour, Rows,
+  SlidersHorizontal, Funnel, Export, ChatCircle, Check,
+  Heart, HeartBreak,
+} from "@phosphor-icons/react";
 import { isVideo } from "../utils/media";
 import { useLang }        from "../contexts/LangContext";
 import { useAuth }        from "../contexts/AuthContext";
@@ -28,10 +27,10 @@ import { UserAvatar }     from "./Navbar";
 function ReactionBadge({ isLike }) {
   return isLike
     ? <span className="inline-flex items-center gap-1 text-green-500 text-xs font-semibold">
-        <FilledHeart size={10} /> Нравится
+        <Heart size={10} /> Нравится
       </span>
     : <span className="inline-flex items-center gap-1 text-red-400 text-xs font-semibold">
-        <BrokenHeart size={10} strokeWidth={2} /> Пропуск
+        <HeartBreak size={10} /> Пропуск
       </span>;
 }
 
@@ -78,10 +77,10 @@ function PhotoListRow({ photo, rank, onPhotoClick, canViewStats }) {
             </div>
             <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
               <span className="text-green-500 flex items-center gap-0.5">
-                <FilledHeart size={9} /> {photo.like_count}
+                <Heart size={9} /> {photo.like_count}
               </span>
               <span className="text-red-400 flex items-center gap-0.5">
-                <BrokenHeart size={9} strokeWidth={2} /> {photo.dislike_count}
+                <HeartBreak size={9} /> {photo.dislike_count}
               </span>
               <span className="ml-auto">
                 {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
@@ -136,10 +135,10 @@ function PhotoTabBar({ tab, setTab, likeCount, dislikeCount, canViewStats, comme
                         ? "bg-primary-400 text-white"
                         : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}
         >
-          <FilledHeart size={14} />
+          <Heart size={14} />
           <span>{likeCount}</span>
           <span className="text-xs opacity-70">·</span>
-          <BrokenHeart size={14} strokeWidth={2} />
+          <HeartBreak size={14} />
           <span>{dislikeCount}</span>
         </button>
       )}
@@ -151,7 +150,7 @@ function PhotoTabBar({ tab, setTab, likeCount, dislikeCount, canViewStats, comme
                       ? "bg-primary-400 text-white"
                       : "bg-border-light dark:bg-border-dark text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"}`}
       >
-        <MessageCircle size={14} />
+        <ChatCircle size={14} />
         {commentsLabel}
       </button>
     </div>
@@ -336,7 +335,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
                 className="w-10 h-10 rounded-2xl flex items-center justify-center
                            bg-gray-100 dark:bg-gray-800 text-primary-500
                            hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
-                <Share size={20} strokeWidth={2.2} />
+                <Export size={20} />
               </button>
             )}
           </div>
@@ -361,7 +360,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
                       ${selectedVoters.size > 0
                         ? "bg-primary-400 text-white"
                         : "bg-border-light dark:bg-border-dark hover:bg-primary-50"}`}>
-          <Filter size={15} /> {t("filterBy")}
+          <Funnel size={15} /> {t("filterBy")}
           {selectedVoters.size > 0 && (
             <span className="bg-white/30 text-white text-xs font-bold px-1.5 rounded-md">
               {selectedVoters.size}
@@ -402,8 +401,8 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
       <BottomSheet open={sortOpen} onClose={() => setSortOpen(false)} title={t("sort")}>
         <div className="flex gap-2 mb-5">
           {[
-            { key: "list", icon: <List size={15} />,       label: t("listView") },
-            { key: "grid", icon: <LayoutGrid size={15} />, label: t("gridView") },
+            { key: "list", icon: <Rows size={15} />,       label: t("listView") },
+            { key: "grid", icon: <SquaresFour size={15} />, label: t("gridView") },
           ].map(({ key, icon, label }) => (
             <button key={key} onClick={() => { setViewMode(key); setSortOpen(false); }}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl

@@ -12,9 +12,7 @@
  */
 import { useRef, forwardRef, useImperativeHandle, useState, useEffect } from "react";
 import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
-import { ImageOff } from "lucide-react";
-import BrokenHeart from "./BrokenHeart";
-import FilledHeart from "./FilledHeart";
+import { ImageBroken, Heart, HeartBreak } from "@phosphor-icons/react";
 import { isVideo } from "../utils/media";
 import VideoPlayer from "./VideoPlayer";
 
@@ -278,7 +276,7 @@ const SwipeCard = forwardRef(function SwipeCard(
 
         {imageFailed ? (
           <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-gray-400">
-            <ImageOff size={34} />
+            <ImageBroken size={34} />
             <span className="text-sm">Изображение недоступно</span>
           </div>
         ) : isVideo(photo) ? (
@@ -351,7 +349,7 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
                    transition-colors duration-150 touch-manipulation"
         aria-label="Dislike"
       >
-        <BrokenHeart size={28} className="text-gray-500 dark:text-gray-300" />
+        <HeartBreak size={28} className="text-gray-500 dark:text-gray-300" />
       </motion.button>
 
       {/* Like */}
@@ -365,7 +363,7 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
                    disabled:opacity-40 disabled:cursor-not-allowed
                    transition-colors duration-150 touch-manipulation"        aria-label="Like"
       >
-        <FilledHeart size={28} className="text-white" />
+        <Heart size={28} className="text-white" />
       </motion.button>
 
     </div>

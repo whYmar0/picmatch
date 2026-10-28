@@ -1,4 +1,4 @@
-/**
+﻿/**
  * NeedAccessEmptyState.jsx
  *
  * Friendly fallback page shown when a share-link visitor has no access:
@@ -11,7 +11,7 @@
  * missing.
  */
 import { motion } from "framer-motion";
-import { Lock, ArrowLeft } from "lucide-react";
+import { LockSimple, ArrowLeft } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "../contexts/LangContext";
 
@@ -35,7 +35,7 @@ export default function NeedAccessEmptyState() {
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 280, damping: 22 }}
           >
-            <Lock size={28} className="text-amber-500" />
+            <LockSimple size={28} className="text-amber-500" />
           </motion.div>
         </div>
 

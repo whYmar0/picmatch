@@ -1,4 +1,4 @@
-/**
+﻿/**
  * pages/CreateAlbum.jsx — album creation with immediate media uploads
  */
 
@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDropzone } from "react-dropzone";
-import { Upload, X, ArrowLeft, RefreshCw } from "lucide-react";
+import { UploadSimple, X, ArrowLeft, ArrowsClockwise } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { albumsApi } from "../api";
 import { useLang } from "../contexts/LangContext";
@@ -20,7 +20,7 @@ async function compressImage(file) {
       return;
     }
 
-    const img = new Image();
+    const img = new ImageSquare();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
@@ -345,7 +345,7 @@ export default function CreateAlbum() {
             }`}
           >
             <input {...getInputProps()} />
-            <Upload size={32} className={`mx-auto mb-3 ${isDragActive ? "text-primary-400" : "text-gray-300"}`} />
+            <UploadSimple size={32} className={`mx-auto mb-3 ${isDragActive ? "text-primary-400" : "text-gray-300"}`} />
             <p className="text-sm text-gray-500 dark:text-gray-400">{t("uploadDrag")}</p>
             <p className="text-xs text-gray-400 mt-1">{t("uploadHint")} · {t("maxFileSize")}</p>
           </div>
@@ -410,7 +410,7 @@ export default function CreateAlbum() {
                       onClick={() => retryFile(item)}
                       className="absolute bottom-1 left-1 right-1 flex items-center justify-center gap-1 rounded-lg bg-black/65 px-1 py-1 text-[10px] font-semibold text-white"
                     >
-                      <RefreshCw size={11} /> {t("retryUpload")}
+                      <ArrowsClockwise size={11} /> {t("retryUpload")}
                     </button>
                   )}
                   <button
@@ -444,7 +444,7 @@ export default function CreateAlbum() {
             </>
           ) : (
             <>
-              <Upload size={18} />
+              <UploadSimple size={18} />
               {t("createAlbumBtn")}
             </>
           )}

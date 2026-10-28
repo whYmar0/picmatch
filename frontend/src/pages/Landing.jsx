@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Landing.jsx — v5.3
  *
  * FIX: Cards were being clipped/cropped at the bottom.
@@ -20,7 +20,7 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Upload, Share, Trophy, ArrowRight } from "lucide-react";
+import { UploadSimple, Export, Trophy, ArrowRight } from "@phosphor-icons/react";
 import { useLang } from "../contexts/LangContext";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -250,8 +250,8 @@ export default function Landing() {
           {t("howItWorks")}
         </motion.h2>
         <div className="grid sm:grid-cols-3 gap-5">
-          <Step icon={Upload} title={t("step1Title")} desc={t("step1Desc")} index={0} />
-          <Step icon={Share} title={t("step2Title")} desc={t("step2Desc")} index={1} />
+          <Step icon={UploadSimple} title={t("step1Title")} desc={t("step1Desc")} index={0} />
+          <Step icon={Export} title={t("step2Title")} desc={t("step2Desc")} index={1} />
           <Step icon={Trophy} title={t("step3Title")} desc={t("step3Desc")} index={2} />
         </div>
       </section>

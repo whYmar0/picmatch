@@ -1,4 +1,4 @@
-/**
+﻿/**
  * CommentThreadPage.jsx
  *
  * Isolated view for notification deep-links.
@@ -9,7 +9,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, Lock, MessageCircle } from "lucide-react";
+import { CaretLeft, LockSimple, ChatCircle } from "@phosphor-icons/react";
 import { commentsApi } from "../api";
 import { UserAvatar } from "../components/Navbar";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -91,7 +91,7 @@ export default function CommentThreadPage() {
           onClick={() => navigate("/inbox")}
           className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         >
-          <ChevronLeft size={24} />
+          <CaretLeft size={24} />
         </button>
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t("Comments")}</h1>
@@ -101,7 +101,7 @@ export default function CommentThreadPage() {
       {/* Private Badge - only for non-owners in private albums */}
       {!isOwner && !isPublic && (
         <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-200 dark:border-amber-800/50 mb-6">
-          <Lock size={15} className="text-amber-500 flex-shrink-0" />
+          <LockSimple size={15} className="text-amber-500 flex-shrink-0" />
           <p className="text-sm text-amber-700 dark:text-amber-300">
             {t("privateAlbumThreadHint")}
           </p>
@@ -118,7 +118,7 @@ export default function CommentThreadPage() {
         </div>
       ) : thread.length === 0 ? (
         <div className="text-center py-16">
-          <MessageCircle size={36} className="mx-auto text-gray-300 mb-4" />
+          <ChatCircle size={36} className="mx-auto text-gray-300 mb-4" />
           <p className="text-gray-500 text-sm">{t("commentNotFound")}</p>
         </div>
       ) : (

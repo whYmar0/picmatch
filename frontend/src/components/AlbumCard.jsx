@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AlbumCard.jsx — v6
  *
  * - Card keeps `rounded-3xl overflow-hidden` (rounded card appearance).
@@ -11,7 +11,7 @@
  */
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Copy, Check, Trash2, Image, Globe, Lock, Play } from "lucide-react";
+import { LinkSimple, Check, TrashSimple, ImageSquare, Globe, LockSimple, Play } from "@phosphor-icons/react";
 import { useLang } from "../contexts/LangContext";
 import { albumsApi } from "../api";
 import { isVideo } from "../utils/media";
@@ -140,7 +140,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
           )
         ) : (
           <div className="flex items-center justify-center h-full">
-            <Image size={32} className="text-gray-300 dark:text-gray-600" />
+            <ImageSquare size={32} className="text-gray-300 dark:text-gray-600" />
           </div>
         )}
         {/* Photo count badge (top-right) */}
@@ -179,11 +179,11 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
             ) : album.is_public ? (
               <Globe size={15} />
             ) : (
-              <Lock size={15} />
+              <LockSimple size={15} />
             )}
           </motion.button>
 
-          {/* Copy link */}
+          {/* LinkSimple link */}
           <motion.button
             onClick={handleCopy}
             whileTap={{ scale: 0.9 }}
@@ -191,7 +191,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
                        text-gray-500 hover:text-primary-500 transition-colors flex-shrink-0"
             title={t("copyLink")}
           >
-            {copied ? <Check size={15} className="text-green-500" /> : <Copy size={15} />}
+            {copied ? <Check size={15} className="text-green-500" /> : <LinkSimple size={15} />}
           </motion.button>
 
           {/* Delete */}
@@ -202,7 +202,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
                        text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 active:bg-red-50 dark:active:bg-red-950/30 transition-colors flex-shrink-0"
             title={t("deleteAlbum")}
           >
-            <Trash2 size={15} />
+            <TrashSimple size={15} />
           </motion.button>
         </div>
       </div>

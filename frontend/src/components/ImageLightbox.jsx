@@ -1,4 +1,4 @@
-/**
+﻿/**
  * components/ImageLightbox.jsx
  * Full-screen image overlay (WhatsApp / Telegram style).
  * Features:
@@ -10,7 +10,7 @@
  */
 import { useRef, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
-import { X, ZoomIn } from "lucide-react";
+import { X, MagnifyingGlassPlus } from "@phosphor-icons/react";
 import { isVideoUrl } from "../utils/media";
 import VideoPlayer from "./VideoPlayer";
 
@@ -95,7 +95,7 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
   // Reset zoom when opening
   useEffect(() => { if (open) reset(); }, [open, reset]);
 
-  // Lock body scroll
+  // LockSimple body scroll
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
@@ -172,7 +172,7 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
           {scale > 1.1 && (
             <div className="absolute top-4 left-4 z-10 bg-black/50 text-white
                             text-xs px-2 py-1 rounded-lg flex items-center gap-1">
-              <ZoomIn size={12} /> {Math.round(scale * 10) / 10}×
+              <MagnifyingGlassPlus size={12} /> {Math.round(scale * 10) / 10}×
             </div>
           )}
 
@@ -182,7 +182,7 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
                           text-white/40 text-xs pointer-events-none">
               Pinch to zoom · Double-tap to zoom · Swipe down to close
             </p>
-          )}            {/* Image / Video */}
+          )}            {/* ImageSquare / Video */}
           <motion.div
             initial={{ scale: 0.88, opacity: 0 }}
             animate={{ scale: 1,    opacity: 1 }}

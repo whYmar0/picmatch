@@ -1,10 +1,10 @@
-/**
+﻿/**
  * SharedAlbumCard.jsx — Card for albums shared with the current user
  * Read-only: shows "View Results" if can_view_stats, else just the invite link
  */
 import { motion } from "framer-motion";
 import { Link }   from "react-router-dom";
-import { BarChart2, Image, Share } from "lucide-react";
+import { TrendUp, ImageSquare, Export } from "@phosphor-icons/react";
 import { useLang } from "../contexts/LangContext";
 import { isVideo } from "../utils/media";
 
@@ -24,7 +24,7 @@ export default function SharedAlbumCard({ album, index }) {
     >
       {/* Shared-by badge */}
       <div className="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
-        <Share size={14} strokeWidth={2.2} className="text-primary-400 flex-shrink-0" />
+        <Export size={14} className="text-primary-400 flex-shrink-0" />
         <span className="truncate">{t("sharedBy")} {album.creator?.username}</span>
       </div>
 
@@ -51,7 +51,7 @@ export default function SharedAlbumCard({ album, index }) {
           </div>
         ) : (
           <div className="flex h-full items-center justify-center">
-            <Image size={22} className="text-gray-300 dark:text-gray-600" />
+            <ImageSquare size={22} className="text-gray-300 dark:text-gray-600" />
           </div>
         )}
         <span className="absolute top-1.5 left-1.5 bg-black/50 text-white
@@ -69,7 +69,7 @@ export default function SharedAlbumCard({ album, index }) {
       {album.can_view_stats && (
         <Link to={`/analytics/${album.id}`}
           className="btn-primary text-xs py-2 justify-center">
-          <BarChart2 size={13} /> {t("viewAnalytics")}
+          <TrendUp size={13} /> {t("viewAnalytics")}
         </Link>
       )}
     </motion.div>

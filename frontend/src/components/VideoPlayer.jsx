@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Pause, Play, SpeakerHigh, SpeakerSlash } from "@phosphor-icons/react";
 
 const TAP_MOVEMENT_PX = 12;
 // Leave enough time for a normal tap to complete before treating it as a hold.
@@ -780,8 +780,8 @@ export default function VideoPlayer({
                 className="absolute inset-0 rounded-full bg-black/50 backdrop-blur-sm transition-colors group-hover:bg-black/70"
               />
               {isMuted
-                ? <VolumeX size={16} className="relative z-10" />
-                : <Volume2 size={16} className="relative z-10" />}
+                ? <SpeakerSlash size={16} className="relative z-10" />
+                : <SpeakerHigh size={16} className="relative z-10" />}
             </button>
             {showPlaybackControl && (
               <button
@@ -798,8 +798,8 @@ export default function VideoPlayer({
                   className="absolute inset-0 rounded-full bg-black/50 backdrop-blur-sm transition-colors group-hover:bg-black/70"
                 />
                 {isPlaying
-                  ? <Pause size={24} fill="currentColor" className="relative z-10" />
-                  : <Play size={24} fill="currentColor" className="relative z-10 ml-0.5" />}
+                  ? <Pause size={24} weight="fill" className="relative z-10" />
+                  : <Play size={24} weight="fill" className="relative z-10 ml-0.5" />}
               </button>
             )}
           </div>

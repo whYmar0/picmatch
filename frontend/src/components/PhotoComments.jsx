@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { SendHorizontal, X } from "lucide-react";
+import { PaperPlaneRight, X } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { commentsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
@@ -232,7 +232,7 @@ export function CommentInput({ photoId, replyTarget, onCancelReply, onCommentCre
           disabled={submitting || !text.trim()}
           whileTap={{ scale: 0.9 }}
           className="btn-primary w-11 h-11 flex-shrink-0 p-0">
-          <SendHorizontal size={18} strokeWidth={2.4} />
+          <PaperPlaneRight size={18} />
         </motion.button>
       </form>
     </div>
@@ -452,7 +452,7 @@ export default function PhotoComments({ photoId, albumCreatorId, initialComments
             disabled={submitting || !text.trim()}
             whileTap={{ scale: 0.9 }}
             className="btn-primary w-11 h-11 flex-shrink-0 p-0">
-            <SendHorizontal size={18} strokeWidth={2.4} />
+            <PaperPlaneRight size={18} />
           </motion.button>
         </form>
       </div>
