@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AvatarCropModal.jsx
  * Circular avatar cropper with drag + zoom support.
  * Uses HTML Canvas — no extra dependencies needed.
@@ -28,7 +28,7 @@ export default function AvatarCropModal({ src, onConfirm, onCancel }) {
   // ── Load image ──
   useEffect(() => {
     if (!src) return;
-    const img = new ImageSquare();
+    const img = new Image();
     img.onload = () => {
       imgRef.current = img;
       setImgSize({ w: img.naturalWidth, h: img.naturalHeight });

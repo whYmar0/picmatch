@@ -1,4 +1,4 @@
-﻿/**
+/**
  * pages/CreateAlbum.jsx — album creation with immediate media uploads
  */
 
@@ -13,51 +13,10 @@ import { useLang } from "../contexts/LangContext";
 
 // ─── Client-side image compression ───────────────────────────────────────────
 async function compressImage(file) {
-  return new Promise((resolve) => {
-    // Videos and already-small images should be uploaded unchanged.
-    if (file.type.startsWith("video/") || !file.type.startsWith("image/") || file.size < 200 * 1024) {
-      resolve(file);
-      return;
-    }
-
-    const img = new ImageSquare();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const maxSize = 1200;
-      let { width, height } = img;
-      if (width > maxSize || height > maxSize) {
-        const ratio = Math.min(maxSize / width, maxSize / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            resolve(file);
-            return;
-          }
-          resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
-            type: "image/jpeg",
-            lastModified: Date.now(),
-          }));
-        },
-        "image/jpeg",
-        0.75
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(file);
-    };
-    img.src = url;
-  });
+  // Stock photos: return original file as-is without client-side downscaling/compression
+  return file;
 }
+
 
 function createId() {
   return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
