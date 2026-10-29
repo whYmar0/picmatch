@@ -78,14 +78,14 @@ const SwipeCard = forwardRef(function SwipeCard(
     panRef.current = null;
     pinchActiveRef.current = false;
     pinchOccurredRef.current = true;
-    pinchCooldownUntilRef.current = Date.now() + 450;
+    pinchCooldownUntilRef.current = Date.now() + 200;
     applyPinchTransform({ scale: 1, x: 0, y: 0 }, `transform ${PINCH_RESET_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`);
     window.clearTimeout(pinchResetTimerRef.current);
     pinchResetTimerRef.current = window.setTimeout(() => {
       pinchOccurredRef.current = false;
       setPinchActive(false);
       pinchResetTimerRef.current = null;
-    }, 450);
+    }, 200);
   };
 
   const handlePinchStartCapture = (event) => {
@@ -173,10 +173,13 @@ const SwipeCard = forwardRef(function SwipeCard(
         lastPointerPos.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         onLikeThresholdCrossed?.(lastPointerPos.current);
       }
+      if (card) {
+        card.style.pointerEvents = "none";
+      }
       animatePointerTransform([
         { transform: "translate3d(0px, 0px, 0px) rotate(0deg)", opacity: 1 },
         { transform: `translate3d(${direction * 900}px, 0px, 0px) rotate(${direction * 22}deg)`, opacity: 0 },
-      ], { duration: 240, easing: "cubic-bezier(0.32, 0, 0.67, 0)" }, () => {
+      ], { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" }, () => {
         onSwipe(photo.id, isLike);
         suppressHeartRef.current = false;
         resolve();
@@ -188,9 +191,10 @@ const SwipeCard = forwardRef(function SwipeCard(
       pointerAnimationRef.current?.cancel();
       pointerAnimationRef.current = null;
       if (cardElRef.current) {
-        cardElRef.current.style.transform = "";
+        cardElRef.current.style.transform = "translate3d(0px, 0px, 0px) rotate(0deg)";
         cardElRef.current.style.opacity = "1";
         cardElRef.current.style.transition = "";
+        cardElRef.current.style.pointerEvents = isTop ? "auto" : "none";
       }
     },
   }));
@@ -199,8 +203,10 @@ const SwipeCard = forwardRef(function SwipeCard(
     pointerAnimationRef.current?.cancel();
     const card = cardElRef.current;
     if (!card?.animate) {
-      card.style.transform = keyframes.at(-1).transform;
-      card.style.opacity = keyframes.at(-1).opacity ?? "1";
+      if (card) {
+        card.style.transform = keyframes.at(-1).transform;
+        card.style.opacity = keyframes.at(-1).opacity ?? "1";
+      }
       onFinish?.();
       return;
     }
@@ -213,21 +219,30 @@ const SwipeCard = forwardRef(function SwipeCard(
       card.style.opacity = finalFrame.opacity ?? "1";
       pointerAnimationRef.current = null;
       animation.cancel();
-      // Defer React state-update callback to the next frame so the browser can
-      // paint the fly-off position before reconciling the card stack.
       if (onFinish) requestAnimationFrame(onFinish);
     };
   };
 
   const handlePointerDown = (event) => {
-    if (!isTop || event.target?.closest?.("[data-video-player]") || pinchActiveRef.current) return;
+    if (!isTop || event.target?.closest?.("[data-video-player]")) return;
+    if (pinchTransformRef.current.scale <= 1.05) {
+      pinchActiveRef.current = false;
+      pinchOccurredRef.current = false;
+    }
+    if (pinchActiveRef.current) return;
+
     pointerAnimationRef.current?.cancel();
     pointerAnimationRef.current = null;
     const card = cardElRef.current;
     if (card) {
       card.style.opacity = "1";
       card.style.transform = "translate3d(0px, 0px, 0px) rotate(0deg)";
+      card.style.pointerEvents = "auto";
     }
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {}
+
     pointerDown.current = {
       pointerId: event.pointerId,
       x: event.clientX,
@@ -269,6 +284,9 @@ const SwipeCard = forwardRef(function SwipeCard(
     const gesture = pointerDown.current;
     if (!isTop || !gesture || gesture.pointerId !== event.pointerId) return;
     pointerDown.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {}
     if (event.target?.closest?.("[data-video-player]")) return;
 
     const dx = event.clientX - gesture.x;
@@ -282,14 +300,14 @@ const SwipeCard = forwardRef(function SwipeCard(
     if (isPinchRestricted) {
       pinchOccurredRef.current = false;
       animatePointerTransform([
-        { transform: cardElRef.current.style.transform },
+        { transform: cardElRef.current?.style.transform || "translate3d(0px, 0px, 0px) rotate(0deg)" },
         { transform: "translate3d(0px, 0px, 0px) rotate(0deg)" },
-      ], { duration: 260, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+      ], { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
       return;
     }
 
     if (Math.abs(dx) < 8 && Math.abs(dy) < 8 && !hasDragged.current && onImageClick) {
-      cardElRef.current.style.transform = "";
+      if (cardElRef.current) cardElRef.current.style.transform = "translate3d(0px, 0px, 0px) rotate(0deg)";
       onImageClick(photo);
       return;
     }
@@ -298,28 +316,36 @@ const SwipeCard = forwardRef(function SwipeCard(
       const isLike = dx > 0 || gesture.velocityX > 0;
       const direction = isLike ? 1 : -1;
       const rotation = Math.max(-22, Math.min(22, dx / 14));
+      if (cardElRef.current) {
+        cardElRef.current.style.pointerEvents = "none";
+      }
       animatePointerTransform([
-        { transform: cardElRef.current.style.transform, opacity: 1 },
+        { transform: cardElRef.current?.style.transform || `translate3d(${dx}px, ${dy}px, 0) rotate(${rotation}deg)`, opacity: 1 },
         { transform: `translate3d(${direction * 900}px, ${dy - 40}px, 0) rotate(${direction * 22}deg)`, opacity: 0 },
-      ], { duration: 220, easing: "ease-out" }, () => onSwipe(photo.id, isLike));
+      ], { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" }, () => onSwipe(photo.id, isLike));
       return;
     }
 
     animatePointerTransform([
-      { transform: cardElRef.current.style.transform },
+      { transform: cardElRef.current?.style.transform || "translate3d(0px, 0px, 0px) rotate(0deg)" },
       { transform: "translate3d(0px, 0px, 0px) rotate(0deg)" },
-    ], { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+    ], { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
   };
 
-  const handlePointerCancel = () => {
+  const handlePointerCancel = (event) => {
     if (!pointerDown.current) return;
     pointerDown.current = null;
+    if (event?.pointerId) {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {}
+    }
     const currentTransform = cardElRef.current?.style.transform
       || "translate3d(0px, 0px, 0px) rotate(0deg)";
     animatePointerTransform([
       { transform: currentTransform },
       { transform: "translate3d(0px, 0px, 0px) rotate(0deg)" },
-    ], { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+    ], { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
   };
 
   const onImageLoad = (e) => {
@@ -334,14 +360,17 @@ const SwipeCard = forwardRef(function SwipeCard(
 
   return (
     <div
-      className="absolute inset-0 no-select touch-manipulation"
+      className="absolute inset-0 no-select"
       ref={cardElRef}
       style={{
         zIndex: 20 - stackIndex,
         pointerEvents: isTop ? "auto" : "none",
         cursor: isTop ? "grab" : "default",
-        touchAction: "pan-y",
+        touchAction: "none",
         transform: "translate3d(0px, 0px, 0px) rotate(0deg)",
+        willChange: isTop ? "transform, opacity" : "auto",
+        backfaceVisibility: "hidden",
+        WebkitBackfaceVisibility: "hidden",
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

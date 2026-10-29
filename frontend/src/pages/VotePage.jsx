@@ -97,7 +97,7 @@ const ThumbStrip = memo(function ThumbStrip({ photos, view, stripRef, onSelect }
 
       <div
         ref={stripRef}
-        className={`w-full min-w-0 py-2 px-[3px] flex overflow-x-auto ${
+        className={`relative w-full min-w-0 py-2 px-[3px] flex overflow-x-auto ${
           photos.length <= 1 ? "justify-center" : "justify-start"
         }`}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
@@ -346,50 +346,45 @@ export default function VotePage() {
   }, [finished, album, user]);
 
   useEffect(() => {
-    if (loading) return undefined;
-    const timer = setTimeout(() => {
-      setThumbView({ currentPhotoId, votesMap });
-    }, 180);
-    return () => clearTimeout(timer);
+    if (loading) return;
+    setThumbView({ currentPhotoId, votesMap });
   }, [currentPhotoId, votesMap, loading]);
 
-  // Auto-scroll thumbnail strip — use DOM measurement for accurate positioning
-  // (hardcoded pixel values are unreliable once padding/gap change).
+  // Auto-scroll thumbnail strip — center active thumbnail smoothly without layout thrashing
   useEffect(() => {
     if (!currentPhotoId || !thumbStripRef.current) return;
     const idx = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
     if (idx < 0) return;
     const strip = thumbStripRef.current;
-    const thumbEls = strip.querySelectorAll(".media-thumbnail");
-    const thumbEl = thumbEls[idx];
-    if (!thumbEl) return;
-    // Center the active thumbnail within the visible strip area.
-    const targetLeft = thumbEl.offsetLeft + thumbEl.offsetWidth / 2 - strip.clientWidth / 2;
-    strip.scrollLeft = Math.max(0, targetLeft);
+
+    const frameId = requestAnimationFrame(() => {
+      const thumbEls = strip.querySelectorAll(".media-thumbnail");
+      const thumbEl = thumbEls[idx];
+      if (!thumbEl) return;
+      const stripRect = strip.getBoundingClientRect();
+      const thumbRect = thumbEl.getBoundingClientRect();
+      const targetScrollLeft = strip.scrollLeft + (thumbRect.left + thumbRect.width / 2) - (stripRect.left + stripRect.width / 2);
+      strip.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: "smooth" });
+    });
+
+    return () => cancelAnimationFrame(frameId);
   }, [currentPhotoId, allPhotos]);
 
   // ── Vote handler ────────────────────────────────────────────────────────────
   const handleSwipe = useCallback((photoId, isLike) => {
     const pid = String(photoId);
-    // Per-photo deduplication: the button path (triggerSwipe → swipeTo) fires
-    // onSwipe internally, then triggerSwipe.then() also calls handleSwipe.
-    // The second call finds the photo already in the map and returns early.
-    // This also guarantees the drag path never gets blocked by an in-flight
-    // API request from a previous card — state always advances.
-    if (pid in votesMapRef.current) return;
+    const photos = allPhotosRef.current;
+    const curIdx = photos.findIndex((p) => String(p.id) === pid);
 
     const newMap = { ...votesMapRef.current, [pid]: isLike };
     votesMapRef.current = newMap;
+    setVotesMap(newMap);
 
-    // Advance immediately. The API request runs in the background so neither
-    // network latency nor the button path delays the next card.
-    const photos = allPhotosRef.current;
-    const curIdx = photos.findIndex((p) => String(p.id) === pid);
+    // Advance immediately. The API request runs in the background.
     const nextUnvoted =
       photos.slice(curIdx + 1).find((p) => !(String(p.id) in newMap)) ||
       photos.find((p) => !(String(p.id) in newMap));
 
-    setVotesMap(newMap);
     if (nextUnvoted) setCurrentPhotoId(String(nextUnvoted.id));
     else setFinished(true);
 
@@ -413,18 +408,15 @@ export default function VotePage() {
     if (topCardRef.current?.swipeTo) {
       votingRef.current = true;
       // Safety: reset the lock if swipeTo's promise never settles
-      // (e.g. the card unmounts mid-animation).
-      const safetyTimer = setTimeout(() => { votingRef.current = false; }, 1500);
+      const safetyTimer = setTimeout(() => { votingRef.current = false; }, 1200);
       topCardRef.current.swipeTo(isLike)
         .then(() => {
           clearTimeout(safetyTimer);
           votingRef.current = false;
-          handleSwipe(photo.id, isLike);
         })
         .catch(() => {
           clearTimeout(safetyTimer);
           votingRef.current = false;
-          handleSwipe(photo.id, isLike);
         });
     } else {
       handleSwipe(photo.id, isLike);
@@ -661,7 +653,8 @@ export default function VotePage() {
                     className="absolute inset-0"
                     style={{
                       opacity: 1,
-                      pointerEvents: commentSheet ? "none" : "auto",
+                      pointerEvents: commentSheet ? "none" : (isTop ? "auto" : "none"),
+                      zIndex: 20 - stackIdx,
                     }}
                   >
                     <SwipeCard
