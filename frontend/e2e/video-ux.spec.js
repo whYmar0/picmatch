@@ -369,10 +369,8 @@ test("voting video uses the bottom 20% for scrub and blurred letterbox backdrop"
   const viewportWidth = await page.evaluate(() => window.innerWidth);
   const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(documentWidth).toBeLessThanOrEqual(viewportWidth);
-  await expect(page.locator('[data-testid="thumbnail-edge-fade"]')).toHaveCount(2);
-  const edgeFades = page.locator('[data-testid="thumbnail-edge-fade"]');
-  await expect(edgeFades.nth(0)).not.toHaveClass(/backdrop-blur/);
-  await expect(edgeFades.nth(1)).not.toHaveClass(/backdrop-blur/);
+  // This fixture has one photo, so edge fades are intentionally omitted.
+  await expect(page.locator('[data-testid="thumbnail-edge-fade"]')).toHaveCount(0);
 
   const player = page.locator('[data-video-player="true"]').first();
   const video = player.locator('[data-video-main="true"]');
@@ -463,6 +461,11 @@ test("voting photo pinch zoom follows two fingers and returns to the card", asyn
     photos: [{ id: "photo-pinch-1", filename: "pinch.jpg", url: `${FRONTEND}/photo-pinch.jpg`, media_type: "image", order: 0 }],
   }}));
   await page.route(`${API}/api/votes/session/photo-pinch-test`, async (route) => route.fulfill({ json: { voted_photo_ids: [] } }));
+  const pinchVotes = [];
+  await page.route(`${API}/api/votes/`, async (route) => {
+    pinchVotes.push(route.request().postDataJSON());
+    return route.fulfill({ json: { id: "unexpected-pinch-vote" } });
+  });
   await page.route(`${API}/api/auth/me`, async (route) => route.fulfill({ json: USER }));
   await page.route(`${API}/api/notifications/`, async (route) => route.fulfill({ json: [] }));
   await page.route(`${API}/api/comments/photo/**`, async (route) => route.fulfill({ json: [] }));
@@ -496,13 +499,24 @@ test("voting photo pinch zoom follows two fingers and returns to the card", asyn
   }, { box });
   await expect.poll(() => pinchImage.locator("img").evaluate((node) => getComputedStyle(node).transform)).not.toBe("none");
   await pinchImage.evaluate((el, { box }) => {
-    const t = new Touch({ identifier: 1, target: el, clientX: box.x + 70, clientY: box.y + box.height / 2, pageX: box.x + 70, pageY: box.y + box.height / 2, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 });
-    el.dispatchEvent(new TouchEvent("touchend", { touches: [], targetTouches: [], changedTouches: [t], bubbles: true, cancelable: true }));
+    const makeTouch = (identifier, x, y) => new Touch({ identifier, target: el, clientX: x, clientY: y, pageX: x, pageY: y, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 });
+    const remaining = makeTouch(2, box.x + 230, box.y + box.height / 2);
+    const lifted = makeTouch(1, box.x + 70, box.y + box.height / 2);
+    el.dispatchEvent(new TouchEvent("touchend", { touches: [remaining], targetTouches: [remaining], changedTouches: [lifted], bubbles: true, cancelable: true }));
+    const moved = makeTouch(2, box.x + 350, box.y + box.height / 2);
+    el.dispatchEvent(new TouchEvent("touchmove", { touches: [moved], targetTouches: [moved], changedTouches: [moved], bubbles: true, cancelable: true }));
+  }, { box });
+  await page.waitForTimeout(50);
+  await pinchImage.evaluate((el, { box }) => {
+    const remaining = new Touch({ identifier: 2, target: el, clientX: box.x + 350, clientY: box.y + box.height / 2, pageX: box.x + 350, pageY: box.y + box.height / 2, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 });
+    el.dispatchEvent(new TouchEvent("touchend", { touches: [], targetTouches: [], changedTouches: [remaining], bubbles: true, cancelable: true }));
   }, { box });
   await expect.poll(() => pinchImage.locator("img").evaluate((node) => {
     const transform = getComputedStyle(node).transform;
     return transform === "none" || transform === "matrix(1, 0, 0, 1, 0, 0)";
   })).toBe(true);
+  await expect(page.locator('[data-testid="vote-pinch-image"]')).toBeVisible();
+  expect(pinchVotes).toHaveLength(0);
 });
 
 test("vertical video swipe closes through the gallery callback", async ({ page }) => {

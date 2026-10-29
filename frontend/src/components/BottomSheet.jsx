@@ -57,7 +57,9 @@ export default function BottomSheet({
   deferClose = false,
   closeOnEscape = true,
   backdropBlur = true,
+  backdropBlurClass = "backdrop-blur-xl",
   backdropDim = true,
+  backdropDimClass = "bg-black/60",
   heightVh = 0.95,
   testId,
   viewportHeight,
@@ -107,10 +109,10 @@ export default function BottomSheet({
   // Scale top content as we drag. The resize mode instead changes the stage
   // height, matching the Dashboard gallery photo stage.
   const scale = useTransform(y, [0, defaultOffset, dismissOffset], [0.85, 1, 1]);
-  const topContentHeight = useTransform(
+  const topContentScale = useTransform(
     y,
     [0, defaultOffset, vh],
-    [vh * 0.25, vh * 0.50, vh],
+    [0.25, 0.50, 1],
     { clamp: true },
   );
   // Fade out top content only when dragging DOWN to dismiss
@@ -401,11 +403,9 @@ export default function BottomSheet({
     };
     updateViewport();
     viewport?.addEventListener("resize", updateViewport);
-    viewport?.addEventListener("scroll", updateViewport);
     window.addEventListener("orientationchange", updateViewport);
     return () => {
       viewport?.removeEventListener("resize", updateViewport);
-      viewport?.removeEventListener("scroll", updateViewport);
       window.removeEventListener("orientationchange", updateViewport);
     };
   }, [viewportHeight]);
@@ -548,10 +548,10 @@ export default function BottomSheet({
             initial={{ opacity: backdropBlur && !backdropDim ? 1 : 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.34 }}
+            transition={{ duration: 0.3 }}
             data-testid={testId ? `${testId}-backdrop` : undefined}
             data-dim={backdropDim ? "true" : "false"}
-            className={`fixed inset-[-50vh] -inset-x-0 ${backdropDim ? "bg-black/60" : "bg-transparent"} ${backdropBlur ? "backdrop-blur-xl" : ""}`}
+            className={`fixed inset-[-50vh] -inset-x-0 ${backdropDim ? backdropDimClass : "bg-transparent"} ${backdropBlur ? backdropBlurClass : ""}`}
             onClick={handleClose}
           />
 
@@ -561,8 +561,11 @@ export default function BottomSheet({
               data-testid={testId ? `${testId}-top-content` : undefined}
               className="absolute top-0 left-0 w-full flex items-center justify-center p-4 z-10 pointer-events-none"
               style={{
-                height: resizeTopContentWithSheet ? topContentHeight : "40dvh",
+                height: resizeTopContentWithSheet ? vh : "40dvh",
+                scale: resizeTopContentWithSheet ? topContentScale : 1,
+                transformOrigin: "top center",
                 opacity: resizeTopContentWithSheet ? 1 : topOpacity,
+                willChange: resizeTopContentWithSheet ? "transform" : undefined,
               }}
             >
               <motion.div

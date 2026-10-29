@@ -18,15 +18,15 @@ const HEART_PATH =
 const GRADIENTS = [
   {
     stops: ["#FF7A00", "#FF1493", "#B000FF"],
-    glow: "rgba(255, 55, 145, 0.32)",
+    glow: "rgba(255, 55, 145, 0.45)",
   },
   {
     stops: ["#7C3AED", "#EC4899"],
-    glow: "rgba(190, 76, 220, 0.32)",
+    glow: "rgba(190, 76, 220, 0.45)",
   },
   {
     stops: ["#22C55E", "#FDE047"],
-    glow: "rgba(111, 220, 67, 0.3)",
+    glow: "rgba(111, 220, 67, 0.4)",
   },
 ];
 
@@ -34,8 +34,6 @@ function HeartBurst({ x, y, onComplete }) {
   const completedRef = useRef(false);
   const gradientId = useRef(`heart-gradient-${Math.random().toString(36).slice(2, 8)}`).current;
   const gradient = useRef(GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)]).current;
-
-  const filterId = useRef(`heart-glow-${Math.random().toString(36).slice(2, 8)}`).current;
 
   const handleComplete = useCallback(() => {
     if (completedRef.current) return;
@@ -87,11 +85,18 @@ function HeartBurst({ x, y, onComplete }) {
           willChange: "transform, opacity",
         }}
       >
+        {/* Soft glow rendered as a static gradient instead of an SVG filter:
+            SVG filters are re-rasterized every frame while the heart animates. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full pointer-events-none"
+          style={{ background: `radial-gradient(circle at 50% 55%, ${gradient.glow} 0%, transparent 70%)` }}
+        />
         <motion.svg
           viewBox="0 0 100 100"
           width={HEART_SIZE}
           height={HEART_SIZE}
-          className="block select-none overflow-visible"
+          className="relative block select-none overflow-visible"
           aria-hidden="true"
           initial={{ scale: 0, rotate: 0 }}
           animate={{
@@ -136,11 +141,8 @@ function HeartBurst({ x, y, onComplete }) {
                 stopColor={gradient.stops[gradient.stops.length - 1]}
               />
             </linearGradient>
-            <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow dx="0" dy="4" stdDeviation="5" floodColor={gradient.glow} floodOpacity="1" />
-            </filter>
           </defs>
-          <path d={HEART_PATH} fill={`url(#${gradientId})`} filter={`url(#${filterId})`} />
+          <path d={HEART_PATH} fill={`url(#${gradientId})`} />
         </motion.svg>
       </motion.div>
     </div>

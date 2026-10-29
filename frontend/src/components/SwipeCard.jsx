@@ -10,8 +10,8 @@
  *    controls the 3:4 aspect ratio and maximum size
  *  - Font: uses inherited font (font-sans from the site theme) — no override
  */
-import { useRef, forwardRef, useImperativeHandle, useState, useEffect } from "react";
-import { motion, useMotionValue, useTransform, useAnimation } from "framer-motion";
+import { memo, useRef, forwardRef, useImperativeHandle, useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { ImageBroken, Heart, HeartBreak } from "@phosphor-icons/react";
 import { isVideo } from "../utils/media";
 import VideoPlayer from "./VideoPlayer";
@@ -35,77 +35,68 @@ function touchMidpoint(touches) {
 }
 
 const SwipeCard = forwardRef(function SwipeCard(
-  { photo, isTop, stackIndex, onSwipe, onImageClick, onLikeThresholdCrossed, enablePinchZoom = false, videoScrubBottomRatio = 0.25, blurredVideoBackdrop = false, sharedLayoutId = null },
+  { photo, isTop, stackIndex, onSwipe, onImageClick, onLikeThresholdCrossed, enablePinchZoom = false, videoScrubBottomRatio = 0.25, blurredVideoBackdrop = false },
   ref
 ) {
-  const controls = useAnimation();
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
   const pointerDown = useRef(null);
+  const pointerAnimationRef = useRef(null);
   const hasDragged = useRef(false);
   const lastPointerPos = useRef({ x: 0, y: 0 });
   const heartFired = useRef(false);
   const suppressHeartRef = useRef(false);
   const cardElRef = useRef(null);
   const pinchRef = useRef({ active: false });
+  const panRef = useRef(null);
   const pinchResetTimerRef = useRef(null);
   const pinchTransformRef = useRef({ scale: 1, x: 0, y: 0 });
   const pinchImageRef = useRef(null);
-  const [pinchTransform, setPinchTransform] = useState({ scale: 1, x: 0, y: 0 });
+  const pinchActiveRef = useRef(false);
+  const pinchOccurredRef = useRef(false);
+  const pinchCooldownUntilRef = useRef(0);
   const [pinchActive, setPinchActive] = useState(false);
   const [aspectRatio, setAspectRatio] = useState(null);
   const [imageFailed, setImageFailed] = useState(false);
 
-  const rotate = useTransform(x, [-300, 0, 300], [-22, 0, 22]);
-
-  // Use the card's actual x motion value so drag and button swipes trigger at
-  // the same like-commit threshold.
-  useEffect(() => {
-    if (!isTop) return undefined;
-    const unsubscribe = x.on("change", (latest) => {
-      if (!suppressHeartRef.current && latest >= 80 && !heartFired.current) {
-        heartFired.current = true;
-        onLikeThresholdCrossed?.(lastPointerPos.current);
-      }
-      if (latest < 40) {
-        heartFired.current = false;
-      }
-    });
-    return unsubscribe;
-  }, [x, isTop, onLikeThresholdCrossed]);
-
   // All cards aligned perfectly (no scale difference)
-  const stackScale = 1;
   const pinchEnabled = enablePinchZoom && !isVideo(photo);
 
   useEffect(() => () => {
     window.clearTimeout(pinchResetTimerRef.current);
+    pointerAnimationRef.current?.cancel();
   }, []);
 
-  const setPinchState = (next) => {
+  const applyPinchTransform = (next, transition = "none") => {
     pinchTransformRef.current = next;
-    setPinchTransform(next);
+    const image = pinchImageRef.current;
+    if (!image) return;
+    image.style.transition = transition;
+    image.style.transform = `translate3d(${next.x}px, ${next.y}px, 0) scale(${next.scale})`;
   };
 
   const finishPinch = () => {
     pinchRef.current = { active: false };
-    setPinchState({ scale: 1, x: 0, y: 0 });
+    panRef.current = null;
+    pinchActiveRef.current = false;
+    pinchOccurredRef.current = true;
+    pinchCooldownUntilRef.current = Date.now() + 450;
+    applyPinchTransform({ scale: 1, x: 0, y: 0 }, `transform ${PINCH_RESET_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`);
     window.clearTimeout(pinchResetTimerRef.current);
     pinchResetTimerRef.current = window.setTimeout(() => {
+      pinchOccurredRef.current = false;
       setPinchActive(false);
       pinchResetTimerRef.current = null;
-    }, PINCH_RESET_MS);
+    }, 450);
   };
 
   const handlePinchStartCapture = (event) => {
     if (!pinchEnabled || event.touches.length !== 2) return;
     event.preventDefault();
     event.stopPropagation();
-    controls.stop();
-    x.set(0);
-    y.set(0);
     pointerDown.current = null;
     hasDragged.current = true;
+    pinchActiveRef.current = true;
+    pinchOccurredRef.current = true;
+    panRef.current = null;
     const midpoint = touchMidpoint(event.touches);
     const imageRect = pinchImageRef.current?.getBoundingClientRect();
     const imageCenter = imageRect
@@ -124,108 +115,207 @@ const SwipeCard = forwardRef(function SwipeCard(
       },
     };
     window.clearTimeout(pinchResetTimerRef.current);
+    if (pinchImageRef.current) pinchImageRef.current.style.transition = "none";
     setPinchActive(true);
   };
 
   const handlePinchMoveCapture = (event) => {
-    if (!pinchEnabled || !pinchRef.current.active || event.touches.length !== 2) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const pinch = pinchRef.current;
-    const distanceRatio = touchDistance(event.touches) / pinch.startDistance;
-    const scale = Math.max(1, Math.min(PINCH_MAX_SCALE, pinch.startTransform.scale * distanceRatio));
-    const midpoint = touchMidpoint(event.touches);
-    const scaleCompensation = (pinch.startTransform.scale || 1) - scale;
-    setPinchState({
-      scale,
-      x: pinch.startTransform.x + midpoint.x - pinch.startMidpoint.x + pinch.startLocalPoint.x * scaleCompensation,
-      y: pinch.startTransform.y + midpoint.y - pinch.startMidpoint.y + pinch.startLocalPoint.y * scaleCompensation,
-    });
+    if (!pinchEnabled || !pinchRef.current.active) return;
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      event.stopPropagation();
+      const pinch = pinchRef.current;
+      const distanceRatio = touchDistance(event.touches) / pinch.startDistance;
+      const scale = Math.max(1, Math.min(PINCH_MAX_SCALE, pinch.startTransform.scale * distanceRatio));
+      const midpoint = touchMidpoint(event.touches);
+      const scaleCompensation = (pinch.startTransform.scale || 1) - scale;
+      applyPinchTransform({
+        scale,
+        x: pinch.startTransform.x + midpoint.x - pinch.startMidpoint.x + pinch.startLocalPoint.x * scaleCompensation,
+        y: pinch.startTransform.y + midpoint.y - pinch.startMidpoint.y + pinch.startLocalPoint.y * scaleCompensation,
+      });
+      return;
+    }
+    if (event.touches.length === 1 && pinchTransformRef.current.scale > 1.05 && panRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      const touch = event.touches[0];
+      applyPinchTransform({
+        ...pinchTransformRef.current,
+        x: panRef.current.transform.x + touch.clientX - panRef.current.x,
+        y: panRef.current.transform.y + touch.clientY - panRef.current.y,
+      });
+    }
   };
 
   const handlePinchEndCapture = (event) => {
     if (!pinchEnabled || !pinchRef.current.active) return;
     event.stopPropagation();
-    if (event.touches.length < 2) finishPinch();
+    if (event.touches.length === 1 && pinchTransformRef.current.scale > 1.05) {
+      const touch = event.touches[0];
+      panRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        transform: { ...pinchTransformRef.current },
+      };
+      return;
+    }
+    if (event.touches.length === 0) finishPinch();
   };
 
   useImperativeHandle(ref, () => ({
-    swipeTo: async (isLike) => {
-      const dir = isLike ? 700 : -700;
+    swipeTo: (isLike) => new Promise((resolve) => {
+      const direction = isLike ? 1 : -1;
+      const card = cardElRef.current;
+      const rect = card?.getBoundingClientRect();
       suppressHeartRef.current = true;
-      // Button-tap like has no finger position. Seed the tracked pointer at
-      // the card center; the x motion subscription fires at x >= 80 below.
-      if (isLike) {
-        const rect = cardElRef.current?.getBoundingClientRect();
-        lastPointerPos.current = rect
-          ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-          : lastPointerPos.current;
+      if (isLike && rect) {
+        lastPointerPos.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        onLikeThresholdCrossed?.(lastPointerPos.current);
       }
-      await controls.start({
-        x: dir, rotate: isLike ? 22 : -22, opacity: 0,
-        transition: { duration: 0.24, ease: [0.32, 0, 0.67, 0] },
+      animatePointerTransform([
+        { transform: "translate3d(0px, 0px, 0px) rotate(0deg)", opacity: 1 },
+        { transform: `translate3d(${direction * 900}px, 0px, 0px) rotate(${direction * 22}deg)`, opacity: 0 },
+      ], { duration: 240, easing: "cubic-bezier(0.32, 0, 0.67, 0)" }, () => {
+        onSwipe(photo.id, isLike);
+        suppressHeartRef.current = false;
+        resolve();
       });
-      onSwipe(photo.id, isLike);
-      suppressHeartRef.current = false;
-    },
+    }),
     resetPosition: () => {
       heartFired.current = false;
       suppressHeartRef.current = false;
-      x.set(0);
-      y.set(0);
-      controls.set({ x: 0, y: 0, rotate: 0, opacity: 1 });
+      pointerAnimationRef.current?.cancel();
+      pointerAnimationRef.current = null;
+      if (cardElRef.current) {
+        cardElRef.current.style.transform = "";
+        cardElRef.current.style.opacity = "1";
+        cardElRef.current.style.transition = "";
+      }
     },
   }));
 
-  const handlePointerDown = (e) => {
-    if (!isTop) return;
-    pointerDown.current = { x: e.clientX, y: e.clientY };
-    lastPointerPos.current = { x: e.clientX, y: e.clientY };
+  const animatePointerTransform = (keyframes, options, onFinish) => {
+    pointerAnimationRef.current?.cancel();
+    const card = cardElRef.current;
+    if (!card?.animate) {
+      card.style.transform = keyframes.at(-1).transform;
+      card.style.opacity = keyframes.at(-1).opacity ?? "1";
+      onFinish?.();
+      return;
+    }
+    const animation = card.animate(keyframes, options);
+    pointerAnimationRef.current = animation;
+    animation.onfinish = () => {
+      if (pointerAnimationRef.current !== animation) return;
+      const finalFrame = keyframes.at(-1);
+      card.style.transform = finalFrame.transform;
+      card.style.opacity = finalFrame.opacity ?? "1";
+      pointerAnimationRef.current = null;
+      animation.cancel();
+      onFinish?.();
+    };
+  };
+
+  const handlePointerDown = (event) => {
+    if (!isTop || event.target?.closest?.("[data-video-player]") || pinchActiveRef.current) return;
+    pointerAnimationRef.current?.cancel();
+    pointerAnimationRef.current = null;
+    const card = cardElRef.current;
+    if (card) {
+      card.style.opacity = "1";
+      card.style.transform = "translate3d(0px, 0px, 0px) rotate(0deg)";
+    }
+    pointerDown.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      lastX: event.clientX,
+      lastTime: event.timeStamp,
+      velocityX: 0,
+    };
+    lastPointerPos.current = { x: event.clientX, y: event.clientY };
     hasDragged.current = false;
   };
 
-  const handlePointerUp = (e) => {
-    if (!isTop || !pointerDown.current) return;
-    if (e.target?.closest?.("[data-video-player]")) {
-      pointerDown.current = null;
+  const handlePointerMove = (event) => {
+    const gesture = pointerDown.current;
+    if (!isTop || !gesture || gesture.pointerId !== event.pointerId) return;
+    if (pinchActiveRef.current || pinchOccurredRef.current || Date.now() < pinchCooldownUntilRef.current) return;
+
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+    const elapsed = Math.max(1, event.timeStamp - gesture.lastTime);
+    gesture.velocityX = ((event.clientX - gesture.lastX) / elapsed) * 1000;
+    gesture.lastX = event.clientX;
+    gesture.lastTime = event.timeStamp;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasDragged.current = true;
+    lastPointerPos.current = { x: event.clientX, y: event.clientY };
+
+    const rotation = Math.max(-22, Math.min(22, dx / 14));
+    const card = cardElRef.current;
+    if (card) card.style.transform = `translate3d(${dx}px, ${dy}px, 0) rotate(${rotation}deg)`;
+    if (dx >= 80 && !heartFired.current && !suppressHeartRef.current) {
+      heartFired.current = true;
+      onLikeThresholdCrossed?.(lastPointerPos.current);
+    } else if (dx < 40) {
+      heartFired.current = false;
+    }
+  };
+
+  const handlePointerUp = (event) => {
+    const gesture = pointerDown.current;
+    if (!isTop || !gesture || gesture.pointerId !== event.pointerId) return;
+    pointerDown.current = null;
+    if (event.target?.closest?.("[data-video-player]")) return;
+
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+    const isPinchRestricted =
+      pinchActiveRef.current
+      || pinchOccurredRef.current
+      || Date.now() < pinchCooldownUntilRef.current
+      || pinchTransformRef.current.scale > 1.05;
+
+    if (isPinchRestricted) {
+      pinchOccurredRef.current = false;
+      animatePointerTransform([
+        { transform: cardElRef.current.style.transform },
+        { transform: "translate3d(0px, 0px, 0px) rotate(0deg)" },
+      ], { duration: 260, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
       return;
     }
-    const dx = Math.abs(e.clientX - pointerDown.current.x);
-    const dy = Math.abs(e.clientY - pointerDown.current.y);
-    if (dx < 8 && dy < 8 && !hasDragged.current && onImageClick) {
+
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8 && !hasDragged.current && onImageClick) {
+      cardElRef.current.style.transform = "";
       onImageClick(photo);
+      return;
     }
+
+    if (Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(gesture.velocityX) > 450) {
+      const isLike = dx > 0 || gesture.velocityX > 0;
+      const direction = isLike ? 1 : -1;
+      const rotation = Math.max(-22, Math.min(22, dx / 14));
+      animatePointerTransform([
+        { transform: cardElRef.current.style.transform, opacity: 1 },
+        { transform: `translate3d(${direction * 900}px, ${dy - 40}px, 0) rotate(${direction * 22}deg)`, opacity: 0 },
+      ], { duration: 220, easing: "ease-out" }, () => onSwipe(photo.id, isLike));
+      return;
+    }
+
+    animatePointerTransform([
+      { transform: cardElRef.current.style.transform },
+      { transform: "translate3d(0px, 0px, 0px) rotate(0deg)" },
+    ], { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+  };
+
+  const handlePointerCancel = () => {
+    if (!pointerDown.current) return;
     pointerDown.current = null;
-  };
-
-  const handleDragStart = () => {
-    hasDragged.current = true;
-    suppressHeartRef.current = false;
-  };
-
-  // Fire the heart burst once the rightward swipe crosses the like threshold (x ≥ 80).
-  // Uses raw event clientX/clientY (viewport coords) so the heart tracks the finger
-  // correctly even if the page is scrolled.
-  const handleDrag = (event, info) => {
-    const clientX = event?.clientX ?? info.point.x;
-    const clientY = event?.clientY ?? info.point.y;
-    lastPointerPos.current = { x: clientX, y: clientY };
-    const latest = info.offset.x;
-  };
-
-  const handleDragEnd = async (_, info) => {
-    const absX = Math.abs(info.offset.x);
-    const absV = Math.abs(info.velocity.x);
-    if (absX > SWIPE_THRESHOLD || absV > 450) {
-      const isLike = info.offset.x > 0 || info.velocity.x > 0;
-      await controls.start({
-        x: isLike ? 700 : -700, y: y.get() - 40, opacity: 0,
-        transition: { duration: 0.22, ease: "easeOut" },
-      });
-      onSwipe(photo.id, isLike);
-    } else {
-      controls.start({ x: 0, y: 0, rotate: 0, transition: { type: "spring", stiffness: 280, damping: 25 } });
-    }
+    animatePointerTransform([
+      { transform: cardElRef.current.style.transform },
+      { transform: "translate3d(0px, 0px, 0px) rotate(0deg)" },
+    ], { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
   };
 
   const onImageLoad = (e) => {
@@ -239,32 +329,20 @@ const SwipeCard = forwardRef(function SwipeCard(
   const objectFit = isCloseToAspect ? "object-cover" : "object-contain";
 
   return (
-    <motion.div
+    <div
       className="absolute inset-0 no-select touch-manipulation"
       ref={cardElRef}
       style={{
-        x: isTop ? x : 0,
-        y: isTop ? y : 0,
-        rotate: isTop ? rotate : 0,
-        scale: stackScale,
-        opacity: 1,               // always full opacity
-        zIndex: 20 - stackIndex, // top card in front
+        zIndex: 20 - stackIndex,
         pointerEvents: isTop ? "auto" : "none",
         cursor: isTop ? "grab" : "default",
+        touchAction: "pan-y",
+        transform: "translate3d(0px, 0px, 0px) rotate(0deg)",
       }}
-      animate={isTop ? controls : {
-        // Back cards: animate only scale when they come to front
-        scale: stackScale,
-        transition: { type: "spring", stiffness: 280, damping: 28 },
-      }}
-      drag={isTop && !pinchActive ? true : false}
-      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-      dragElastic={{ left: 0.85, right: 0.85, top: 0.25, bottom: 0.25 }}
-      onDragStart={handleDragStart}
-      onDrag={handleDrag}
-      onDragEnd={handleDragEnd}
       onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       data-pinch-enabled={pinchEnabled ? "true" : undefined}
     >
       {/*
@@ -302,9 +380,8 @@ const SwipeCard = forwardRef(function SwipeCard(
             onTouchEndCapture={handlePinchEndCapture}
             onTouchCancelCapture={finishPinch}
           >
-            <motion.img
+            <img
               ref={pinchImageRef}
-              layoutId={sharedLayoutId || undefined}
               src={photo.url}
               alt="Фото альбома"
               onLoad={onImageLoad}
@@ -315,9 +392,9 @@ const SwipeCard = forwardRef(function SwipeCard(
               decoding="async"
               fetchpriority={isTop ? "high" : (stackIndex <= 1 ? "auto" : "low")}
               style={{
-                transform: `translate3d(${pinchTransform.x}px, ${pinchTransform.y}px, 0) scale(${pinchTransform.scale})`,
+                transform: `translate3d(${pinchTransformRef.current.x}px, ${pinchTransformRef.current.y}px, 0) scale(${pinchTransformRef.current.scale})`,
                 transformOrigin: "center center",
-                transition: pinchActive && !pinchRef.current.active ? `transform ${PINCH_RESET_MS}ms cubic-bezier(0.22, 1, 0.36, 1)` : "none",
+                transition: "none",
                 willChange: pinchActive ? "transform" : "auto",
               }}
             />
@@ -325,14 +402,14 @@ const SwipeCard = forwardRef(function SwipeCard(
         )}
 
       </div>
-    </motion.div>
+    </div>
   );
 });
 
-export default SwipeCard;
+export default memo(SwipeCard);
 
 // ─── Action buttons — equal size, site font ────────────────────────────────────
-export function SwipeButtons({ onLike, onDislike, disabled }) {
+export const SwipeButtons = memo(function SwipeButtons({ onLike, onDislike, disabled }) {
   return (
     <div className="flex items-center justify-center gap-14">
 
@@ -368,4 +445,4 @@ export function SwipeButtons({ onLike, onDislike, disabled }) {
 
     </div>
   );
-}
+});

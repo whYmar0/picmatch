@@ -9,9 +9,9 @@
  *  3. Cards: 3:4 aspect ratio, larger size, stacked directly on top of each other
  *     (no staircase/ladder offset — all cards share the same Y position)
  */
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, memo, forwardRef, useImperativeHandle } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence, useMotionValue } from "framer-motion";
+import { motion, useMotionValue } from "framer-motion";
 import toast from "react-hot-toast";
 import { albumsApi, votesApi } from "../api";
 import { useLang } from "../contexts/LangContext";
@@ -33,6 +33,113 @@ const COMMENT_SHEET_HEIGHT_VH = 0.75;
 const COMMENT_SHEET_PARTIAL_OFFSET_VH = 0.25;
 
 // ── Small reusable avatar ──────────────────────────────────────────────────────
+const ThumbButton = memo(function ThumbButton({ photo, isCurrent, hasVote, reaction, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(photo)}
+      className={`media-thumbnail relative flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden
+                  active:scale-95 transition-transform duration-150
+                  ${isCurrent
+          ? "ring-2 ring-primary-400 ring-offset-1 ring-offset-surface-light dark:ring-offset-surface-dark scale-105"
+          : "hover:scale-105"
+        }`}
+    >
+      {isVideo(photo) && !photo.thumb_url ? (
+        <div className="relative w-full h-full">
+          <video src={photo.url} className="w-full h-full object-contain bg-gray-950" preload="metadata" muted playsInline />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center">
+              <Play size={12} className="text-white ml-0.5" />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="relative w-full h-full">
+          <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+          {isVideo(photo) && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center">
+                <Play size={12} className="text-white ml-0.5" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {hasVote && (
+        <div className={`absolute bottom-[3px] right-[3px] w-[18px] h-[18px] rounded-full
+                         flex items-center justify-center
+                         ${reaction ? "bg-green-500" : "bg-red-400"}`}>
+          <span className="absolute left-1/2 top-1/2 w-[10px] h-[10px] flex items-center justify-center -translate-x-1/2 -translate-y-[calc(50%-1px)]">
+            {reaction
+              ? <Heart size={10} className="block text-white" />
+              : <HeartBreak size={10} className="block text-white" />
+            }
+          </span>
+        </div>
+      )}
+    </button>
+  );
+});
+
+// The strip is memoized and fed a deferred view of the review state. During a
+// swipe the parent re-renders only the card stack; the 55 thumbnails (and the
+// current-ring / vote-badge updates) settle right after the animation.
+const ThumbStrip = memo(function ThumbStrip({ photos, view, stripRef, onSelect }) {
+  return (
+    <div className="relative flex-shrink-0 w-full max-w-[410px] min-w-0 mx-auto">
+      {photos.length > 1 && (
+        <>
+          <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
+          <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
+        </>
+      )}
+
+      <div
+        ref={stripRef}
+        className={`w-full min-w-0 py-2 px-[3px] flex overflow-x-auto ${
+          photos.length <= 1 ? "justify-center" : "justify-start"
+        }`}
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
+        <div className={`flex gap-2 items-center min-w-max ${
+          photos.length <= 1 ? "justify-center w-full" : ""
+        }`}>
+          {photos.map((photo) => {
+            const pid = String(photo.id);
+            return (
+              <ThumbButton
+                key={pid}
+                photo={photo}
+                isCurrent={pid === view.currentPhotoId}
+                hasVote={pid in view.votesMap}
+                reaction={view.votesMap[pid]}
+                onSelect={onSelect}
+              />
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const HeartBurstLayer = forwardRef(function HeartBurstLayer(_, ref) {
+  const [hearts, setHearts] = useState([]);
+  useImperativeHandle(ref, () => ({
+    spawn: (x, y) => {
+      const id = `heart-${Date.now()}-${Math.random()}`;
+      setHearts((previous) => [...previous.slice(-(MAX_ACTIVE_HEARTS - 1)), { id, x, y }]);
+    },
+  }), []);
+  const removeHeart = useCallback((id) => {
+    setHearts((previous) => previous.filter((heart) => heart.id !== id));
+  }, []);
+  return hearts.map((heart) => (
+    <HeartBurst key={heart.id} x={heart.x} y={heart.y} onComplete={() => removeHeart(heart.id)} />
+  ));
+});
+
 function AuthorAvatar({ user, size = 36 }) {
   if (!user) return null;
   const initial = user.username?.[0]?.toUpperCase() ?? "?";
@@ -67,20 +174,22 @@ export default function VotePage() {
   ));
   const commentSheetY = useMotionValue(viewportHeight);
   const thumbStripRef = useRef(null);
+  const heartLayerRef = useRef(null);
 
   const [album, setAlbum] = useState(null);
   const [allPhotos, setAllPhotos] = useState([]);
   const [votesMap, setVotesMap] = useState({});
+  // Deferred copy of the review state for the thumbnail strip, so a swipe does
+  // not have to reconcile 55 thumbnails while the card animation is running.
+  const [thumbView, setThumbView] = useState({ currentPhotoId: null, votesMap: {} });
   const [currentPhotoId, setCurrentPhotoId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [finished, setFinished] = useState(false);
-  const [voting, setVoting] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [titleExpanded, setTitleExpanded] = useState(false);
   const [albumError, setAlbumError] = useState(null);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [commentSheet, setCommentSheet] = useState(null); // null | photo object
-  const [hearts, setHearts] = useState([]); // active heart burst effects
   // ── Comment split-layout state ────────────────────────────────────────────
   const [replyTarget, setReplyTarget] = useState(null);
   const replyTriggerRef = useRef({});
@@ -112,11 +221,9 @@ export default function VotePage() {
     };
     updateViewport();
     viewport?.addEventListener("resize", updateViewport);
-    viewport?.addEventListener("scroll", updateViewport);
     window.addEventListener("orientationchange", updateViewport);
     return () => {
       viewport?.removeEventListener("resize", updateViewport);
-      viewport?.removeEventListener("scroll", updateViewport);
       window.removeEventListener("orientationchange", updateViewport);
     };
   }, [commentSheet, commentSheetY]);
@@ -238,6 +345,14 @@ export default function VotePage() {
     });
   }, [finished, album, user]);
 
+  useEffect(() => {
+    if (loading) return undefined;
+    const timer = setTimeout(() => {
+      setThumbView({ currentPhotoId, votesMap });
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [currentPhotoId, votesMap, loading]);
+
   // Auto-scroll thumbnail strip
   useEffect(() => {
     if (!currentPhotoId || !thumbStripRef.current) return;
@@ -245,20 +360,19 @@ export default function VotePage() {
     if (idx < 0) return;
     const strip = thumbStripRef.current;
     const thumbW = 68;
-    strip.scrollTo({
-      left: Math.max(0, idx * thumbW - strip.clientWidth / 2 + thumbW / 2),
-      behavior: "smooth",
-    });
+    // Instant scroll: a smooth scroll animation would keep re-laying-out the
+    // strip on every frame, competing with the card swipe animation.
+    strip.scrollLeft = Math.max(0, idx * thumbW - strip.clientWidth / 2 + thumbW / 2);
   }, [currentPhotoId, allPhotos]);
 
   // ── Vote handler ────────────────────────────────────────────────────────────
   const handleSwipe = useCallback((photoId, isLike) => {
     if (votingRef.current) return;
     votingRef.current = true;
-    setVoting(true);
+    // The in-flight lock is a ref, not state: re-rendering the whole review page
+    // just to disable the two action buttons costs a frame mid-swipe.
     const safetyTimer = setTimeout(() => {
       votingRef.current = false;
-      setVoting(false);
     }, 3000);
 
     const pid = String(photoId);
@@ -266,7 +380,6 @@ export default function VotePage() {
     // rather than duplicates, the previous decision.
     const newMap = { ...votesMapRef.current, [pid]: isLike };
     votesMapRef.current = newMap;
-    setVotesMap(newMap);
 
     // Advance immediately. The API request runs in the background so neither
     // network latency nor the button path delays the next card.
@@ -276,6 +389,7 @@ export default function VotePage() {
       photos.slice(curIdx + 1).find((p) => !(String(p.id) in newMap)) ||
       photos.find((p) => !(String(p.id) in newMap));
 
+    setVotesMap(newMap);
     if (nextUnvoted) setCurrentPhotoId(String(nextUnvoted.id));
     else setFinished(true);
     votesApi.castVote(photoId, isLike)
@@ -285,17 +399,14 @@ export default function VotePage() {
       .finally(() => {
         clearTimeout(safetyTimer);
         votingRef.current = false;
-        setVoting(false);
       });
   }, []);
 
   // ── Thumbnail jump ──────────────────────────────────────────────────────────
   const jumpToPhoto = useCallback((photo) => {
-    const pid = String(photo.id);
-    if (pid === currentPhotoId) return;
-    setCurrentPhotoId(pid);
+    setCurrentPhotoId(String(photo.id));
     requestAnimationFrame(() => { topCardRef.current?.resetPosition?.(); });
-  }, [currentPhotoId]);
+  }, []);
 
   // ── Button trigger ──────────────────────────────────────────────────────────
   const triggerSwipe = useCallback((isLike) => {
@@ -304,20 +415,24 @@ export default function VotePage() {
     if (!photo) return;
     if (topCardRef.current?.swipeTo) {
       votingRef.current = true;
-      setVoting(true);
       topCardRef.current.swipeTo(isLike).then(() => {
         votingRef.current = false;
-        setVoting(false);
         handleSwipe(photo.id, isLike);
       }).catch(() => {
         votingRef.current = false;
-        setVoting(false);
         handleSwipe(photo.id, isLike);
       });
     } else {
       handleSwipe(photo.id, isLike);
     }
   }, [currentPhotoId, handleSwipe]);
+
+  const handleLikePress = useCallback(() => triggerSwipe(true), [triggerSwipe]);
+  const handleDislikePress = useCallback(() => triggerSwipe(false), [triggerSwipe]);
+  const closeCommentSheet = useCallback(() => {
+    setCommentSheet(null);
+    setReplyTarget(null);
+  }, []);
 
   // ── Heart burst ─────────────────────────────────────────────────────────────
   const handleLikeThreshold = useCallback((fingerPos) => {
@@ -333,15 +448,7 @@ export default function VotePage() {
       Math.max(fingerPos.y - rect.top - 60, FULL_H), // 60px above the finger
       rect.height - 4
     );
-    const id = `heart-${Date.now()}-${Math.random()}`;
-    setHearts((prev) => [
-      ...prev.slice(-(MAX_ACTIVE_HEARTS - 1)),
-      { id, x: localX, y: localY },
-    ]);
-  }, []);
-
-  const removeHeart = useCallback((id) => {
-    setHearts((prev) => prev.filter((h) => h.id !== id));
+    heartLayerRef.current?.spawn(localX, localY);
   }, []);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -376,11 +483,11 @@ export default function VotePage() {
     return [currentPhoto, ...rest];
   }, [currentPhoto, currentPhotoId, allPhotos, votesMap]);
 
-  // Preload next card image into browser cache so it appears instantly with no blank box
+  // Preload the next card's lightweight preview into the browser cache.
   useEffect(() => {
     if (stackPhotos[1]?.url) {
-      const img = new Image();
-      img.src = stackPhotos[1].thumb_url || stackPhotos[1].url;
+      const image = new Image();
+      image.src = stackPhotos[1].thumb_url || stackPhotos[1].url;
     }
   }, [stackPhotos]);
 
@@ -526,75 +633,7 @@ export default function VotePage() {
         </div>
 
         {/* ─── Thumbnail strip ─────────────────────────────────────────────── */}
-        <div className="relative flex-shrink-0 w-full max-w-[410px] min-w-0 mx-auto">
-          {/* Wide edge fades cover the strip boundary without changing its width. */}
-          {allPhotos.length > 1 && (
-            <>
-              <div data-testid="thumbnail-edge-fade" className="absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
-              <div data-testid="thumbnail-edge-fade" className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-surface-light/95 dark:from-surface-dark/95 via-surface-light/65 dark:via-surface-dark/65 to-transparent z-10 pointer-events-none" />
-            </>
-          )}
-
-          <div
-            ref={thumbStripRef}
-            className={`w-full min-w-0 py-2 px-[3px] flex overflow-x-auto ${
-              allPhotos.length <= 1 ? "justify-center" : "justify-start"
-            }`}
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            <div className={`flex gap-2 items-center min-w-max ${
-              allPhotos.length <= 1 ? "justify-center w-full" : ""
-            }`}>
-              {allPhotos.map((photo) => {
-                const pid = String(photo.id);
-                const isCur = pid === currentPhotoId;
-                const reaction = votesMap[pid];
-                const hasVote = pid in votesMap;
-
-                return (
-                  <motion.button
-                    key={pid}
-                    onClick={() => jumpToPhoto(photo)}
-                    whileTap={{ scale: 0.9 }}
-                    className={`media-thumbnail relative flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden
-                                transition-all duration-150
-                                ${isCur
-                        ? "ring-2 ring-primary-400 ring-offset-1 ring-offset-surface-light dark:ring-offset-surface-dark scale-105"
-                        : "hover:scale-105"
-                      }`}
-                  >
-                    {isVideo(photo) ? (
-                      <div className="relative w-full h-full">
-                        <video src={photo.url} className="w-full h-full object-contain bg-gray-950" preload="metadata" muted playsInline />
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center">
-                            <Play size={12} className="text-white ml-0.5" />
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                    )}
-                    {hasVote && (
-                      <div className={`absolute bottom-[3px] right-[3px] w-[18px] h-[18px] rounded-full
-                                       flex items-center justify-center
-                                       ${reaction ? "bg-green-500" : "bg-red-400"}`}>
-                        <span
-                          className="absolute left-1/2 top-1/2 w-[10px] h-[10px] flex items-center justify-center -translate-x-1/2 -translate-y-[calc(50%-1px)]"
-                        >
-                          {reaction
-                            ? <Heart size={10} className="block text-white" />
-                            : <HeartBreak size={10} className="block text-white" />
-                          }
-                        </span>
-                      </div>
-                    )}
-                  </motion.button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <ThumbStrip photos={allPhotos} view={thumbView} stripRef={thumbStripRef} onSelect={jumpToPhoto} />
 
         {/* ─── Card stack ────────────────────────────────────────────────────── */}
         <div className="flex-shrink-0 w-full max-w-full min-w-0 overflow-visible flex items-center justify-center px-2 sm:px-6 py-2">
@@ -604,13 +643,12 @@ export default function VotePage() {
           >
             {/* n/m counter badge — now placed top-right on the cards */}
             <div className="absolute top-3 right-3 z-30 pointer-events-none">
-              <span className="bg-black/75 backdrop-blur-md border border-white/20 text-white
+              <span data-testid="vote-photo-counter" className="bg-black/70 border border-white/20 text-white
                                px-2.5 py-1 rounded-full font-mono font-bold text-[13px] shadow-sm">
                 {currentIdx >= 0 ? currentIdx + 1 : 0}/{total}
               </span>
             </div>
-            <AnimatePresence mode="sync">
-              {[...stackPhotos].reverse().map((photo, revIdx) => {
+            {[...stackPhotos].reverse().map((photo, revIdx) => {
                 const stackIdx = stackPhotos.length - 1 - revIdx;
                 const isTop = stackIdx === 0;
                 return (
@@ -637,7 +675,7 @@ export default function VotePage() {
                       <button
                         onClick={() => setCommentSheet(photo)}
                         className="absolute bottom-4 right-4 z-30 p-3 rounded-full
-                                   bg-black/60 backdrop-blur-md border border-white/20
+                                   bg-black/70 border border-white/20
                                    text-white hover:bg-black/80 transition-all active:scale-90"
                         title={t("Comments")}
                         data-testid="vote-comment-button"
@@ -648,12 +686,9 @@ export default function VotePage() {
                   </div>
                 );
               })}
-            </AnimatePresence>
 
             {/* Heart burst effects */}
-            {hearts.map((h) => (
-              <HeartBurst key={h.id} x={h.x} y={h.y} onComplete={() => removeHeart(h.id)} />
-            ))}
+            <HeartBurstLayer ref={heartLayerRef} />
           </div>
         </div>
 
@@ -665,9 +700,9 @@ export default function VotePage() {
         {/* ─── Buttons ─────────────────────────────────────────────────────── */}
         <div className="flex-shrink-0 pb-6 pt-1">
           <SwipeButtons
-            onLike={() => triggerSwipe(true)}
-            onDislike={() => triggerSwipe(false)}
-            disabled={voting || !currentPhoto}
+            onLike={handleLikePress}
+            onDislike={handleDislikePress}
+            disabled={!currentPhoto}
           />
         </div>
       </div>
@@ -675,7 +710,7 @@ export default function VotePage() {
 
       <BottomSheet
         open={!!commentSheet}
-        onClose={() => { setCommentSheet(null); setReplyTarget(null); }}
+        onClose={closeCommentSheet}
         title={t("Comments")}
         sharedY={commentSheetY}
         viewportHeight={viewportHeight}
@@ -685,7 +720,10 @@ export default function VotePage() {
         deferClose
         hideHeader
         backdropBlur
-        backdropDim={false}
+        backdropBlurClass="backdrop-blur-md"
+        backdropDim
+        backdropDimClass="bg-black/50"
+        linearMotion
         testId="vote-comments-sheet"
         footer={
           commentSheet ? (
@@ -714,7 +752,7 @@ export default function VotePage() {
                 />
               ) : (
                 <motion.img
-                  src={commentSheet.url}
+                  src={commentSheet.thumb_url || commentSheet.url}
                   className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl border border-white/10"
                   alt=""
                 />
