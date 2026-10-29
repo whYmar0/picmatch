@@ -213,7 +213,9 @@ const SwipeCard = forwardRef(function SwipeCard(
       card.style.opacity = finalFrame.opacity ?? "1";
       pointerAnimationRef.current = null;
       animation.cancel();
-      onFinish?.();
+      // Defer React state-update callback to the next frame so the browser can
+      // paint the fly-off position before reconciling the card stack.
+      if (onFinish) requestAnimationFrame(onFinish);
     };
   };
 
@@ -312,8 +314,10 @@ const SwipeCard = forwardRef(function SwipeCard(
   const handlePointerCancel = () => {
     if (!pointerDown.current) return;
     pointerDown.current = null;
+    const currentTransform = cardElRef.current?.style.transform
+      || "translate3d(0px, 0px, 0px) rotate(0deg)";
     animatePointerTransform([
-      { transform: cardElRef.current.style.transform },
+      { transform: currentTransform },
       { transform: "translate3d(0px, 0px, 0px) rotate(0deg)" },
     ], { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
   };

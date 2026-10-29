@@ -353,31 +353,31 @@ export default function VotePage() {
     return () => clearTimeout(timer);
   }, [currentPhotoId, votesMap, loading]);
 
-  // Auto-scroll thumbnail strip
+  // Auto-scroll thumbnail strip — use DOM measurement for accurate positioning
+  // (hardcoded pixel values are unreliable once padding/gap change).
   useEffect(() => {
     if (!currentPhotoId || !thumbStripRef.current) return;
     const idx = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
     if (idx < 0) return;
     const strip = thumbStripRef.current;
-    const thumbW = 68;
-    // Instant scroll: a smooth scroll animation would keep re-laying-out the
-    // strip on every frame, competing with the card swipe animation.
-    strip.scrollLeft = Math.max(0, idx * thumbW - strip.clientWidth / 2 + thumbW / 2);
+    const thumbEls = strip.querySelectorAll(".media-thumbnail");
+    const thumbEl = thumbEls[idx];
+    if (!thumbEl) return;
+    // Center the active thumbnail within the visible strip area.
+    const targetLeft = thumbEl.offsetLeft + thumbEl.offsetWidth / 2 - strip.clientWidth / 2;
+    strip.scrollLeft = Math.max(0, targetLeft);
   }, [currentPhotoId, allPhotos]);
 
   // ── Vote handler ────────────────────────────────────────────────────────────
   const handleSwipe = useCallback((photoId, isLike) => {
-    if (votingRef.current) return;
-    votingRef.current = true;
-    // The in-flight lock is a ref, not state: re-rendering the whole review page
-    // just to disable the two action buttons costs a frame mid-swipe.
-    const safetyTimer = setTimeout(() => {
-      votingRef.current = false;
-    }, 3000);
-
     const pid = String(photoId);
-    // The backend upserts this photo's vote; re-voting therefore replaces,
-    // rather than duplicates, the previous decision.
+    // Per-photo deduplication: the button path (triggerSwipe → swipeTo) fires
+    // onSwipe internally, then triggerSwipe.then() also calls handleSwipe.
+    // The second call finds the photo already in the map and returns early.
+    // This also guarantees the drag path never gets blocked by an in-flight
+    // API request from a previous card — state always advances.
+    if (pid in votesMapRef.current) return;
+
     const newMap = { ...votesMapRef.current, [pid]: isLike };
     votesMapRef.current = newMap;
 
@@ -392,13 +392,10 @@ export default function VotePage() {
     setVotesMap(newMap);
     if (nextUnvoted) setCurrentPhotoId(String(nextUnvoted.id));
     else setFinished(true);
+
     votesApi.castVote(photoId, isLike)
       .catch((err) => {
         if (!err.message?.includes("timeout")) toast.error(err.message, { duration: 2000 });
-      })
-      .finally(() => {
-        clearTimeout(safetyTimer);
-        votingRef.current = false;
       });
   }, []);
 
@@ -415,13 +412,20 @@ export default function VotePage() {
     if (!photo) return;
     if (topCardRef.current?.swipeTo) {
       votingRef.current = true;
-      topCardRef.current.swipeTo(isLike).then(() => {
-        votingRef.current = false;
-        handleSwipe(photo.id, isLike);
-      }).catch(() => {
-        votingRef.current = false;
-        handleSwipe(photo.id, isLike);
-      });
+      // Safety: reset the lock if swipeTo's promise never settles
+      // (e.g. the card unmounts mid-animation).
+      const safetyTimer = setTimeout(() => { votingRef.current = false; }, 1500);
+      topCardRef.current.swipeTo(isLike)
+        .then(() => {
+          clearTimeout(safetyTimer);
+          votingRef.current = false;
+          handleSwipe(photo.id, isLike);
+        })
+        .catch(() => {
+          clearTimeout(safetyTimer);
+          votingRef.current = false;
+          handleSwipe(photo.id, isLike);
+        });
     } else {
       handleSwipe(photo.id, isLike);
     }
