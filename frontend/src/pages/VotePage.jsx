@@ -125,19 +125,10 @@ const ThumbStrip = memo(function ThumbStrip({ photos, currentPhotoId, votesMap, 
 });
 
 const HeartBurstLayer = forwardRef(function HeartBurstLayer(_, ref) {
-  const [hearts, setHearts] = useState([]);
   useImperativeHandle(ref, () => ({
-    spawn: (x, y) => {
-      const id = `heart-${Date.now()}-${Math.random()}`;
-      setHearts((previous) => [...previous.slice(-(MAX_ACTIVE_HEARTS - 1)), { id, x, y }]);
-    },
+    spawn: () => {}, // Временно отключено для дебага
   }), []);
-  const removeHeart = useCallback((id) => {
-    setHearts((previous) => previous.filter((heart) => heart.id !== id));
-  }, []);
-  return hearts.map((heart) => (
-    <HeartBurst key={heart.id} x={heart.x} y={heart.y} onComplete={() => removeHeart(heart.id)} />
-  ));
+  return null;
 });
 
 function AuthorAvatar({ user, size = 36 }) {
