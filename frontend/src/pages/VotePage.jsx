@@ -82,10 +82,10 @@ const ThumbButton = memo(function ThumbButton({ photo, isCurrent, hasVote, react
   );
 });
 
-// The strip is memoized and fed a deferred view of the review state. During a
-// swipe the parent re-renders only the card stack; the 55 thumbnails (and the
-// current-ring / vote-badge updates) settle right after the animation.
-const ThumbStrip = memo(function ThumbStrip({ photos, view, stripRef, onSelect }) {
+// The strip is memoized on the two pieces of review state it actually uses, so
+// a swipe re-renders only the two thumbnails whose ring/badge changed while the
+// other 50 keep their previous elements.
+const ThumbStrip = memo(function ThumbStrip({ photos, currentPhotoId, votesMap, stripRef, onSelect }) {
   return (
     <div className="relative flex-shrink-0 w-full max-w-[410px] min-w-0 mx-auto">
       {photos.length > 1 && (
@@ -111,9 +111,9 @@ const ThumbStrip = memo(function ThumbStrip({ photos, view, stripRef, onSelect }
               <ThumbButton
                 key={pid}
                 photo={photo}
-                isCurrent={pid === view.currentPhotoId}
-                hasVote={pid in view.votesMap}
-                reaction={view.votesMap[pid]}
+                isCurrent={pid === currentPhotoId}
+                hasVote={pid in votesMap}
+                reaction={votesMap[pid]}
                 onSelect={onSelect}
               />
             );
@@ -179,9 +179,6 @@ export default function VotePage() {
   const [album, setAlbum] = useState(null);
   const [allPhotos, setAllPhotos] = useState([]);
   const [votesMap, setVotesMap] = useState({});
-  // Deferred copy of the review state for the thumbnail strip, so a swipe does
-  // not have to reconcile 55 thumbnails while the card animation is running.
-  const [thumbView, setThumbView] = useState({ currentPhotoId: null, votesMap: {} });
   const [currentPhotoId, setCurrentPhotoId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [finished, setFinished] = useState(false);
@@ -345,26 +342,18 @@ export default function VotePage() {
     });
   }, [finished, album, user]);
 
-  useEffect(() => {
-    if (loading) return;
-    setThumbView({ currentPhotoId, votesMap });
-  }, [currentPhotoId, votesMap, loading]);
-
-  // Auto-scroll thumbnail strip — center active thumbnail smoothly without layout thrashing
+  // Auto-scroll the thumbnail strip. Letting the engine centre the active
+  // thumbnail avoids the two forced layouts (strip + thumb rects) that the
+  // previous hand-rolled scroll calculation needed on every swipe.
   useEffect(() => {
     if (!currentPhotoId || !thumbStripRef.current) return;
+    const strip = thumbStripRef.current;
     const idx = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
     if (idx < 0) return;
-    const strip = thumbStripRef.current;
 
     const frameId = requestAnimationFrame(() => {
-      const thumbEls = strip.querySelectorAll(".media-thumbnail");
-      const thumbEl = thumbEls[idx];
-      if (!thumbEl) return;
-      const stripRect = strip.getBoundingClientRect();
-      const thumbRect = thumbEl.getBoundingClientRect();
-      const targetScrollLeft = strip.scrollLeft + (thumbRect.left + thumbRect.width / 2) - (stripRect.left + stripRect.width / 2);
-      strip.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: "smooth" });
+      const thumbEl = strip.querySelectorAll(".media-thumbnail")[idx];
+      thumbEl?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
     });
 
     return () => cancelAnimationFrame(frameId);
@@ -429,6 +418,12 @@ export default function VotePage() {
     setCommentSheet(null);
     setReplyTarget(null);
   }, []);
+  // Stable element: otherwise the memoised BottomSheet sees a new child on
+  // every vote and re-renders even though the sheet is closed.
+  const commentSheetHeader = useMemo(
+    () => <h3 className="w-full text-center font-bold text-lg px-0">{t("Comments")}</h3>,
+    [t]
+  );
 
   // ── Heart burst ─────────────────────────────────────────────────────────────
   const handleLikeThreshold = useCallback((fingerPos) => {
@@ -629,7 +624,13 @@ export default function VotePage() {
         </div>
 
         {/* ─── Thumbnail strip ─────────────────────────────────────────────── */}
-        <ThumbStrip photos={allPhotos} view={thumbView} stripRef={thumbStripRef} onSelect={jumpToPhoto} />
+        <ThumbStrip
+          photos={allPhotos}
+          currentPhotoId={currentPhotoId}
+          votesMap={votesMap}
+          stripRef={thumbStripRef}
+          onSelect={jumpToPhoto}
+        />
 
         {/* ─── Card stack ────────────────────────────────────────────────────── */}
         <div className="flex-shrink-0 w-full max-w-full min-w-0 overflow-visible flex items-center justify-center px-2 sm:px-6 py-2">
@@ -732,7 +733,7 @@ export default function VotePage() {
             />
           ) : null
         }
-        headerChildren={<h3 className="w-full text-center font-bold text-lg px-0">{t("Comments")}</h3>}
+        headerChildren={commentSheetHeader}
         topContent={
           commentSheet ? (
             <div className="w-full h-full min-h-0 flex items-center justify-center">

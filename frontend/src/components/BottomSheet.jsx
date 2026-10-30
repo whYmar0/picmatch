@@ -7,7 +7,7 @@
  * State isolation is guaranteed because each instance owns its own
  * `useAnimation` controls and motion values.
  */
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { X } from "@phosphor-icons/react";
 
@@ -36,7 +36,7 @@ function unlockBody() {
   if (restoreOverflow !== "hidden") document.body.style.overflow = restoreOverflow;
 }
 
-export default function BottomSheet({
+function BottomSheet({
   open,
   onClose,
   title,
@@ -689,3 +689,8 @@ export default function BottomSheet({
     </AnimatePresence>
   );
 }
+
+// The sheet owns motion values and a large gesture tree, and its parents keep
+// it mounted while it is closed. Memoising keeps a closed sheet from being
+// re-rendered by unrelated state changes (e.g. every vote on the vote page).
+export default memo(BottomSheet);

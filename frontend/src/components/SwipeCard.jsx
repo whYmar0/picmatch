@@ -353,6 +353,40 @@ const SwipeCard = forwardRef(function SwipeCard(
     setAspectRatio(naturalWidth / naturalHeight);
   };
 
+  // Prepare the pixels ahead of time instead of on the frame that reveals them.
+  // `decode()` forces the JPEG to be turned into a bitmap now, so the raster of
+  // the next card (or of the card that just slid away) never has to wait for a
+  // decode. The card that is already visible is decoded immediately; the
+  // occluded one waits for an idle slice, so its decode does not land in the
+  // commit that removes the previous card.
+  useEffect(() => {
+    if (isVideo(photo)) return undefined;
+    let cancelled = false;
+    let handle = null;
+    let timer = null;
+    const run = () => {
+      handle = null;
+      timer = null;
+      if (cancelled) return;
+      pinchImageRef.current?.decode?.().catch(() => {});
+    };
+    if (stackIndex === 0) return undefined;
+    if (stackIndex === 1) {
+      run();
+    } else if (typeof window.requestIdleCallback === "function") {
+      handle = window.requestIdleCallback(run, { timeout: 1200 });
+    } else {
+      // Safari has no requestIdleCallback — a short timer is enough to get the
+      // decode out of the commit that is currently on screen.
+      timer = window.setTimeout(run, 300);
+    }
+    return () => {
+      cancelled = true;
+      if (handle !== null) window.cancelIdleCallback?.(handle);
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [stackIndex, photo]);
+
   // Determine object-fit based on ratio
   // Target: 0.75 (3:4). If within [0.6, 1.0], use object-cover.
   const isCloseToAspect = aspectRatio && Math.abs(aspectRatio - 0.75) < 0.22;
@@ -364,11 +398,21 @@ const SwipeCard = forwardRef(function SwipeCard(
       ref={cardElRef}
       style={{
         zIndex: 20 - stackIndex,
+        // The third card is exactly occluded by the one above it, so painting
+        // (and therefore decoding) it achieves nothing. Keeping it invisible
+        // until it is promoted lets the idle decode effect prepare its pixels
+        // off the critical frame instead of inside the swipe commit.
+        visibility: stackIndex >= 2 ? "hidden" : "visible",
         pointerEvents: isTop ? "auto" : "none",
         cursor: isTop ? "grab" : "default",
         touchAction: "none",
         transform: "translate3d(0px, 0px, 0px) rotate(0deg)",
-        willChange: isTop ? "transform, opacity" : "auto",
+        // Promote the top two cards up front: the next card becomes the top one
+        // while the previous card's exit animation is still on screen, and
+        // promoting (and rasterising) a fresh layer in that window is what the
+        // user perceives as a stall. The third card stays unlayered — it is
+        // fully occluded, so a layer there would only cost memory.
+        willChange: stackIndex <= 1 ? "transform, opacity" : "auto",
         backfaceVisibility: "hidden",
         WebkitBackfaceVisibility: "hidden",
       }}

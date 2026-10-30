@@ -3,6 +3,10 @@ import { test, expect } from "@playwright/test";
 const FRONTEND = process.env.E2E_BASE_URL || "http://localhost:5173";
 const PHOTO_COUNT = 55;
 const SWIPE_COUNT = 20;
+// Photo dimensions are configurable so the same harness can isolate decoding
+// cost (large photos) from layout/React cost (tiny photos).
+const PHOTO_WIDTH = Number(process.env.VOTE_PERF_PHOTO_W || 1200);
+const PHOTO_HEIGHT = Number(process.env.VOTE_PERF_PHOTO_H || 1600);
 const USER = {
   id: "vote-performance-user",
   email: "vote-performance@example.com",
@@ -46,7 +50,7 @@ async function runThrottledVoteSession(browser, rate) {
   const cdp = await context.newCDPSession(page);
   await cdp.send("Emulation.setCPUThrottlingRate", { rate });
 
-  const photoBytes = await makeJpeg(page, 1200, 1600, 0x1a2b3c4d);
+  const photoBytes = await makeJpeg(page, PHOTO_WIDTH, PHOTO_HEIGHT, 0x1a2b3c4d);
   const thumbBytes = await makeJpeg(page, 160, 214, 0x5e6f7788);
   const voteRequests = [];
   const code = `vote-perf-${rate}x`;
@@ -219,7 +223,7 @@ async function runThrottledVoteSession(browser, rate) {
         activeLongTasks: activeLongTasks.map(({ start, duration }) => ({ start: Math.round(start), duration: Math.round(duration * 10) / 10 })),
       };
     });
-    const result = { rate, photoCount: PHOTO_COUNT, swipes: SWIPE_COUNT, votesSent: voteRequests.length, ...measurements, ...(profileSummary ? { topJavaScriptSelfTime: profileSummary } : {}) };
+    const result = { rate, photoCount: PHOTO_COUNT, photoSize: `${PHOTO_WIDTH}x${PHOTO_HEIGHT}`, swipes: SWIPE_COUNT, votesSent: voteRequests.length, ...measurements, ...(profileSummary ? { topJavaScriptSelfTime: profileSummary } : {}) };
     console.log(`VOTE_FPS_STRESS ${JSON.stringify(result)}`);
     return result;
   } finally {
@@ -234,10 +238,12 @@ async function runThrottledVoteSession(browser, rate) {
 // performance measurement, not a functional assertion; run it with VOTE_PERF=1.
 test.skip(!process.env.VOTE_PERF, "Set VOTE_PERF=1 to run the FPS stress harness");
 
+const RATES = (process.env.VOTE_PERF_RATES || "4,6").split(",").map(Number);
+
 test("vote stack maintains 55 FPS across 20 swipes on 55 large photos under 4x and 6x CPU throttling", async ({ browser }) => {
   test.setTimeout(240_000);
   const results = [];
-  for (const rate of [4, 6]) {
+  for (const rate of RATES) {
     const result = await runThrottledVoteSession(browser, rate);
     results.push(result);
     expect(result.votesSent, `${rate}x run must submit one vote per swipe`).toBe(SWIPE_COUNT);
