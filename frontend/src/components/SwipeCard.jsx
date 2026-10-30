@@ -56,6 +56,12 @@ const SwipeCard = forwardRef(function SwipeCard(
   const [pinchActive, setPinchActive] = useState(false);
   const [aspectRatio, setAspectRatio] = useState(null);
   const [imageFailed, setImageFailed] = useState(false);
+  const [useFallback, setUseFallback] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+    setUseFallback(false);
+  }, [photo?.id]);
 
   // All cards aligned perfectly (no scale difference)
   const pinchEnabled = enablePinchZoom && !isVideo(photo);
@@ -459,10 +465,16 @@ const SwipeCard = forwardRef(function SwipeCard(
           >
             <img
               ref={pinchImageRef}
-              src={photo.url}
+              src={useFallback && photo.thumb_url ? photo.thumb_url : photo.url}
               alt="Фото альбома"
               onLoad={onImageLoad}
-              onError={() => setImageFailed(true)}
+              onError={() => {
+                if (!useFallback && photo.thumb_url && photo.thumb_url !== photo.url) {
+                  setUseFallback(true);
+                } else {
+                  setImageFailed(true);
+                }
+              }}
               className={`w-full h-full ${objectFit} select-none pointer-events-none`}
               draggable={false}
               loading={stackIndex <= 1 ? "eager" : "lazy"}

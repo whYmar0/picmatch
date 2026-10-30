@@ -83,6 +83,8 @@ def get_image_url(public_id: str, resource_type: str = "image") -> str:
     url, _ = cloudinary.utils.cloudinary_url(
         public_id,
         secure=True,
+        width=2048,
+        crop="limit",
         fetch_format="auto",
         quality="auto",
     )
