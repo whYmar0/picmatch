@@ -465,13 +465,43 @@ export default function VotePage() {
     return [currentPhoto, ...rest];
   }, [currentPhoto, currentPhotoId, allPhotos, votesMap]);
 
-  // Preload the next card's lightweight preview into the browser cache.
+  // Preload next upcoming photos into the browser cache during idle time.
+  // Buffers 3 photos ahead so rapid swiping never hits an empty network cache.
   useEffect(() => {
-    if (stackPhotos[1]?.url) {
-      const image = new Image();
-      image.src = stackPhotos[1].thumb_url || stackPhotos[1].url;
+    if (!currentPhotoId || allPhotos.length === 0) return undefined;
+    const curIdx = allPhotos.findIndex((p) => String(p.id) === currentPhotoId);
+    if (curIdx < 0) return undefined;
+
+    let timer = null;
+    let idleHandle = null;
+
+    const preloadUpcoming = () => {
+      // Find up to 3 upcoming unvoted photos ahead of current
+      const toPreload = [];
+      for (let i = curIdx + 1; i < allPhotos.length && toPreload.length < 3; i++) {
+        const p = allPhotos[i];
+        if (!isVideo(p) && p.url && !(String(p.id) in votesMap)) {
+          toPreload.push(p.url);
+        }
+      }
+      toPreload.forEach((src) => {
+        const img = new Image();
+        img.src = src;
+      });
+    };
+
+    // Defer preloading slightly so the top visible card finishes mounting first
+    if (typeof window.requestIdleCallback === "function") {
+      idleHandle = window.requestIdleCallback(preloadUpcoming, { timeout: 800 });
+    } else {
+      timer = window.setTimeout(preloadUpcoming, 250);
     }
-  }, [stackPhotos]);
+
+    return () => {
+      if (idleHandle !== null) window.cancelIdleCallback?.(idleHandle);
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [currentPhotoId, allPhotos, votesMap]);
 
   const title = album?.title || "";
   const titleLong = title.length > TITLE_LIMIT;

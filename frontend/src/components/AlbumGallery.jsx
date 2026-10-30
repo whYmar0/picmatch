@@ -434,9 +434,9 @@ function StatisticsTab({
         {shareDone ? <Check size={15} /> : <Export size={18} />}
       </button>
       <div data-testid="stats-views" className="ml-auto flex items-center gap-2 text-sm font-semibold
-                        text-gray-600 dark:text-gray-300" aria-label={t("votes")}>
+                        text-gray-600 dark:text-gray-300" aria-label={t("voters") || t("votes")}>
         <TrendUp size={16} />
-        <span className="tabular-nums">{analytics.total_votes}</span>
+        <span className="tabular-nums">{analytics.unique_voters ?? analytics.total_votes}</span>
       </div>
     </div>
 
@@ -461,9 +461,9 @@ function StatisticsTab({
                   : ""}`}
             >
               {isVideo(photo) ? (
-                <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                <video src={photo.thumb_url || photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
               ) : (
-                <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="eager" />
               )}
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 text-white text-[10px] font-semibold flex justify-between">
                 <span>{i + 1}</span>
@@ -491,18 +491,16 @@ function StatisticsTab({
               <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0
                             bg-border-light dark:bg-border-dark">
                 {isVideo(photo) ? (
-                  <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                  <video src={photo.thumb_url || photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
                 ) : (
-                  <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="eager" />
                 )}
               </div>
               <div className="flex-1 min-w-0 text-left">
                 <div className="h-1.5 max-w-[95%] bg-border-light dark:bg-border-dark rounded-full overflow-hidden">
-                  <motion.div
-                    className="h-full bg-primary-400 rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${photo.like_percentage || 0}%` }}
-                    transition={{ delay: i * 0.03 + 0.2, duration: 0.4 }}
+                  <div
+                    className="h-full bg-primary-400 rounded-full transition-all duration-300"
+                    style={{ width: `${photo.like_percentage || 0}%` }}
                   />
                 </div>
                 <div className="flex items-center gap-3 mt-1.5 text-sm font-semibold tabular-nums
