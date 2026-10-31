@@ -399,7 +399,18 @@ function StatisticsTab({
   viewMode = "list",
 }) {
   const { t } = useLang();
+  // If the active photo is manually toggled closed, store its id here
+  const [collapsedPhotoId, setCollapsedPhotoId] = useState(null);
 
+  const handlePhotoClick = (photoId) => {
+    const isCurrent = String(photoId) === String(currentPhotoId);
+    if (isCurrent) {
+      setCollapsedPhotoId((prev) => (String(prev) === String(photoId) ? null : photoId));
+    } else {
+      setCollapsedPhotoId(null);
+      onJump(photoId);
+    }
+  };
 
   if (!analytics) return <p className="text-center text-gray-400 py-8 text-sm">Loading stats...</p>;
 
@@ -478,6 +489,7 @@ function StatisticsTab({
         <div className="space-y-1.5">
           {photos.map((photo, i) => {
             const isCurrent = String(photo.id) === String(currentPhotoId);
+            const isExpanded = isCurrent && String(collapsedPhotoId) !== String(photo.id);
             const reactions = photo.reactions || [];
 
             return (
@@ -491,7 +503,7 @@ function StatisticsTab({
               >
                 <button
                   type="button"
-                  onClick={() => onJump(photo.id)}
+                  onClick={() => handlePhotoClick(photo.id)}
                   aria-label={`${t("photo") || "Photo"} ${i + 1}`}
                   data-testid={`stats-photo-${i}`}
                   className="w-full flex items-center gap-3 py-2 px-2 text-left cursor-pointer"
@@ -527,9 +539,9 @@ function StatisticsTab({
                   </div>
                 </button>
 
-                {/* Always show voter list for the currently active photo */}
+                {/* Show voter list for active photo unless toggled collapsed */}
                 <AnimatePresence initial={false}>
-                  {isCurrent && (
+                  {isExpanded && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
