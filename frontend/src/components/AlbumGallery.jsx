@@ -18,10 +18,10 @@
  *  - Sort/Filter buttons mirror AnalyticsPage toolbar styling.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { motion, useMotionValue, useTransform, animate } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import {
   ChatCircle, TrendUp, SlidersHorizontal, Funnel, Export, Check,
-  Rows, SquaresFour, Heart, HeartBreak,
+  Rows, SquaresFour, Heart, HeartBreak, CaretDown,
 } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { albumsApi, commentsApi } from "../api";
@@ -399,6 +399,8 @@ function StatisticsTab({
   viewMode = "list",
 }) {
   const { t } = useLang();
+
+
   if (!analytics) return <p className="text-center text-gray-400 py-8 text-sm">Loading stats...</p>;
 
   return (
@@ -473,51 +475,115 @@ function StatisticsTab({
           ))}
         </div>
       ) : (
-        <div className="space-y-1">
-          {photos.map((photo, i) => (
-            <button
-              key={photo.id}
-              onClick={() => onJump(photo.id)}
-              aria-label={`${t("photo") || "Photo"} ${i + 1}`}
-              data-testid={`stats-photo-${i}`}
-              className={`w-full flex items-center gap-3 py-2 px-2 rounded-xl transition-colors
-                       ${String(photo.id) === String(currentPhotoId)
-                  ? "bg-primary-50 dark:bg-primary-900/20"
-                  : ""}`}
-            >
-              <span className="w-6 text-center text-sm font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 tabular-nums">
-                {i + 1}
-              </span>
-              <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0
-                            bg-border-light dark:bg-border-dark">
-                {isVideo(photo) ? (
-                  <video src={photo.thumb_url || photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
-                ) : (
-                  <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="eager" />
-                )}
+        <div className="space-y-1.5">
+          {photos.map((photo, i) => {
+            const isCurrent = String(photo.id) === String(currentPhotoId);
+            const reactions = photo.reactions || [];
+
+            return (
+              <div
+                key={photo.id}
+                className={`rounded-3xl transition-colors duration-200 overflow-hidden ${
+                  isCurrent
+                    ? "bg-primary-50/70 dark:bg-primary-900/20"
+                    : "hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onJump(photo.id)}
+                  aria-label={`${t("photo") || "Photo"} ${i + 1}`}
+                  data-testid={`stats-photo-${i}`}
+                  className="w-full flex items-center gap-3 py-2 px-2 text-left cursor-pointer"
+                >
+                  <span className="w-6 text-center text-sm font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 tabular-nums">
+                    {i + 1}
+                  </span>
+                  <div className="w-10 h-10 rounded-2xl overflow-hidden flex-shrink-0 bg-border-light dark:bg-border-dark shadow-sm">
+                    {isVideo(photo) ? (
+                      <video src={photo.thumb_url || photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                    ) : (
+                      <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="eager" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="h-1.5 max-w-[95%] bg-border-light dark:bg-border-dark rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary-400 rounded-full transition-all duration-300"
+                        style={{ width: `${photo.like_percentage || 0}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 mt-1.5 text-sm font-semibold tabular-nums text-gray-600 dark:text-gray-300">
+                      <span className="flex items-center gap-1.5">
+                        <Heart size={14} className="text-primary-500 dark:text-primary-400" /> {photo.like_count}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <HeartBreak size={14} className="text-gray-400" /> {photo.dislike_count}
+                      </span>
+                      <span className="ml-auto mr-1 text-gray-500 dark:text-gray-400 font-normal">
+                        {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Always show voter list for the currently active photo */}
+                <AnimatePresence initial={false}>
+                  {isCurrent && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-3 pb-2.5 pt-0.5 space-y-1">
+                        {reactions.length > 0 ? (
+                          reactions.map((r) => {
+                            const initial = (r.username?.[0] || "?").toUpperCase();
+                            return (
+                              <div
+                                key={`${r.voter_id}-${r.is_like ? 'like' : 'dislike'}`}
+                                className="flex items-center justify-between py-1.5 px-2 rounded-2xl hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-colors"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  {r.avatar_url ? (
+                                    <img
+                                      src={r.avatar_url}
+                                      alt={r.username}
+                                      className="w-6 h-6 rounded-full object-cover flex-shrink-0 shadow-sm"
+                                    />
+                                  ) : (
+                                    <div className="w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-300 flex items-center justify-center text-[11px] font-bold flex-shrink-0">
+                                      {initial}
+                                    </div>
+                                  )}
+                                  <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                                    {r.username}
+                                  </span>
+                                </div>
+                                <div className="flex-shrink-0 ml-2">
+                                  {r.is_like ? (
+                                    <Heart size={15} className="text-primary-500 dark:text-primary-400" />
+                                  ) : (
+                                    <HeartBreak size={15} className="text-gray-400" />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-xs text-gray-400 py-1.5 px-2 text-center">
+                            {t("noReactions") || "Пока нет голосов"}
+                          </p>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-              <div className="flex-1 min-w-0 text-left">
-                <div className="h-1.5 max-w-[95%] bg-border-light dark:bg-border-dark rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary-400 rounded-full transition-all duration-300"
-                    style={{ width: `${photo.like_percentage || 0}%` }}
-                  />
-                </div>
-                <div className="flex items-center gap-3 mt-1.5 text-sm font-semibold tabular-nums
-                              text-gray-600 dark:text-gray-300">
-                  <span className="flex items-center gap-1.5">
-                    <Heart size={14} /> {photo.like_count}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <HeartBreak size={14} /> {photo.dislike_count}
-                  </span>
-                  <span className="ml-auto mr-4 text-gray-500 dark:text-gray-400 font-normal">
-                    {photo.total_votes > 0 ? `${photo.like_percentage}%` : "—"}
-                  </span>
-                </div>
-              </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

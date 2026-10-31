@@ -97,9 +97,10 @@ class PhotoOut(BaseModel):
     created_at: datetime
 
 class VoterReaction(BaseModel):
-    voter_id: AnyUUID
-    username: str
-    is_like:  bool
+    voter_id:   AnyUUID
+    username:   str
+    is_like:    bool
+    avatar_url: Optional[str] = None
 
 class PhotoStats(BaseModel):
     model_config = ConfigDict(from_attributes=True)

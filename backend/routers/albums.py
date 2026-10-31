@@ -796,7 +796,7 @@ async def _build_analytics(
 
     if photo_ids:
         vote_query = (
-            select(Vote.photo_id, Vote.voter_id, Vote.is_like, User.username)
+            select(Vote.photo_id, Vote.voter_id, Vote.is_like, User.username, User.avatar_url)
             .join(User, Vote.voter_id == User.id)
             .where(Vote.photo_id.in_(photo_ids))
         )
@@ -807,7 +807,7 @@ async def _build_analytics(
 
         # Single O(n) pass through all votes
         for row in vote_rows:
-            row_photo_id, row_voter_id, row_is_like, row_username = row
+            row_photo_id, row_voter_id, row_is_like, row_username, row_avatar_url = row
             pid = _s(row_photo_id)
             vid = _s(row_voter_id)
             uname = row_username or vid[:8]
@@ -823,7 +823,7 @@ async def _build_analytics(
                 total_likes += 1
 
             pd["reactions"].append(
-                VoterReaction(voter_id=vid, username=uname, is_like=row_is_like)
+                VoterReaction(voter_id=vid, username=uname, is_like=row_is_like, avatar_url=row_avatar_url)
             )
 
             if vid not in voter_map:
