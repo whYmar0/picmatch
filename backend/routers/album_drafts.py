@@ -50,3 +50,13 @@ async def create_draft(request: Request, response: Response, draft_id: uuid.UUID
 async def read_draft(request: Request, draft_id: uuid.UUID, item_id: uuid.UUID | None = None,
                      owner=Depends(draft_owner), db=Depends(get_db)):
     return await drafts.get_draft(db, owner, draft_id, item_id)
+
+
+@router.put("/{draft_id}/items/{item_id}")
+async def put_item(request: Request, response: Response, draft_id: uuid.UUID, item_id: uuid.UUID,
+                    owner=Depends(draft_owner), db=Depends(get_db)):
+    result, status = await drafts.upload_item(request, db, owner, draft_id, item_id)
+    response.status_code = status
+    if status == 202:
+        response.headers["Retry-After"] = "2"
+    return result

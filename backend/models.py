@@ -174,6 +174,8 @@ class AlbumUploadItem(Base):
     cloudinary_delivery_type = Column(String(16), nullable=False, default="authenticated")
     lease_id = Column(String(36), nullable=True)
     lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    needs_reconcile = Column(Boolean, nullable=False, default=False)
+    provider_asset_id = Column(String(255), nullable=True)
     __table_args__ = (
         UniqueConstraint("draft_id", "item_id", name="uq_draft_item_id"),
         UniqueConstraint("draft_id", "order", name="uq_draft_item_order"),

@@ -20,6 +20,49 @@ ALBUM_IMAGE_TRANSFORMS = (
 )
 
 
+class DraftAssetConflict(ValueError):
+    pass
+
+
+def _draft_receipt(receipt, public_id, resource_type, context):
+    if (receipt.get("public_id") != public_id or receipt.get("type") != "authenticated"
+            or receipt.get("resource_type") != resource_type
+            or receipt.get("context", {}).get("custom") != context or not receipt.get("asset_id")):
+        raise DraftAssetConflict("Draft resource identity differs")
+    return receipt
+
+
+def upload_draft_media(file, public_id, resource_type, context):
+    import cloudinary.uploader
+    options = {"public_id": public_id, "resource_type": resource_type, "type": "authenticated",
+               "overwrite": False, "context": context, "timeout": 120}
+    if resource_type == "image":
+        options["eager"] = list(ALBUM_IMAGE_TRANSFORMS)
+    receipt = cloudinary.uploader.upload(str(file), **options)
+    return _draft_receipt(receipt, public_id, resource_type, context)
+
+
+def lookup_draft_media(public_id, resource_type, context):
+    import cloudinary.api
+    from cloudinary.exceptions import NotFound
+    try:
+        receipt = cloudinary.api.resource(public_id, resource_type=resource_type,
+                                           type="authenticated", context=True, timeout=120)
+    except NotFound:
+        return None
+    return _draft_receipt(receipt, public_id, resource_type, context)
+
+
+def delete_draft_media(public_id, resource_type, context):
+    import cloudinary.uploader
+    if lookup_draft_media(public_id, resource_type, context) is None:
+        return
+    result = cloudinary.uploader.destroy(public_id, resource_type=resource_type,
+                                         type="authenticated", invalidate=True, timeout=120)
+    if result.get("result") not in {"ok", "not found"}:
+        raise RuntimeError("Draft deletion not confirmed")
+
+
 def upload_album_media(media_bytes: bytes, public_id: str, resource_type: str) -> str:
     import cloudinary.uploader
     options = {"public_id": public_id, "resource_type": resource_type,
