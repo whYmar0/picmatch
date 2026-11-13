@@ -9,7 +9,7 @@ New in this version:
 """
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, text
+from sqlalchemy import Column, String, Integer, BigInteger, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, Index, CheckConstraint, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 import enum
@@ -133,6 +133,52 @@ class PendingUpload(Base):
     cloudinary_delivery_type = Column(String(16), nullable=False, default="upload", server_default=text("'upload'"))
     expires_at      = Column(DateTime(timezone=True), nullable=False)
     claimed_at      = Column(DateTime(timezone=True), nullable=True)
+
+
+class AlbumUploadDraft(Base):
+    __tablename__ = "album_upload_drafts"
+    id = uuid_column(primary_key=True)
+    user_id = uuid_column(foreign_key="users.id")
+    manifest_hash = Column(String(64), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text)
+    is_public = Column(Boolean, nullable=False)
+    status = Column(String(16), nullable=False, default="uploading")
+    total_size = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    # Receipt survives album deletion so a finalize replay cannot recreate it.
+    album_id = Column(String(36), nullable=True)
+    __table_args__ = (
+        Index("uq_album_upload_active_owner", "user_id", unique=True,
+              sqlite_where=text("status IN ('uploading','ready','cancelling')"),
+              postgresql_where=text("status IN ('uploading','ready','cancelling')")),
+        CheckConstraint("total_size > 0 AND total_size <= 10000000000", name="ck_draft_total_size"),
+    )
+
+
+class AlbumUploadItem(Base):
+    __tablename__ = "album_upload_items"
+    id = uuid_column(primary_key=True)
+    draft_id = uuid_column(foreign_key="album_upload_drafts.id")
+    item_id = Column(String(36), nullable=False)
+    order = Column(Integer, nullable=False)
+    filename = Column(String(500), nullable=False)
+    mime_type = Column(String(64), nullable=False)
+    byte_size = Column(BigInteger, nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    status = Column(String(16), nullable=False, default="pending")
+    stored_filename = Column(String(500), nullable=False)
+    media_type = Column(String(10), nullable=False)
+    storage_kind = Column(String(16), nullable=False)
+    cloudinary_delivery_type = Column(String(16), nullable=False, default="authenticated")
+    lease_id = Column(String(36), nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("draft_id", "item_id", name="uq_draft_item_id"),
+        UniqueConstraint("draft_id", "order", name="uq_draft_item_order"),
+        CheckConstraint("byte_size > 0 AND byte_size <= 52428800", name="ck_draft_item_size"),
+    )
 
 
 class Vote(Base):

@@ -15,7 +15,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from database import init_db, AsyncSessionLocal
 from middleware.rate_limit import limiter, custom_rate_limit_exceeded_handler
-from routers import albums, auth_router, comments, notifications, shared_access, share_links, votes, media
+from routers import albums, auth_router, comments, notifications, shared_access, share_links, votes, media, album_drafts
 from cloudinary_utils import setup_cloudinary, is_cloudinary_configured as cloudinary_enabled
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -238,6 +238,7 @@ app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(auth_router.router, prefix="/api")
 app.include_router(albums.router, prefix="/api")
+app.include_router(album_drafts.router, prefix="/api")
 app.include_router(votes.router, prefix="/api")
 app.include_router(shared_access.router, prefix="/api")
 app.include_router(share_links.router, prefix="/api")

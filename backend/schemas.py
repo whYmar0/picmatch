@@ -5,10 +5,58 @@ Updated: UserOut gains avatar_url
 """
 from datetime import datetime
 from typing import Optional, List, Union
-from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
+from uuid import UUID
+from typing import Literal
+import unicodedata
 import enum
 
 AnyUUID = Union[str, object]
+
+
+class DraftItemCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: UUID
+    filename: str = Field(min_length=1)
+    mime_type: Literal["image/jpeg", "image/png", "image/webp", "image/gif",
+                       "video/mp4", "video/webm", "video/quicktime", "video/avi"]
+    size: int = Field(strict=True, ge=1, le=52428800)
+    sha256: str = Field(pattern=r"^[a-fA-F0-9]{64}$")
+
+    @field_validator("filename")
+    @classmethod
+    def safe_filename(cls, value):
+        if value in {".", ".."} or len(value.encode("utf-8")) > 255 or any(
+            c in "/\\" or unicodedata.category(c) in {"Cc", "Cs"} for c in value
+        ):
+            raise ValueError("Invalid filename")
+        return value
+
+    @field_validator("sha256")
+    @classmethod
+    def canonical_digest(cls, value):
+        return value.lower()
+
+
+class DraftCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    is_public: bool = True
+    items: List[DraftItemCreate] = Field(min_length=1, max_length=10000)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def trim_title(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def validate_batch(self):
+        if len({item.id for item in self.items}) != len(self.items):
+            raise ValueError("Duplicate item")
+        if sum(item.size for item in self.items) > 10000000000:
+            raise ValueError("Batch exceeds 10 GB")
+        return self
 
 
 class UserRole(str, enum.Enum):
