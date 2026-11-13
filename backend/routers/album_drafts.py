@@ -60,3 +60,19 @@ async def put_item(request: Request, response: Response, draft_id: uuid.UUID, it
     if status == 202:
         response.headers["Retry-After"] = "2"
     return result
+
+
+@router.post("/{draft_id}/finalize")
+@limiter.limit(_get_limit("RATE_LIMIT_DRAFT_STATUS", "120/minute"))
+async def finish_draft(request: Request, response: Response, draft_id: uuid.UUID,
+                        owner=Depends(draft_owner), db=Depends(get_db)):
+    result, created = await drafts.finalize_draft(db, owner, draft_id)
+    response.status_code = 201 if created else 200
+    return result
+
+
+@router.delete("/{draft_id}")
+@limiter.limit(_get_limit("RATE_LIMIT_DRAFT_STATUS", "120/minute"))
+async def delete_draft(request: Request, draft_id: uuid.UUID,
+                        owner=Depends(draft_owner), db=Depends(get_db)):
+    return await drafts.cancel_draft(db, owner, draft_id)

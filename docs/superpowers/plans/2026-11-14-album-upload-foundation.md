@@ -8,9 +8,9 @@
 
 **Tech Stack:** Existing FastAPI, SQLAlchemy async, Pydantic, PostgreSQL/SQLite, Cloudinary SDK and pytest; no new dependencies.
 
-**Spec:** `../pickmatch_swift/docs/superpowers/specs/2026-11-14-album-creation-design.md` (resolve from backend repository root).
+**Spec:** `docs/superpowers/specs/2026-11-14-album-creation-design.md` (approved copy retained in this feature branch).
 
-**Status:** Proposed. User authorized preparing the plan; implementation/backend changes and production deployment require the concrete approval under `prompt.md` sections 4 and 9.
+**Status:** User approved local Stage7A implementation and tests with «да, приступай». Implementation verified locally; final review is recorded below. Production rollout remains a separate approval.
 
 ## Global Constraints
 

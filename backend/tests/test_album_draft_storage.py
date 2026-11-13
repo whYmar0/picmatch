@@ -196,3 +196,23 @@ def test_private_provider_receipts_and_strict_deletion(monkeypatch, tmp_path):
     with pytest.raises(cloud.DraftAssetConflict): cloud.lookup_draft_media("test/other", "image", context)
     monkeypatch.setattr(cloudinary.uploader, "destroy", lambda *a, **k: {"result": "failed"})
     with pytest.raises(RuntimeError): cloud.delete_draft_media("test/asset", "image", context)
+
+
+async def test_owner_slots_include_expired_draft_workers(async_client, auth_headers, draft_files, db_session):
+    import album_drafts as drafts
+    from models import AlbumUploadDraft, AlbumUploadItem
+    from datetime import timedelta
+    body = manifest()
+    body["items"].append({**body["items"][0], "id": str(uuid.uuid4())})
+    old_id, _, _ = await create(async_client, auth_headers, body)
+    old = await db_session.scalar(select(AlbumUploadDraft).where(AlbumUploadDraft.id == old_id))
+    old.expires_at = drafts.now() - timedelta(seconds=1)
+    for item in (await db_session.scalars(select(AlbumUploadItem).where(AlbumUploadItem.draft_id == old_id))).all():
+        item.status = "receiving"
+        item.lease_id = str(uuid.uuid4())
+        item.lease_expires_at = drafts.now() + timedelta(seconds=300)
+    await db_session.commit()
+    new_id, new_body, response = await create(async_client, auth_headers)
+    assert response.status_code == 201
+    upload = await async_client.put(f"/api/album-drafts/{new_id}/items/{new_body['items'][0]['id']}", content=b"synthetic image", headers={**auth_headers, "Content-Type": "image/jpeg"})
+    assert upload.status_code == 429, "Persistent worker leases must bound the account across drafts/processes"

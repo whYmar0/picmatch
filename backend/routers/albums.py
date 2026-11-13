@@ -107,6 +107,20 @@ def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0
     )
 
 
+async def add_album_with_photos(db, creator, title, description, is_public, rows):
+    """Insert album rows without committing the caller's ownership transaction."""
+    album = Album(title=title, description=description, invite_code=secrets.token_urlsafe(16),
+                  is_public=is_public, creator_id=_s(creator.id))
+    db.add(album)
+    await db.flush()
+    for row in sorted(rows, key=lambda row: row["idx"]):
+        db.add(Photo(album_id=_s(album.id), filename=row["filename"], stored_filename=row["stored"],
+                     media_type=row["media_type"], cloudinary_delivery_type=row.get("cloudinary_delivery_type", "upload"),
+                     order=row["idx"]))
+    await db.flush()
+    return album
+
+
 def _safe_extension(filename: str | None) -> str:
     if not filename:
         return ""
@@ -462,13 +476,6 @@ async def create_album(
                 raise HTTPException(400, detail="Uploaded media reference does not match server state")
             pending.claimed_at = datetime.now(timezone.utc)
 
-    album = Album(title=title, description=description,
-                  invite_code=secrets.token_urlsafe(16),
-                  is_public=is_public,
-                  creator_id=_s(current_user.id))
-    db.add(album)
-    await db.flush()
-
     if uploaded_rows:
         results = [
             {
@@ -492,16 +499,7 @@ async def create_album(
         except Exception as exc:
             raise HTTPException(500, detail=f"Upload failed: {exc}")
 
-    results.sort(key=lambda r: r["idx"])
-    for row in results:
-        db.add(Photo(
-            album_id=_s(album.id),
-            filename=row["filename"],
-            stored_filename=row["stored"],
-            media_type=row["media_type"],
-            cloudinary_delivery_type=row.get("cloudinary_delivery_type", "upload"),
-            order=row["idx"],
-        ))
+    album = await add_album_with_photos(db, current_user, title, description, is_public, results)
     for pending in pending_rows:
         await db.delete(pending)
 

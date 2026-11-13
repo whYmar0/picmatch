@@ -4,18 +4,22 @@ import json
 import asyncio
 import tempfile
 import uuid
+import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 from sqlalchemy import select, func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.orm import selectinload
 from limits import parse
 
 from cloudinary_utils import is_cloudinary_configured, DraftAssetConflict
-from models import AlbumUploadDraft, AlbumUploadItem, User
+from models import AlbumUploadDraft, AlbumUploadItem, User, Album
 from middleware.rate_limit import limiter, _get_limit
 import album_draft_storage as storage
 
@@ -23,6 +27,7 @@ ACTIVE = ("uploading", "ready", "cancelling")
 EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
               "video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov", "video/avi": ".avi"}
 UPLOAD_SLOTS = asyncio.Semaphore(2)
+CLOUD_DRAFT_PREFIX = "picmatch/drafts"
 WORKERS = set()
 IDLE_SECONDS = 30
 RECEIVE_SECONDS = 1200
@@ -92,6 +97,8 @@ async def get_draft(db, owner, draft_id, item_id=None):
 
 
 async def create_or_get_draft(db, owner, draft_id, manifest):
+    # A rollback expires ORM attributes; retries retain only the authenticated identity.
+    owner = SimpleNamespace(id=str(owner.id))
     encoded = json.dumps(manifest.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     fingerprint = hashlib.sha256(encoded.encode()).hexdigest()
     existing = await db.scalar(select(AlbumUploadDraft).where(AlbumUploadDraft.id == str(draft_id)))
@@ -103,7 +110,9 @@ async def create_or_get_draft(db, owner, draft_id, manifest):
         await db.commit()
         return await draft_out(db, draft), False
     # NO KEY UPDATE serializes creates without blocking Album's user FK checks.
-    await db.scalar(select(User).where(User.id == str(owner.id)).with_for_update(key_share=True))
+    account = await db.scalar(select(User).where(User.id == owner.id).with_for_update(key_share=True))
+    if account is None or not account.is_active or not account.is_verified:
+        raise HTTPException(403, "Account unavailable")
     existing = await db.scalar(select(AlbumUploadDraft).where(AlbumUploadDraft.id == str(draft_id)))
     if existing:
         await db.rollback()
@@ -123,7 +132,7 @@ async def create_or_get_draft(db, owner, draft_id, manifest):
     try:
         await db.flush()
         for order, item in enumerate(manifest.items):
-            stored = f"picmatch/drafts/{draft_id}/{item.id}" if cloud else f"drafts/{draft_id}/{item.id}{EXTENSIONS[item.mime_type]}"
+            stored = f"{CLOUD_DRAFT_PREFIX}/{draft_id}/{item.id}" if cloud else f"draft_{draft_id}_{item.id}{EXTENSIONS[item.mime_type]}"
             db.add(AlbumUploadItem(draft_id=str(draft_id), item_id=str(item.id), order=order,
                                   filename=item.filename, mime_type=item.mime_type, byte_size=item.size, sha256=item.sha256,
                                   media_type="video" if item.mime_type.startswith("video/") else "image",
@@ -132,7 +141,13 @@ async def create_or_get_draft(db, owner, draft_id, manifest):
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        return await create_or_get_draft(db, owner, draft_id, manifest)
+        existing = await db.scalar(select(AlbumUploadDraft).where(AlbumUploadDraft.id == str(draft_id)))
+        if existing:
+            return await create_or_get_draft(db, owner, draft_id, manifest)
+        active = await db.scalar(select(AlbumUploadDraft).where(AlbumUploadDraft.user_id == owner.id, AlbumUploadDraft.status.in_(ACTIVE)))
+        if active:
+            raise HTTPException(409, {"message": "Active draft exists", "draft_id": str(active.id)}) from None
+        raise HTTPException(503, "Draft could not be saved") from None
     return await draft_out(db, draft), True
 
 
@@ -158,8 +173,9 @@ async def claim_item(db, owner, draft_id, item_id):
     if item.status == "receiving" and item.lease_expires_at and utc(item.lease_expires_at) > now():
         await db.commit()
         return item_out(item), 202
-    active = await db.scalar(select(func.count()).select_from(AlbumUploadItem).where(
-        AlbumUploadItem.draft_id == str(draft_id), AlbumUploadItem.status == "receiving",
+    active = await db.scalar(select(func.count()).select_from(AlbumUploadItem).join(
+        AlbumUploadDraft, AlbumUploadDraft.id == AlbumUploadItem.draft_id).where(
+        AlbumUploadDraft.user_id == str(owner.id), AlbumUploadItem.status == "receiving",
         AlbumUploadItem.lease_expires_at > now()))
     if active >= 2:
         raise HTTPException(429, "Upload capacity reached", headers={"Retry-After": "2"})
@@ -201,7 +217,7 @@ async def receive_item(request, lease):
     if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != lease.mime_type:
         raise HTTPException(415, "Media type differs from manifest")
     length = request.headers.get("content-length")
-    if length is not None and (not length.isascii() or not length.isdigit() or int(length) != lease.byte_size):
+    if length is not None and (len(length) > 20 or not length.isascii() or not length.isdigit() or int(length) != lease.byte_size):
         raise HTTPException(400, "Media size differs from manifest")
     directory = storage.UPLOAD_DIR / ".draft-spool"
     directory.mkdir(parents=True, exist_ok=True)
@@ -222,7 +238,7 @@ async def receive_item(request, lease):
                     if total > lease.byte_size or total > 52428800:
                         raise HTTPException(413, "Media exceeds manifest size")
                     digest.update(chunk)
-                    await asyncio.to_thread(file.write, chunk)
+                    await storage.blocking(file.write, chunk)
         if total != lease.byte_size or digest.hexdigest() != lease.sha256:
             raise HTTPException(400, "Media does not match manifest")
         return path
@@ -323,3 +339,110 @@ async def upload_item(request, db, owner, draft_id, item_id):
 async def drain_workers():
     if WORKERS:
         await asyncio.gather(*list(WORKERS), return_exceptions=True)
+
+
+async def finalized_album(db, draft):
+    from routers.albums import album_to_out
+    album = await db.scalar(select(Album).where(Album.id == draft.album_id).options(
+        selectinload(Album.photos), selectinload(Album.creator)).execution_options(populate_existing=True)) if draft.album_id else None
+    if album is None:
+        raise HTTPException(410, "Completed album no longer exists")
+    return album_to_out(album)
+
+
+async def finalize_draft(db, owner, draft_id):
+    from routers.albums import add_album_with_photos
+    draft = await owned(db, owner, draft_id, lock=True)
+    if draft.status == "completed":
+        return await finalized_album(db, draft), False
+    expire(draft)
+    if draft.status not in ("uploading", "ready"):
+        await db.commit()
+        raise HTTPException(410 if draft.status in ("expired", "cancelled") else 409, "Draft closed")
+    items = list((await db.scalars(select(AlbumUploadItem).where(
+        AlbumUploadItem.draft_id == str(draft.id)).order_by(AlbumUploadItem.order))).all())
+    if not items or any(item.status != "uploaded" for item in items):
+        raise HTTPException(409, "Draft upload incomplete")
+    rows = [{"idx": item.order, "filename": item.filename, "stored": item.stored_filename,
+             "media_type": item.media_type, "cloudinary_delivery_type": item.cloudinary_delivery_type} for item in items]
+    album = await add_album_with_photos(db, owner, draft.title, draft.description, draft.is_public, rows)
+    draft.album_id = str(album.id)
+    draft.status = "completed"
+    await db.commit()
+    return await finalized_album(db, draft), True
+
+
+def storage_item(item):
+    return SimpleNamespace(draft_id=str(item.draft_id), item_id=item.item_id, sha256=item.sha256,
+                            byte_size=item.byte_size, stored_filename=item.stored_filename,
+                            media_type=item.media_type, storage_kind=item.storage_kind)
+
+
+async def cleanup_draft(db, draft_id):
+    draft = await db.scalar(select(AlbumUploadDraft).where(AlbumUploadDraft.id == str(draft_id)).with_for_update())
+    if draft is None:
+        return
+    expire(draft)
+    if draft.status not in ("cancelling", "expired"):
+        await db.commit()
+        return
+    items = list((await db.scalars(select(AlbumUploadItem).where(AlbumUploadItem.draft_id == str(draft_id)))).all())
+    pending = False
+    for item in items:
+        if item.status == "receiving" and item.lease_expires_at and utc(item.lease_expires_at) > now():
+            pending = True
+            continue
+        if item.status == "uploaded" or item.needs_reconcile:
+            snapshot = storage_item(item)
+            await db.commit()
+            try:
+                if item.needs_reconcile and snapshot.storage_kind == "cloudinary" and await storage.lookup(snapshot) is None:
+                    # A lost provider result may still be in flight. Keep its receipt retryable.
+                    pending = True
+                    continue
+                await storage.delete(snapshot)
+            except Exception:
+                pending = True
+                continue
+            item.status = "pending"
+            item.needs_reconcile = False
+            item.provider_asset_id = None
+        item.lease_id = None
+        item.lease_expires_at = None
+        await db.commit()
+    draft = await db.scalar(select(AlbumUploadDraft).where(AlbumUploadDraft.id == str(draft_id)).with_for_update().execution_options(populate_existing=True))
+    if draft.status == "cancelling" and not pending:
+        draft.status = "cancelled"
+    await db.commit()
+
+
+async def cancel_draft(db, owner, draft_id):
+    draft = await owned(db, owner, draft_id, lock=True)
+    if draft.status == "completed":
+        raise HTTPException(409, "Draft already completed")
+    if draft.status not in ("cancelled", "expired"):
+        draft.status = "cancelling"
+    await db.commit()
+    await cleanup_draft(db, draft_id)
+    await db.refresh(draft)
+    return await draft_out(db, draft)
+
+
+async def cleanup_album_drafts(db):
+    ids = list((await db.scalars(select(AlbumUploadDraft.id).where(
+        (AlbumUploadDraft.status == "cancelling") | (AlbumUploadDraft.status == "expired") |
+        (AlbumUploadDraft.status.in_(("uploading", "ready")) & (AlbumUploadDraft.expires_at <= now()))))).all())
+    await db.commit()
+    for draft_id in ids:
+        await cleanup_draft(db, draft_id)
+    directory = storage.UPLOAD_DIR.resolve() / ".draft-spool"
+    if directory.is_symlink() or not directory.is_dir():
+        return
+    live = set((await db.scalars(select(AlbumUploadItem.lease_id).where(
+        AlbumUploadItem.status == "receiving", AlbumUploadItem.lease_expires_at > now()))).all())
+    await db.commit()
+    for file in directory.iterdir():
+        match = re.fullmatch(r"([0-9a-f-]{36})-[a-z0-9_]{8}\.part", file.name)
+        if (match and match[1] not in live and not file.is_symlink() and file.is_file()
+                and file.stat().st_mtime < time.time() - 86400):
+            file.unlink(missing_ok=True)

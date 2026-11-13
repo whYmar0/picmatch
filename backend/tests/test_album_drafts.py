@@ -109,3 +109,21 @@ async def test_expiry_releases_active_slot_without_extending(async_client, auth_
     assert response.status_code == 201
     old = await async_client.get(f"/api/album-drafts/{draft_id}", headers=auth_headers)
     assert old.json()["status"] == "expired"
+
+
+async def test_unverified_owner_and_manifest_byte_limit(async_client, auth_headers, db_session):
+    import album_drafts as drafts
+    from models import User
+    from routers.album_drafts import manifest_body
+    from fastapi import HTTPException
+    class Oversized:
+        async def stream(self):
+            for _ in range(9): yield b"x" * 1024 * 1024
+    with pytest.raises(HTTPException) as error:
+        await manifest_body(Oversized())
+    assert error.value.status_code == 413
+    user = await db_session.scalar(select(User).where(User.email == "alice@x.com"))
+    user.is_verified = False
+    await db_session.commit()
+    _, _, response = await create(async_client, auth_headers)
+    assert response.status_code == 403

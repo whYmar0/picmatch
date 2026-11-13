@@ -41,11 +41,13 @@ def _parse_origins(raw: str | None) -> list[str]:
 async def _pending_upload_cleanup_loop():
     """Periodically remove abandoned pre-uploaded media."""
     from routers.albums import _cleanup_expired_pending_uploads
+    from album_drafts import cleanup_album_drafts
 
     while True:
         try:
             async with AsyncSessionLocal() as db:
                 await _cleanup_expired_pending_uploads(db)
+                await cleanup_album_drafts(db)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -69,6 +71,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        from album_drafts import drain_workers
+        await drain_workers()
         if cleanup_task is not None:
             cleanup_task.cancel()
             try:
