@@ -254,16 +254,19 @@ async def publish_item(sessions, lease, receipt):
         draft = await db.scalar(select(AlbumUploadDraft).where(AlbumUploadDraft.id == lease.draft_id).with_for_update())
         item = await find_item(db, lease.draft_id, lease.item_id)
         expire(draft)
+        if item.lease_id != lease.key:
+            await db.commit()
+            if item.status == "uploaded":
+                return item_out(item)
+            raise HTTPException(409, "Upload attempt superseded; check draft status")
         if draft.status not in ("uploading", "ready", "completed"):
             await db.commit()
             await storage.delete(lease)
-            await db.execute(update(AlbumUploadItem).where(AlbumUploadItem.id == item.id).values(
-                status="pending", needs_reconcile=False, lease_id=None, lease_expires_at=None))
+            await db.execute(update(AlbumUploadItem).where(
+                AlbumUploadItem.id == item.id, AlbumUploadItem.lease_id == lease.key).values(
+                status="pending", needs_reconcile=False, provider_asset_id=None, lease_id=None, lease_expires_at=None))
             await db.commit()
             raise HTTPException(409, "Draft closed")
-        if item.lease_id != lease.key:
-            await db.commit()
-            return item_out(item)
         asset_id = receipt.get("asset_id") if isinstance(receipt, dict) else None
         if item.provider_asset_id and item.provider_asset_id != asset_id:
             raise DraftAssetConflict("Provider asset identity differs")
@@ -290,9 +293,18 @@ async def complete_item_upload(request, sessions, lease, slots):
                 return await publish_item(sessions, lease, receipt)
         spool = await receive_item(request, lease)
         async with sessions() as db:
-            await db.execute(update(AlbumUploadItem).where(
+            draft = await db.scalar(select(AlbumUploadDraft).where(
+                AlbumUploadDraft.id == lease.draft_id).with_for_update())
+            expire(draft)
+            if draft.status not in ("uploading", "ready"):
+                await db.commit()
+                raise HTTPException(409, "Draft closed")
+            marked = await db.execute(update(AlbumUploadItem).where(
                 AlbumUploadItem.draft_id == lease.draft_id, AlbumUploadItem.item_id == lease.item_id,
-                AlbumUploadItem.lease_id == lease.key).values(needs_reconcile=True))
+                AlbumUploadItem.lease_id == lease.key, AlbumUploadItem.status == "receiving",
+                AlbumUploadItem.lease_expires_at > now()).values(needs_reconcile=True))
+            if marked.rowcount != 1:
+                raise HTTPException(409, "Upload attempt expired; check draft status")
             await db.commit()
         receipt = await storage.upload(lease, spool)
         return await publish_item(sessions, lease, receipt)

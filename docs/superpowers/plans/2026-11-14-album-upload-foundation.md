@@ -60,11 +60,11 @@ Create `docs/album-upload-drafts.md`: API examples, configuration/limits, failur
 - A DB-enforced unique active draft per owner for uploading/ready/cancelling; cancelled/expired receipts are not active. Serialize creation through the owner row so concurrent creates cannot bypass the constraint.
 - `create_or_get_draft(db, owner, draft_id, manifest) -> DraftOut`; `get_draft(db, owner, draft_id, item_id=None) -> DraftOut`. A filtered status request avoids downloading a10000-item list while resolving one ambiguous item.
 
-- [ ] Add isolated tests `test_draft_manifest_boundaries`, `test_create_replay_and_conflict`, `test_foreign_owner_hidden`, `test_one_active_draft`, `test_filtered_status`. Exact10GB is accepted as200×50000000-byte metadata entries; +1 byte is rejected without uploading bytes. Cover10001 items, duplicate UUID, bad SHA/MIME/name, zero/too-large file and whitespace title.
-- [ ] Run `python -m pytest tests/test_album_drafts.py -q` from backend in its existing test environment; observe missing route/model failures.
-- [ ] Implement schema/models and create/status routes under `/api/album-drafts`. Authenticate before reading a bounded8MiB raw manifest, then validate with the typed schema. Normalize once before fingerprinting; filename≤255 UTF8 bytes and title/description bounds are enforced, owner cannot be supplied by request. Return only safe metadata/status/expiry and optional album_id.
-- [ ] Add migration inventory/apply/replay tests preserving existing User/Album/Photo/PendingUpload data. Implement additive table/index migration, default read-only.
-- [ ] Run the Task1 test files; expected PASS. Keep seven-day expiry and ownership independent of GET access frequency.
+- [x] Add isolated tests `test_draft_manifest_boundaries`, `test_create_replay_and_conflict`, `test_foreign_owner_hidden`, `test_one_active_draft`, `test_filtered_status`. Exact10GB is accepted as200×50000000-byte metadata entries; +1 byte is rejected without uploading bytes. Cover10001 items, duplicate UUID, bad SHA/MIME/name, zero/too-large file and whitespace title.
+- [x] Run `python -m pytest tests/test_album_drafts.py -q` from backend in its existing test environment; observe missing route/model failures.
+- [x] Implement schema/models and create/status routes under `/api/album-drafts`. Authenticate before reading a bounded8MiB raw manifest, then validate with the typed schema. Normalize once before fingerprinting; filename≤255 UTF8 bytes and title/description bounds are enforced, owner cannot be supplied by request. Return only safe metadata/status/expiry and optional album_id.
+- [x] Add migration inventory/apply/replay tests preserving existing User/Album/Photo/PendingUpload data. Implement additive table/index migration, default read-only.
+- [x] Run the Task1 test files; expected PASS. Keep seven-day expiry and ownership independent of GET access frequency.
 
 ## Task 2: Bounded, replay-safe item transfer and storage
 
@@ -76,13 +76,13 @@ Create `docs/album-upload-drafts.md`: API examples, configuration/limits, failur
 - `complete_item_upload(lease, spool) -> ItemOut`: independent `AsyncSessionLocal`, conditional lease/generation publication, deterministic storage reconciliation and eventual owned-file cleanup.
 - Draft storage helpers `upload_draft_media`, `lookup_draft_media`, `delete_draft_media`; strict outcome/identity checking, no ignored provider failures.
 
-- [ ] Add stream tests for exact size, +1, truncated body, missing/false Content-Length, wrong digest, invalid MIME, disconnect and timeouts. Count provider calls and temp files; invalid bytes must make zero provider writes. Observe failures before implementation.
-- [ ] Add provider-adapter tests: lost upload receipt, provider success before DB failure, existing matching object, existing conflicting context/type, transient lookup failure, lease expiry and late completion. Assert one deterministic protected resource, overwrite=false, exact digest/identity, no exposed origin URL and no deletion on a mere stale lease.
-- [ ] Implement bounded intake and worker slots. HTTP cancellation must not release a worker slot or delete the spool while a blocking SDK operation still uses it; heartbeat/result DB work uses an independent session. Hold no database row lock across stream/provider I/O.
-- [ ] Implement private provider helpers. Normal new uploads use the upload receipt; Admin API lookup is limited to ambiguous/existing/recovery cases, avoiding a lookup per normal file. Verify actual SDK receipt/context behavior with the planned synthetic provider probe before treating identity as established. Unknown/foreign identity fails409 rather than overwrite/delete.
-- [ ] Implement local-file storage with atomic rename/digest validation. Do not add external storage providers or chunked uploads in this task.
-- [ ] Apply new-transfer rate limits only after the uploaded/receiving replay fast path; limit new work to30/minute. Separate status limit120/minute; keep owner/global concurrency bounds and legacy limits. Test with the real limiter active.
-- [ ] Run `python -m pytest tests/test_album_drafts.py tests/test_album_draft_storage.py -q`; expected PASS, including slot/spool cleanup.
+- [x] Add stream tests for exact size, +1, truncated body, missing/false Content-Length, wrong digest, invalid MIME, disconnect and timeouts. Count provider calls and temp files; invalid bytes must make zero provider writes. Observe failures before implementation.
+- [x] Add provider-adapter tests: lost upload receipt, provider success before DB failure, existing matching object, existing conflicting context/type, transient lookup failure, lease expiry and late completion. Assert one deterministic protected resource, overwrite=false, exact digest/identity, no exposed origin URL and no deletion on a mere stale lease.
+- [x] Implement bounded intake and worker slots. HTTP cancellation must not release a worker slot or delete the spool while a blocking SDK operation still uses it; heartbeat/result DB work uses an independent session. Hold no database row lock across stream/provider I/O.
+- [x] Implement private provider helpers. Normal new uploads use the upload receipt; Admin API lookup is limited to ambiguous/existing/recovery cases, avoiding a lookup per normal file. Verify actual SDK receipt/context behavior with the planned synthetic provider probe before treating identity as established. Unknown/foreign identity fails409 rather than overwrite/delete.
+- [x] Implement local-file storage with atomic no-overwrite hard-link publication and digest validation. Do not add external storage providers or chunked uploads in this task.
+- [x] Apply new-transfer rate limits only after the uploaded/receiving replay fast path; limit new work to30/minute. Separate status limit120/minute; keep owner/global concurrency bounds and legacy limits. Test with the real limiter active.
+- [x] Run `python -m pytest tests/test_album_drafts.py tests/test_album_draft_storage.py -q`; expected PASS, including slot/spool cleanup.
 
 ## Task 3: Atomic finalize, retryable cancellation, lifecycle and acceptance
 
@@ -93,14 +93,36 @@ Create `docs/album-upload-drafts.md`: API examples, configuration/limits, failur
 - `finalize_draft(db, owner, draft_id) -> AlbumOut`: same draft lock for readiness check, Album/Photo insert and completed+album_id transaction. Initial success201, repeat200; not-ready409, expired410, deleted completed album410.
 - `cancel_draft(db, owner, draft_id) -> DraftOut` and `cleanup_album_drafts(db)`: safe cancellation/tombstone, repeatable owned-object removal and expiry recovery. Active worker completion observes draft cancellation before publication; completed assets are excluded.
 
-- [ ] Add lost-final-response and concurrent finalize/finalize/finalize-cancel/cleanup tests; assert one album, exact ordered photos and unchanged private delivery types. Add failed delete/retry, cancellation during provider operation, expiry during upload, stale worker result and deleted-album receipt tests. Observe RED.
-- [ ] Extract the existing insert helper without changing validation/reference claims; implement finalize/cancel using the same locked draft row and transaction. Strict provider delete failures retain retryable cleanup state; do not delete through the legacy swallowed-error helper.
-- [ ] Extend the existing periodic cleanup lifecycle and router registration. Maintenance must bypass uploads/finalize and must not start draft cleanup. Preserve legacy test expectations, including reuse of legacy tokens returning409.
-- [ ] Run full isolated backend suite with production env/DSN/provider calls excluded; expected PASS. Run race tests against disposable local PostgreSQL with at least two independent connections: SQLite alone does not prove locking/active-draft uniqueness.
-- [ ] Run an explicitly isolated real-Cloudinary probe with synthetic image/video files: same item repeated, lost-response recovery, matching context, unsigned denial, protected gateway after finalize, strict deletion and no old namespace interaction. Keep proof/asset mapping secret-safe and delete only positively owned test assets. No10GB provider upload or real-user album creation is part of this proof.
-- [ ] Document the API, limits/TTL, recovery statuses and storage costs/risks in `docs/album-upload-drafts.md`. Prepare an additive production rollout checklist with backup/schema-first deployment compatibility, preserving the existing live app; execution of that checklist remains a separate approval.
-- [ ] One fresh final read-only review; address material findings with focused RED→GREEN regression checks and the green full suite. Deliver the verified local foundation and concrete7B API contract. No iPhone behavior is claimed at7A.
+- [x] Add lost-final-response and concurrent finalize/finalize/finalize-cancel/cleanup tests; assert one album, exact ordered photos and unchanged private delivery types. Add failed delete/retry, cancellation during provider operation, expiry during upload, stale worker result and deleted-album receipt tests. Observe RED.
+- [x] Extract the existing insert helper without changing validation/reference claims; implement finalize/cancel using the same locked draft row and transaction. Strict provider delete failures retain retryable cleanup state; do not delete through the legacy swallowed-error helper.
+- [x] Extend the existing periodic cleanup lifecycle and router registration. Maintenance must bypass uploads/finalize and must not start draft cleanup. Preserve legacy test expectations, including reuse of legacy tokens returning409.
+- [x] Run full isolated backend suite with production env/DSN/provider calls excluded; expected PASS. Run race tests against disposable local PostgreSQL with at least two independent connections: SQLite alone does not prove locking/active-draft uniqueness.
+- [x] Run an explicitly isolated real-Cloudinary probe with synthetic image/video files: same item repeated, lost-response recovery, matching context, unsigned denial, protected gateway after finalize, strict deletion and no old namespace interaction. Keep proof/asset mapping secret-safe and delete only positively owned test assets. No10GB provider upload or real-user album creation is part of this proof.
+- [x] Document the API, limits/TTL, recovery statuses and storage costs/risks in `docs/album-upload-drafts.md`. Prepare an additive production rollout checklist with backup/schema-first deployment compatibility, preserving the existing live app; execution of that checklist remains a separate approval.
+- [x] One fresh final read-only review; address material findings with focused RED→GREEN regression checks and the green full suite. Deliver the verified local foundation and concrete7B API contract. No iPhone behavior is claimed at7A.
 
 ## Plan Review
 
 The independent builder check found no important unanswered question. It confirmed that current Album/Photo models suffice and flagged the swallowed-error deletion helper; this plan explicitly requires a separate strict draft deletion path. Spec coverage maps server ownership/manifest to Task1, byte/provider/lease recovery to Task2 and finalization/cancel/cleanup/compatibility to Task3. Native preparation/UI/background acceptance belongs to7B and is not marked implemented by this plan.
+
+
+## Execution result - 2026-11-14
+
+Local Stage7A complete on `feat/album-upload-drafts`; no production rollout.
+The final isolated suite passed92 tests. Disposable PostgreSQL passed seven groups,
+including native UUID/additive migration, competing creates and file claims,
+concurrent finalize and five finalize/cancel races. Exact10GB is metadata-only;
+actual stream boundary proof is50MiB. Real Cloudinary passed four acceptance groups
+with a synthetic JPEG and WebM; all three owned acceptance assets were removed.
+
+One fresh independent review found two important lease races. Both were reproduced
+before fixes: a cancelled receiver still started provider I/O; an older completion
+cleared the next worker's lease/recovery marker. Upload now checks open draft and
+current live lease under the draft lock before persisting its provider-attempt
+marker; publication checks generation before deletion and conditionally clears
+only its own lease. Both regressions are green; full suite and both external
+acceptance probes were repeated after the fix. No deferred minor findings.
+
+Execution variations and limits are recorded in `docs/album-upload-drafts.md`.
+The isolated worktree and ignored evidence are retained for the next approved
+integration step. No Swift source, installed iPhone app or production data changed.

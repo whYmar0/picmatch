@@ -14,7 +14,7 @@ in the upload manifest or print it in diagnostic logs.
 |---|---|
 | PUT `/{draft_id}` |201 for a new immutable manifest;200 for the same normalized manifest;409 if changed or another draft is active |
 | GET `/{draft_id}` | Status, expiration, item totals, safe item metadata and optional completed album_id; `?item_id=UUID` filters the item list |
-| PUT `/{draft_id}/items/{item_id}` | Raw file bytes with the declared Content-Type;200 uploaded;202+Retry-After while the same item is receiving |
+| PUT `/{draft_id}/items/{item_id}` | Raw file bytes with the declared Content-Type;200 uploaded;202+Retry-After while the same item is receiving;409 for a superseded/expired attempt (check status before retry) |
 | POST `/{draft_id}/finalize` |201 new AlbumOut;200 the same album on replay;409 incomplete/cancelling;410 expired/cancelled/deleted result |
 | DELETE `/{draft_id}` | Safe cancellation status; repeated cancellation is allowed;409 after completion preserves album media |
 
@@ -49,7 +49,9 @@ A lost finalize response is resolved by GET or the same finalize operation.
 Receiving leases last300 seconds, heartbeat every30 seconds. Input times out
 after30 seconds without a chunk or20 minutes overall. A worker owns its spool,
 slot and independent DB session through the provider operation even if the client
-disconnects after sending bytes. Streaming size/hash errors clean their spools.
+disconnects after sending bytes. Streaming size/hash errors clean their spools. Before provider writes, the worker
+locks the draft and confirms its current live lease; stale completion cannot
+clear another worker's recovery marker or delete its resource.
 
 Provider storage is authenticated and non-overwriting. Cloudinary context carries
 the server-verified draft/item/digest; provider lookup is used for ambiguous
@@ -111,3 +113,32 @@ DB, existing user album or existing media namespace is a test target.
 Stage7B will provide Photos import/preparation, persistent background queue and
 the creation UI. There is no claim of device upload throughput, disk headroom,
 background scheduling or real ten-GB acceptance from this backend work.
+
+
+## Verified result and implementation decisions
+
+On14November2026:92 isolated tests passed, seven disposable-PostgreSQL groups
+passed and four real-Cloudinary groups passed. Both final-review race regressions
+failed before the fix and passed afterward. All three synthetic acceptance assets
+were confirmed absent after strict cleanup; the earlier standalone protocol asset
+was also deleted. The test database is disposable and stopped after verification.
+No minor findings were deferred.
+
+- The installed execution-workspace helper was absent. A local ignored ledger
+  records the execution; the worktree/evidence are retained, avoiding loss of the
+  reproducible local stand before integration. This is manual evidence management.
+- Provider/filesystem operations live in one internal storage module, and workers
+  use independent sessions bound to the request's engine. No new dependency is
+  introduced; test overrides stay confined to their database.
+- Local publication uses an atomic hard link on the same filesystem rather than
+  a replacing rename; flat names preserve the existing gateway's confinement.
+  Moving spool and destination to different filesystems would require adaptation.
+- An uncertain provider result can keep cancellation pending and block a new draft
+  until provider/operator confirmation; this favors recoverability over reporting
+  unproven deletion. A mismatched resource is never silently overwritten/deleted.
+- Concurrency evidence is for PostgreSQL and the current shared storage. Two worker
+  slots are per process; multi-instance fleet limits/shared-filesystem deployment
+  and SQLite write concurrency were not certified by this stage.
+- Exact byte/hash/type contracts and real JPEG/WebM were checked; exhaustive codec
+  decoding, external Cloudinary administrator replacement, sustained10GB transfer,
+  device storage capacity and iOS background behavior are outside this evidence.

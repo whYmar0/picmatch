@@ -134,3 +134,91 @@ async def test_abandoned_spools_cleanup_is_owned_and_lease_aware(async_client, a
         os.utime(file, (time.time() - 172800, time.time() - 172800))
     await drafts.cleanup_album_drafts(db_session)
     assert not stale.exists() and live.exists() and unknown.exists()
+
+
+async def test_expired_receiver_cannot_start_provider_after_cancel(async_client, auth_headers, draft_files, db_session, monkeypatch):
+    import album_drafts as drafts
+    import album_draft_storage as storage
+    from models import AlbumUploadItem
+    data = b"late receiver"
+    draft_id, body, _ = await create(async_client, auth_headers, manifest(data))
+    original_receive, original_upload = drafts.receive_item, storage.upload
+    received, release = asyncio.Event(), asyncio.Event()
+    calls = 0
+    async def held_receive(request, lease):
+        file = await original_receive(request, lease)
+        received.set()
+        await release.wait()
+        return file
+    async def counted_upload(*args):
+        nonlocal calls
+        calls += 1
+        return await original_upload(*args)
+    async def lost_publication(*args): raise RuntimeError("simulated lost publication")
+    monkeypatch.setattr(drafts, "receive_item", held_receive)
+    monkeypatch.setattr(storage, "upload", counted_upload)
+    monkeypatch.setattr(drafts, "publish_item", lost_publication)
+    task = asyncio.create_task(async_client.put(f"/api/album-drafts/{draft_id}/items/{body['items'][0]['id']}", content=data,
+                                               headers={**auth_headers, "Content-Type": "image/jpeg"}))
+    await asyncio.wait_for(received.wait(), 3)
+    item = await db_session.scalar(select(AlbumUploadItem).where(AlbumUploadItem.draft_id == draft_id))
+    item.lease_expires_at = drafts.now() - timedelta(seconds=1)
+    await db_session.commit()
+    cancelled = await async_client.delete(f"/api/album-drafts/{draft_id}", headers=auth_headers)
+    assert cancelled.json()["status"] == "cancelled"
+    release.set()
+    result = await task
+    assert calls == 0, "A receiver whose lease was cleared must not start provider I/O"
+    assert result.status_code == 409
+    assert not list(draft_files.rglob("*.jpg")) and not list(draft_files.rglob("*.part"))
+
+
+async def test_stale_completion_preserves_newer_cancel_recovery(async_client, auth_headers, draft_files, db_session, monkeypatch):
+    import album_drafts as drafts
+    import album_draft_storage as storage
+    from models import AlbumUploadItem
+    data = b"two generations"
+    draft_id, body, _ = await create(async_client, auth_headers, manifest(data))
+    original_upload, original_delete = storage.upload, storage.delete
+    began_a, began_b, release_a, release_b = (asyncio.Event() for _ in range(4))
+    keys = []
+    fail_b_delete = True
+    async def held_upload(lease, file):
+        keys.append(lease.key)
+        if len(keys) == 1:
+            began_a.set()
+            await release_a.wait()
+        else:
+            began_b.set()
+            await release_b.wait()
+        return await original_upload(lease, file)
+    async def failed_b_delete(item):
+        if len(keys) == 2 and getattr(item, "key", None) == keys[1] and fail_b_delete:
+            raise RuntimeError("synthetic late deletion failure")
+        return await original_delete(item)
+    monkeypatch.setattr(storage, "upload", held_upload)
+    monkeypatch.setattr(storage, "delete", failed_b_delete)
+    url = f"/api/album-drafts/{draft_id}/items/{body['items'][0]['id']}"
+    a = asyncio.create_task(async_client.put(url, content=data, headers={**auth_headers, "Content-Type": "image/jpeg"}))
+    await asyncio.wait_for(began_a.wait(), 3)
+    item = await db_session.scalar(select(AlbumUploadItem).where(AlbumUploadItem.draft_id == draft_id))
+    item.lease_expires_at = drafts.now() - timedelta(seconds=1)
+    await db_session.commit()
+    b = asyncio.create_task(async_client.put(url, content=data, headers={**auth_headers, "Content-Type": "image/jpeg"}))
+    await asyncio.wait_for(began_b.wait(), 3)
+    assert (await async_client.delete(f"/api/album-drafts/{draft_id}", headers=auth_headers)).json()["status"] == "cancelling"
+    release_a.set()
+    assert (await a).status_code == 409
+    try:
+        await db_session.refresh(item)
+        assert item.lease_id == keys[1] and item.needs_reconcile, "Old completion erased a newer operation's ownership"
+        assert (await async_client.delete(f"/api/album-drafts/{draft_id}", headers=auth_headers)).json()["status"] == "cancelling"
+    finally:
+        release_b.set()
+        late = await b
+    assert late.status_code == 503
+    await db_session.refresh(item)
+    assert item.needs_reconcile and list(draft_files.rglob("*.jpg"))
+    fail_b_delete = False
+    final = await async_client.delete(f"/api/album-drafts/{draft_id}", headers=auth_headers)
+    assert final.json()["status"] == "cancelled" and not list(draft_files.rglob("*.jpg"))
