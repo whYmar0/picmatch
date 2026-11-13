@@ -1,3 +1,4 @@
+import { MediaVideo } from "./Media";
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, SpeakerHigh, SpeakerSlash } from "@phosphor-icons/react";
 
@@ -731,7 +732,7 @@ export default function VideoPlayer({
         style={mediaFrameStyle}
         data-video-frame="true"
       >
-      <video
+      <MediaVideo
         ref={videoRef}
         src={src}
         muted={isMuted}
@@ -742,6 +743,10 @@ export default function VideoPlayer({
         className="relative z-10 max-w-full max-h-full select-none pointer-events-none"
         style={videoStyle}
         onLoadedMetadata={syncMetadata}
+        onSourceReset={() => {
+          // Canvas pixels must not survive an account/source change either.
+          if (backgroundCanvasRef.current) backgroundCanvasRef.current.width = 0;
+        }}
         onCanPlay={() => {
           drawBackgroundFrame();
         }}

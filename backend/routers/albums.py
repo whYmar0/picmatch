@@ -31,7 +31,6 @@ def compress_image(image_bytes: bytes, max_size: int = 1200, quality: int = 80) 
         return image_bytes
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.orm import selectinload
@@ -44,37 +43,15 @@ from schemas import (
     PhotoStats, PhotoOut, MessageResponse,
     VoterReaction, VoterSummary,
 )
-from auth import SECRET_KEY, get_current_user
+from auth import SECRET_KEY, get_current_user, get_optional_current_user as get_optional_user
+from media_access import media_url, require_album_media_access
 from cloudinary_utils import (
     is_cloudinary_configured as _cloudinary_enabled,
-    upload_image as _cloudinary_upload,
+    upload_album_media as _cloudinary_upload,
     delete_image as _cloudinary_delete,
-    get_image_url as _cloudinary_url,
 )
 
 router = APIRouter(prefix="/albums", tags=["Albums"])
-
-# Optional auth dependency — does NOT raise 401 if no token present
-_bearer = HTTPBearer(auto_error=False)
-
-async def get_optional_user(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
-    db: AsyncSession = Depends(get_db),
-) -> User | None:
-    """Returns the current user if a valid token is provided, else None."""
-    if not credentials:
-        return None
-    from auth import decode_token
-    payload = decode_token(credentials.credentials)
-    if not payload:
-        return None
-    user_id = payload.get("sub")
-    if not user_id:
-        return None
-    from sqlalchemy import select as sa_select
-    result = await db.execute(sa_select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    return user if (user and user.is_active) else None
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 raw_upload_dir = os.getenv("UPLOAD_DIR", "./uploads")
@@ -96,29 +73,19 @@ ALLOWED_TYPES = {
 def _s(v) -> str:
     return str(v)
 
-def photo_url(stored: str, media_type: str = "image") -> str:
-    if _cloudinary_enabled():
-        return _cloudinary_url(stored, resource_type="video" if media_type == "video" else "image")
-    return f"{BASE_URL}/uploads/{stored}"
+def photo_url(photo_id, media_type: str = "image") -> str:
+    return media_url(photo_id, media_type=media_type)
 
-def photo_thumb_url(stored: str, media_type: str = "image") -> str:
-    if media_type == "video":
-        return photo_url(stored, media_type="video")
-    if _cloudinary_enabled():
-        try:
-            from cloudinary_utils import get_thumb_url as _cloud_thumb
-            return _cloud_thumb(stored, resource_type="image")
-        except Exception:
-            return photo_url(stored, media_type="image")
-    return f"{BASE_URL}/api/thumbnail/{stored}"
+def photo_thumb_url(photo_id, media_type: str = "image") -> str:
+    return media_url(photo_id, variant="thumbnail", media_type=media_type)
 
 def photo_to_out(p: Photo) -> PhotoOut:
     media = p.media_type or "image"
     return PhotoOut(
         id=p.id,
         filename=p.filename,
-        url=photo_url(p.stored_filename, media_type=media),
-        thumb_url=photo_thumb_url(p.stored_filename, media_type=media),
+        url=photo_url(p.id, media_type=media),
+        thumb_url=photo_thumb_url(p.id, media_type=media),
         media_type=media,
         order=p.order,
         created_at=p.created_at,
@@ -240,7 +207,7 @@ async def _process_upload(f: UploadFile, idx: int) -> dict:
     if _cloudinary_enabled():
         stored = f"picmatch/{uuid.uuid4()}"
         # Cloudinary SDK is blocking; run in thread pool to avoid stalling event loop.
-        await asyncio.to_thread(_cloudinary_upload, content, public_id=stored)
+        await asyncio.to_thread(_cloudinary_upload, content, public_id=stored, resource_type=media_type)
     else:
         stored = f"{uuid.uuid4()}{stored_ext}"
         def _write():
@@ -253,6 +220,7 @@ async def _process_upload(f: UploadFile, idx: int) -> dict:
         "filename": f.filename or stored,
         "stored": stored,
         "media_type": media_type,
+        "cloudinary_delivery_type": "authenticated" if _cloudinary_enabled() else "upload",
     }
 
 
@@ -307,6 +275,7 @@ async def _delete_stored_media(row: dict) -> None:
             _cloudinary_delete,
             row["stored"],
             resource_type="video" if row["media_type"] == "video" else "image",
+            delivery_type=row.get("cloudinary_delivery_type", "upload"),
         )
         return
 
@@ -338,6 +307,7 @@ async def _cleanup_expired_pending_uploads(db: AsyncSession) -> None:
         await _delete_stored_media({
             "stored": pending.stored_filename,
             "media_type": pending.media_type,
+            "cloudinary_delivery_type": pending.cloudinary_delivery_type,
         })
         await db.delete(pending)
     await db.commit()
@@ -360,6 +330,7 @@ async def upload_media(
         stored_filename=row["stored"],
         original_filename=row["filename"],
         media_type=row["media_type"],
+        cloudinary_delivery_type=row["cloudinary_delivery_type"],
         expires_at=expires_at,
     ))
     await db.commit()
@@ -407,6 +378,7 @@ async def delete_uploaded_media(
     if not pending:
         await db.rollback()
         raise HTTPException(409, detail="Media is already attached or unavailable")
+    row["cloudinary_delivery_type"] = pending.cloudinary_delivery_type
     await _delete_stored_media(row)
     await db.delete(pending)
     await db.commit()
@@ -504,6 +476,7 @@ async def create_album(
                 "filename": pending_by_stored[row["stored"]].original_filename,
                 "stored": pending_by_stored[row["stored"]].stored_filename,
                 "media_type": pending_by_stored[row["stored"]].media_type,
+                "cloudinary_delivery_type": pending_by_stored[row["stored"]].cloudinary_delivery_type,
             }
             for idx, row in enumerate(uploaded_rows)
         ]
@@ -526,6 +499,7 @@ async def create_album(
             filename=row["filename"],
             stored_filename=row["stored"],
             media_type=row["media_type"],
+            cloudinary_delivery_type=row.get("cloudinary_delivery_type", "upload"),
             order=row["idx"],
         ))
     for pending in pending_rows:
@@ -584,6 +558,7 @@ async def get_album_by_invite(
     album = result.scalar_one_or_none()
     if not album:
         raise HTTPException(404, detail="Album not found or invite link has expired")
+    await require_album_media_access(album, current_user, db)
     return album_to_out(album)
 
 
@@ -711,7 +686,7 @@ async def get_my_comments_in_album(
 
     # Get photo URL
     photo = next((p for p in album.photos if _s(p.id) == _s(first_comment.photo_id)), None)
-    photo_url_val = photo_url(photo.stored_filename) if photo else None
+    photo_url_val = photo_url(photo.id, media_type=photo.media_type) if photo else None
 
     return {
         "has_comments": True,
@@ -737,7 +712,7 @@ async def delete_album(
 
     for photo in album.photos:
         if _cloudinary_enabled():
-            _cloudinary_delete(photo.stored_filename, resource_type="video" if photo.media_type == "video" else "image")
+            _cloudinary_delete(photo.stored_filename, resource_type="video" if photo.media_type == "video" else "image", delivery_type=photo.cloudinary_delivery_type)
         else:
             p = UPLOAD_DIR / photo.stored_filename
             if p.exists():
@@ -842,8 +817,8 @@ async def _build_analytics(
             pct = round((likes / total * 100), 1) if total else 0.0
             photo_stats.append(PhotoStats(
                 id=p.id, filename=p.filename,
-                url=photo_url(p.stored_filename, media_type=p.media_type or "image"),
-                thumb_url=photo_thumb_url(p.stored_filename, media_type=p.media_type or "image"),
+                url=photo_url(p.id, media_type=p.media_type or "image"),
+                thumb_url=photo_thumb_url(p.id, media_type=p.media_type or "image"),
                 media_type=p.media_type or "image",
                 order=p.order,
                 like_count=likes, dislike_count=dislikes,
@@ -854,8 +829,8 @@ async def _build_analytics(
         else:
             photo_stats.append(PhotoStats(
                 id=p.id, filename=p.filename,
-                url=photo_url(p.stored_filename, media_type=p.media_type or "image"),
-                thumb_url=photo_thumb_url(p.stored_filename, media_type=p.media_type or "image"),
+                url=photo_url(p.id, media_type=p.media_type or "image"),
+                thumb_url=photo_thumb_url(p.id, media_type=p.media_type or "image"),
                 media_type=p.media_type or "image",
                 order=p.order,
                 like_count=0, dislike_count=0,

@@ -48,6 +48,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1008
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -125,3 +126,12 @@ async def get_creator_user(current_user: User = Depends(get_current_user)) -> Us
             detail="Creators only",
         )
     return current_user
+
+
+async def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    if credentials is None:
+        return None
+    return await get_current_user(credentials, db)

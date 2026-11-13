@@ -9,7 +9,7 @@ from database import get_db
 from models import User, Notification, Photo
 from schemas import NotificationOut, MessageResponse
 from auth import get_current_user
-from cloudinary_utils import is_cloudinary_configured as _cloudinary_enabled, get_image_url as _cloudinary_url
+from media_access import media_url
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -46,17 +46,17 @@ async def get_notifications(
     if all_ids:
         # One query: get direct photos + first photo per album
         p_rows = await db.execute(
-            select(Photo.id, Photo.album_id, Photo.stored_filename, Photo.order)
+            select(Photo.id, Photo.album_id, Photo.order, Photo.media_type)
             .where(Photo.id.in_(photo_ids))
         )
         for row in p_rows:
-            pid, aid, sfname, order = row
-            photo_map[_s(pid)] = sfname
+            pid, aid, order, media_type = row
+            photo_map[_s(pid)] = (_s(pid), media_type)
             # Track for album first-photo (lowest order wins)
             aid_str = _s(aid)
             current = album_first_photo_map.get(aid_str)
             if current is None or order < current[1]:
-                album_first_photo_map[aid_str] = (sfname, order)
+                album_first_photo_map[aid_str] = (_s(pid), order, media_type)
 
         # Fetch first photos for album_ids that weren't covered by photo_ids
         missing_albums = [aid for aid in album_ids if aid not in album_first_photo_map]
@@ -69,13 +69,11 @@ async def get_notifications(
                 .group_by(Photo.album_id)
             ).subquery()
             ap_rows = await db.execute(
-                select(Photo.album_id, Photo.stored_filename)
+                select(Photo.album_id, Photo.id, Photo.media_type)
                 .join(subq, (Photo.album_id == subq.c.album_id) & (Photo.order == subq.c.min_order))
             )
             for row in ap_rows:
-                album_first_photo_map[_s(row[0])] = (row[1], 0)
-
-    BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
+                album_first_photo_map[_s(row[0])] = (_s(row[1]), 0, row[2])
 
     out_list = []
     for n in notifications:
@@ -84,11 +82,9 @@ async def get_notifications(
         aid = _s(n.album_id) if n.album_id else None
 
         if pid and pid in photo_map:
-            stored = photo_map[pid]
-            thumb_url = _cloudinary_url(stored) if _cloudinary_enabled() else f"{BASE_URL}/uploads/{stored}"
+            thumb_url = media_url(photo_map[pid][0], variant="thumbnail", media_type=photo_map[pid][1])
         elif aid and aid in album_first_photo_map:
-            stored = album_first_photo_map[aid][0]
-            thumb_url = _cloudinary_url(stored) if _cloudinary_enabled() else f"{BASE_URL}/uploads/{stored}"
+            thumb_url = media_url(album_first_photo_map[aid][0], variant="thumbnail", media_type=album_first_photo_map[aid][2])
 
         n.thumbnail_url = thumb_url
         out_list.append(n)

@@ -29,7 +29,9 @@ async def test_video_upload_then_metadata_album_creation(async_client, auth_head
     album = created.json()
     assert album["photo_count"] == 1
     assert album["photos"][0]["media_type"] == "video"
-    assert album["photos"][0]["url"].endswith(".mp4")
+    assert f"/api/media/{album['photos'][0]['id']}?" in album["photos"][0]["url"]
+    assert "media_type=video" in album["photos"][0]["url"]
+    assert (await async_client.get(album["photos"][0]["url"])).content == b"not-a-real-video"
 
     reused = await async_client.post(
         "/api/albums/",

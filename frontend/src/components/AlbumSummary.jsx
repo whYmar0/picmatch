@@ -1,3 +1,4 @@
+import { MediaImage, MediaVideo } from "./Media";
 /**
  * AlbumSummary.jsx — v6
  *
@@ -59,9 +60,9 @@ function PhotoListRow({ photo, rank, onPhotoClick, canViewStats }) {
                    hover:ring-2 hover:ring-primary-400 transition-all"
       >
         {isVideo(photo) ? (
-          <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+          <MediaVideo src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
         ) : (
-          <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+          <MediaImage src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
         )}
       </button>
       <button onClick={() => onPhotoClick(photo)} className="flex-1 min-w-0 text-left">
@@ -99,9 +100,9 @@ function PhotoGridCard({ photo, rank, onPhotoClick, canViewStats }) {
                     bg-border-light dark:bg-border-dark group">
       <button onClick={() => onPhotoClick(photo)} className="media-thumbnail absolute inset-0 z-10">
         {isVideo(photo) ? (
-          <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+          <MediaVideo src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
         ) : (
-          <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+          <MediaImage src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
         )}
       </button>
       <button
@@ -487,7 +488,7 @@ export default function AlbumSummary({ analytics, onBack, initialPhotoId = null,
                   preload="metadata"
                 />
               ) : (
-                <img
+                <MediaImage
                   src={reactionSheet.url}
                   className="max-h-[45dvh] w-auto h-auto rounded-2xl object-contain shadow-2xl border border-white/10"
                   alt=""

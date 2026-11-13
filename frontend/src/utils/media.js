@@ -9,6 +9,7 @@ export function isVideoUrl(url) {
   try {
     const parsed = new URL(url, "http://localhost");
     const pathname = parsed.pathname.toLowerCase();
+    if (pathname.startsWith("/api/media/") && parsed.searchParams.get("media_type") === "video") return true;
     // Cloudinary video delivery URLs use `/video/upload/` and commonly omit
     // the original extension from the public URL.
     if (pathname.includes("/video/upload/")) return true;

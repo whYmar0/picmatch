@@ -1,3 +1,4 @@
+import { MediaImage } from "../components/Media";
 ﻿/**
  * pages/AnalyticsPage.jsx
  *
@@ -90,7 +91,7 @@ function LockedCommentSheet({ photoId, photoUrl, initialComments, commentId, onB
                 preload="metadata"
               />
             ) : (
-              <img
+              <MediaImage
                 src={photoUrl}
                 alt=""
                 className="max-h-[38dvh] w-auto h-auto rounded-3xl object-contain shadow-2xl border border-white/10"

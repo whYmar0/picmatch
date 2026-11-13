@@ -102,6 +102,7 @@ class Photo(Base):
     filename        = Column(String(500), nullable=False)
     stored_filename = Column(String(500), nullable=False)
     media_type      = Column(String(10), nullable=False, server_default=text("'image'"))
+    cloudinary_delivery_type = Column(String(16), nullable=False, default="upload", server_default=text("'upload'"))
     order           = Column(Integer, default=0)
     created_at      = Column(DateTime(timezone=True), default=_now)
 
@@ -129,6 +130,7 @@ class PendingUpload(Base):
     stored_filename  = Column(String(500), nullable=False)
     original_filename = Column(String(500), nullable=False)
     media_type      = Column(String(10), nullable=False)
+    cloudinary_delivery_type = Column(String(16), nullable=False, default="upload", server_default=text("'upload'"))
     expires_at      = Column(DateTime(timezone=True), nullable=False)
     claimed_at      = Column(DateTime(timezone=True), nullable=True)
 

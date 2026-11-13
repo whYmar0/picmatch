@@ -24,7 +24,7 @@ from middleware.rate_limit import _get_limit, limiter
 from models import User, Comment, CommentLike, Photo, Album, Vote, SharedAccess, Notification, NotificationType
 from schemas import CommentCreate, CommentOut, MessageResponse, CommentThreadOut
 from auth import get_current_user
-from cloudinary_utils import is_cloudinary_configured as _cloudinary_enabled, get_image_url as _cloudinary_url
+from media_access import media_url
 
 logger = logging.getLogger("pickmatch")
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
@@ -244,10 +244,7 @@ async def get_comment_thread(
 
     # Generate photo URL — Photo model has no .url attribute;
     # construct it the same way albums.py does via stored_filename.
-    if _cloudinary_enabled():
-        photo_url_val = _cloudinary_url(photo.stored_filename)
-    else:
-        photo_url_val = f"{BASE_URL}/uploads/{photo.stored_filename}"
+    photo_url_val = media_url(photo.id, media_type=photo.media_type)
 
     return CommentThreadOut(
         thread=[filtered_root],

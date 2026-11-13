@@ -1,3 +1,4 @@
+import { MediaVideo, MotionMediaImage } from "./Media";
 ﻿/**
  * AlbumCard.jsx — v6
  *
@@ -111,7 +112,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
               transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
               className="relative w-full h-full"
             >
-              <video
+              <MediaVideo
                 src={firstPhoto.url}
                 className="w-full h-full object-cover rounded-t-2xl pointer-events-none"
                 preload="metadata"
@@ -125,7 +126,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
               </div>
             </motion.div>
           ) : (
-            <motion.img
+            <MotionMediaImage
               src={firstPhoto.url}
               alt=""
               layoutId={`album-cover-${album.id}`}

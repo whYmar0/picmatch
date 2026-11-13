@@ -1,0 +1,65 @@
+"""Album media identities, permissions and narrowly scoped browser tickets."""
+import os
+import secrets
+from datetime import datetime, timezone
+from urllib.parse import quote, urlencode
+
+import jwt
+from fastapi import HTTPException
+from sqlalchemy import select
+
+from auth import SECRET_KEY
+from models import SharedAccess, User
+
+MEDIA_AUDIENCE = "pickmatch-media"
+TICKET_SECONDS = 300
+
+
+def media_url(photo_id, *, variant="display", ticket=None, media_type="image"):
+    base = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
+    query = {"variant": variant}
+    if media_type == "video":
+        query["media_type"] = "video"
+    if ticket:
+        query["ticket"] = ticket
+    return f"{base}/api/media/{quote(str(photo_id), safe='')}?{urlencode(query)}"
+
+
+async def require_album_media_access(album, user, db):
+    if album.is_public:
+        return
+    if not user or not user.is_active or not user.is_verified:
+        raise HTTPException(404, "Media not found")
+    if str(album.creator_id) == str(user.id):
+        return
+    access = await db.scalar(select(SharedAccess.id).where(
+        SharedAccess.album_id == str(album.id), SharedAccess.user_id == str(user.id)))
+    if access is None:
+        raise HTTPException(404, "Media not found")
+
+
+def issue_media_ticket(user, photo_id, variant):
+    now = int(datetime.now(timezone.utc).timestamp())
+    claims = {"aud": MEDIA_AUDIENCE, "sub": str(user.id), "photo": str(photo_id),
+              "variant": variant, "pwd_version": int(user.password_version),
+              "iat": now, "exp": now + TICKET_SECONDS, "jti": secrets.token_urlsafe(12)}
+    return jwt.encode(claims, SECRET_KEY, algorithm="HS256"), claims["exp"]
+
+
+async def media_ticket_user(token, photo_id, variant, db):
+    try:
+        claims = jwt.decode(token, SECRET_KEY, algorithms=["HS256"], audience=MEDIA_AUDIENCE,
+                            options={"require": ["aud", "sub", "photo", "variant", "pwd_version", "iat", "exp", "jti"]})
+        if (claims["aud"] != MEDIA_AUDIENCE or claims["photo"] != str(photo_id)
+                or claims["variant"] != variant or not isinstance(claims["sub"], str)
+                or type(claims["pwd_version"]) is not int
+                or type(claims["iat"]) is not int or type(claims["exp"]) is not int
+                or not 0 < claims["exp"] - claims["iat"] <= TICKET_SECONDS):
+            raise ValueError("Invalid scope")
+        user = await db.scalar(select(User).where(User.id == claims["sub"]))
+        if (not user or not user.is_active or not user.is_verified
+                or int(user.password_version) != claims["pwd_version"]):
+            raise ValueError("Revoked user")
+        return user
+    except (jwt.InvalidTokenError, ValueError, TypeError, KeyError):
+        raise HTTPException(404, "Media not found")

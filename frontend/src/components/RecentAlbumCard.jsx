@@ -1,3 +1,4 @@
+import { MediaVideo, MotionMediaImage } from "./Media";
 ﻿/**
  * RecentAlbumCard.jsx — v3
  *
@@ -70,7 +71,7 @@ export default function RecentAlbumCard({ album, index, onOpen, onVote }) {
         {album.coverUrl ? (
           isVideo({ url: album.coverUrl }) ? (
             <div className="relative w-full h-full">
-              <video
+              <MediaVideo
                 src={album.coverUrl}
                 className="w-full h-full object-cover"
                 preload="metadata"
@@ -84,7 +85,7 @@ export default function RecentAlbumCard({ album, index, onOpen, onVote }) {
               </div>
             </div>
           ) : (
-            <motion.img
+            <MotionMediaImage
               src={album.coverUrl}
               alt=""
               layoutId={`album-cover-${album.id}`}

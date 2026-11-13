@@ -1,3 +1,4 @@
+import { MediaImage, MediaVideo } from "./Media";
 ﻿/**
  * SharedAlbumCard.jsx — Card for albums shared with the current user
  * Read-only: shows "View Results" if can_view_stats, else just the invite link
@@ -36,9 +37,9 @@ export default function SharedAlbumCard({ album, index }) {
               <div key={photo.id}
                 className={`h-full overflow-hidden ${i === 0 ? "flex-[2]" : "flex-1"}`}>
                 {isVideo(photo) ? (
-                  <video src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                  <MediaVideo src={photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
                 ) : (
-                  <img src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  <MediaImage src={photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
                 )}
               </div>
             ))}

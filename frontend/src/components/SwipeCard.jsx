@@ -1,3 +1,4 @@
+import { MediaImage } from "./Media";
 /**
  * SwipeCard.jsx — v5.2
  *
@@ -463,7 +464,7 @@ const SwipeCard = forwardRef(function SwipeCard(
             onTouchEndCapture={handlePinchEndCapture}
             onTouchCancelCapture={finishPinch}
           >
-            <img
+            <MediaImage
               ref={pinchImageRef}
               src={useFallback && photo.thumb_url ? photo.thumb_url : photo.url}
               alt="Фото альбома"

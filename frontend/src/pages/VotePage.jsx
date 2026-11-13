@@ -1,3 +1,5 @@
+import { MediaImage, MediaVideo, MotionMediaImage } from "../components/Media";
+import { resolveMediaSource } from "../hooks/useMediaSource";
 /**
  * VotePage.jsx — v5.3
  *
@@ -47,7 +49,7 @@ const ThumbButton = memo(function ThumbButton({ photo, isCurrent, hasVote, react
     >
       {isVideo(photo) && !photo.thumb_url ? (
         <div className="relative w-full h-full">
-          <video src={photo.url} className="w-full h-full object-contain bg-gray-950" preload="metadata" muted playsInline />
+          <MediaVideo src={photo.url} className="w-full h-full object-contain bg-gray-950" preload="metadata" muted playsInline />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center">
               <Play size={12} className="text-white ml-0.5" />
@@ -56,7 +58,7 @@ const ThumbButton = memo(function ThumbButton({ photo, isCurrent, hasVote, react
         </div>
       ) : (
         <div className="relative w-full h-full">
-          <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+          <MediaImage src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="lazy" />
           {isVideo(photo) && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-6 h-6 rounded-full bg-black/50 flex items-center justify-center">
@@ -141,7 +143,7 @@ function AuthorAvatar({ user, size = 36 }) {
       style={{ width: size, height: size, fontSize: size * 0.42 }}
     >
       {user.avatar_url
-        ? <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+        ? <MediaImage src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
         : initial
       }
     </div>
@@ -474,6 +476,7 @@ export default function VotePage() {
 
     let timer = null;
     let idleHandle = null;
+    let cancelled = false;
 
     const preloadUpcoming = () => {
       // Find up to 3 upcoming unvoted photos ahead of current
@@ -485,8 +488,12 @@ export default function VotePage() {
         }
       }
       toPreload.forEach((src) => {
-        const img = new Image();
-        img.src = src;
+        resolveMediaSource(src).then(url => {
+          if (!cancelled) {
+            const img = new Image();
+            img.src = url;
+          }
+        }).catch(() => {});
       });
     };
 
@@ -498,6 +505,7 @@ export default function VotePage() {
     }
 
     return () => {
+      cancelled = true;
       if (idleHandle !== null) window.cancelIdleCallback?.(idleHandle);
       if (timer !== null) window.clearTimeout(timer);
     };
@@ -770,7 +778,7 @@ export default function VotePage() {
                   stableLayout
                 />
               ) : (
-                <motion.img
+                <MotionMediaImage
                   src={commentSheet.thumb_url || commentSheet.url}
                   className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl border border-white/10"
                   alt=""

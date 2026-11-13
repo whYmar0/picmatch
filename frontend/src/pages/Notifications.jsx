@@ -1,3 +1,4 @@
+import { MediaImage, MediaVideo } from "../components/Media";
 ﻿import { useState, useEffect, useMemo } from "react";
 import { notificationsApi } from "../api";
 import { useAuth } from "../contexts/AuthContext";
@@ -138,7 +139,7 @@ export default function Notifications() {
         <div className="relative w-12 h-12 flex-shrink-0">
           {n.thumbnail_url ? (
             isVideoUrl(n.thumbnail_url) ? (
-              <video
+              <MediaVideo
                 src={n.thumbnail_url}
                 className="w-12 h-12 rounded-xl object-cover bg-gray-100 dark:bg-gray-800"
                 preload="metadata"
@@ -146,7 +147,7 @@ export default function Notifications() {
                 playsInline
               />
             ) : (
-              <img
+              <MediaImage
                 src={n.thumbnail_url}
                 alt=""
                 loading="lazy"

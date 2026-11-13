@@ -9,14 +9,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from database import init_db, AsyncSessionLocal
 from middleware.rate_limit import limiter, custom_rate_limit_exceeded_handler
-from routers import albums, auth_router, comments, notifications, shared_access, share_links, votes
+from routers import albums, auth_router, comments, notifications, shared_access, share_links, votes, media
 from cloudinary_utils import setup_cloudinary, is_cloudinary_configured as cloudinary_enabled
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -27,6 +26,10 @@ else:
     UPLOAD_DIR = BASE_DIR / raw_upload_dir
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 logger = logging.getLogger("pickmatch")
+
+
+def _maintenance_enabled():
+    return os.getenv("MEDIA_MAINTENANCE", "false").strip().lower() == "true"
 
 
 def _parse_origins(raw: str | None) -> list[str]:
@@ -54,7 +57,7 @@ async def _pending_upload_cleanup_loop():
 async def lifespan(app: FastAPI):
     await init_db()
     setup_cloudinary()
-    cleanup_task = asyncio.create_task(_pending_upload_cleanup_loop())
+    cleanup_task = None if _maintenance_enabled() else asyncio.create_task(_pending_upload_cleanup_loop())
     if cloudinary_enabled():
         logger.info("Cloudinary configured — images will be uploaded to cloud storage.")
     elif os.getenv("ENVIRONMENT", "").lower() == "production":
@@ -66,11 +69,12 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        cleanup_task.cancel()
-        try:
-            await cleanup_task
-        except asyncio.CancelledError:
-            pass
+        if cleanup_task is not None:
+            cleanup_task.cancel()
+            try:
+                await cleanup_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(
@@ -134,7 +138,11 @@ def _csp_for(path: str, is_dev: bool) -> str:
 
 @app.middleware("http")
 async def security_headers(request, call_next):
-    resp = await call_next(request)
+    if _maintenance_enabled() and request.url.path != "/api/health":
+        resp = JSONResponse({"detail": "Service maintenance. Please try again shortly."}, status_code=503,
+                            headers={"Retry-After": "120", "Cache-Control": "no-store"})
+    else:
+        resp = await call_next(request)
     is_dev = os.getenv("DEBUG", "false").lower() == "true"
 
     # HSTS — 1 year, includeSubDomains, NOT preload yet. After ~1 month of
@@ -153,6 +161,9 @@ async def security_headers(request, call_next):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if request.url.path.startswith(("/api/media/", "/api/thumbnail/", "/uploads/")):
+        resp.headers["Referrer-Policy"] = "no-referrer"
+        resp.headers["Cache-Control"] = "private, no-store"
     # Modern CSP supersedes the legacy XSS auditor; explicitly disable to
     # avoid a buggy fallback path in old browsers.
     resp.headers["X-XSS-Protection"] = "0"
@@ -209,7 +220,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+app.include_router(media.legacy_router)
+app.include_router(media.router, prefix="/api")
 
 # Register the limiter on app.state so @limiter.limit() decorators in routers
 # can find it via `request.app.state.limiter`. The exception handler converts
@@ -239,47 +251,8 @@ THUMB_DIR.mkdir(parents=True, exist_ok=True)
 
 @app.get("/api/thumbnail/{filename}", tags=["System"])
 async def get_thumbnail(filename: str):
-    """Serve a lightweight webp thumbnail (max 480px), generating and caching it on the fly."""
-    safe_name = Path(filename).name
-    if not safe_name or safe_name != filename:
-        raise HTTPException(400, "Invalid filename")
-
-    thumb_path = THUMB_DIR / f"thumb_{safe_name}.webp"
-    if thumb_path.exists():
-        return FileResponse(
-            thumb_path,
-            media_type="image/webp",
-            headers={"Cache-Control": "public, max-age=31536000, immutable"},
-        )
-
-    original_path = UPLOAD_DIR / safe_name
-    if not original_path.exists():
-        raise HTTPException(404, "File not found")
-
-    ext = original_path.suffix.lower()
-    if ext in {".mp4", ".webm", ".mov", ".avi"}:
-        return FileResponse(original_path)
-
-    def _create():
-        try:
-            from PIL import Image, ImageOps
-            with Image.open(original_path) as img:
-                img = ImageOps.exif_transpose(img)
-                img.thumbnail((480, 480), Image.Resampling.LANCZOS)
-                img.save(thumb_path, format="WEBP", quality=80, method=4)
-            return True
-        except Exception as e:
-            logger.warning("Failed to generate thumbnail for %s: %s", safe_name, e)
-            return False
-
-    success = await asyncio.to_thread(_create)
-    if success and thumb_path.exists():
-        return FileResponse(
-            thumb_path,
-            media_type="image/webp",
-            headers={"Cache-Control": "public, max-age=31536000, immutable"},
-        )
-    return FileResponse(original_path)
+    """Legacy filename routes cannot authorize an album. Use /api/media/<photo_id>."""
+    raise HTTPException(404, "Media not found")
 
 
 @app.get("/api/health", tags=["System"])
@@ -289,6 +262,7 @@ async def health():
         "version": "2.0.0",
         "uploads_directory": str(UPLOAD_DIR),
         "uploads_writable": os.access(UPLOAD_DIR, os.W_OK),
+        **({"maintenance": True} if _maintenance_enabled() else {}),
     }
 
 

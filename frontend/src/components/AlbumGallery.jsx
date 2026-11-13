@@ -1,3 +1,4 @@
+import { MediaImage, MediaVideo, MotionMediaImage } from "./Media";
 /**
  * AlbumGallery.jsx — v11 Touch-driven photo viewer
  *
@@ -175,7 +176,7 @@ function ThumbItem({ photo, index, activeIdx, onSelect, isDraggingRef }) {
       className="btn-thumb outline-none rounded-xl"
     >
       {isVideo(photo) ? (
-        <video
+        <MediaVideo
           src={photo.url}
           className="w-full h-full object-cover rounded-xl select-none pointer-events-none"
           preload="metadata"
@@ -183,7 +184,7 @@ function ThumbItem({ photo, index, activeIdx, onSelect, isDraggingRef }) {
           playsInline
         />
       ) : (
-        <img
+        <MediaImage
           src={photo.thumb_url || photo.url}
           alt=""
           className="w-full h-full object-cover rounded-xl select-none pointer-events-none"
@@ -474,9 +475,9 @@ function StatisticsTab({
                   : ""}`}
             >
               {isVideo(photo) ? (
-                <video src={photo.thumb_url || photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                <MediaVideo src={photo.thumb_url || photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
               ) : (
-                <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="eager" />
+                <MediaImage src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="eager" />
               )}
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 text-white text-[10px] font-semibold flex justify-between">
                 <span>{i + 1}</span>
@@ -513,9 +514,9 @@ function StatisticsTab({
                   </span>
                   <div className="w-10 h-10 rounded-2xl overflow-hidden flex-shrink-0 bg-border-light dark:bg-border-dark shadow-sm">
                     {isVideo(photo) ? (
-                      <video src={photo.thumb_url || photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
+                      <MediaVideo src={photo.thumb_url || photo.url} className="w-full h-full object-cover" preload="metadata" muted playsInline />
                     ) : (
-                      <img src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="eager" />
+                      <MediaImage src={photo.thumb_url || photo.url} alt="" className="w-full h-full object-cover" loading="eager" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -560,7 +561,7 @@ function StatisticsTab({
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
                                   {r.avatar_url ? (
-                                    <img
+                                    <MediaImage
                                       src={r.avatar_url}
                                       alt={r.username}
                                       className="w-6 h-6 rounded-full object-cover flex-shrink-0 shadow-sm"
@@ -1958,7 +1959,7 @@ export default function AlbumGallery({
                           />
                         </motion.div>
                       ) : (
-                        <motion.img
+                        <MotionMediaImage
                           {...photoProps}
                           layoutId={`album-cover-${album.id}`}
                           layout={false}
@@ -1983,7 +1984,7 @@ export default function AlbumGallery({
                         onVerticalSwipe={onVideoVerticalSwipe}
                       />
                     ) : (
-                      <img {...photoProps} />
+                      <MediaImage {...photoProps} />
                     )
                   ) : (
                     <div className="text-white/40 text-sm">No photo</div>

@@ -16,7 +16,10 @@ export function getRecentAlbums(userId) {
   try {
     const raw = JSON.parse(localStorage.getItem(storageKey(userId)) || "[]");
     // Sort by visitedAt descending (most recent first)
-    return raw.sort((a, b) => new Date(b.visitedAt) - new Date(a.visitedAt));
+    return raw.map(a => ({ ...a,
+      // Legacy storage URLs are retired; reopening the album records its new API cover.
+      coverUrl: a.coverUrl?.includes("/api/media/") ? a.coverUrl : null,
+    })).sort((a, b) => new Date(b.visitedAt) - new Date(a.visitedAt));
   } catch {
     return [];
   }

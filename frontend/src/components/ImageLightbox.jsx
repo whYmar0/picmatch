@@ -1,3 +1,4 @@
+import { MediaImage } from "./Media";
 ﻿/**
  * components/ImageLightbox.jsx
  * Full-screen image overlay (WhatsApp / Telegram style).
@@ -207,7 +208,7 @@ export default function ImageLightbox({ open, src, alt, onClose, mediaType }) {
                 />
               </motion.div>
             ) : (
-              <img
+              <MediaImage
                 ref={imgRef}
                 src={src}
                 alt={alt}

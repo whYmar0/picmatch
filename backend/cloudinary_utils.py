@@ -14,6 +14,29 @@ Usage:
 import os
 
 CLOUDINARY_ENABLED = bool(os.getenv("CLOUDINARY_CLOUD_NAME"))
+ALBUM_IMAGE_TRANSFORMS = (
+    {"width": 2048, "crop": "limit", "quality": "auto"},
+    {"width": 500, "crop": "limit", "quality": "auto"},
+)
+
+
+def upload_album_media(media_bytes: bytes, public_id: str, resource_type: str) -> str:
+    import cloudinary.uploader
+    options = {"public_id": public_id, "resource_type": resource_type,
+               "type": "authenticated", "overwrite": False}
+    if resource_type == "image":
+        options["eager"] = list(ALBUM_IMAGE_TRANSFORMS)
+    return cloudinary.uploader.upload(media_bytes, **options)["secure_url"]
+
+
+def get_album_media_url(public_id: str, media_type: str, thumbnail: bool = False) -> str:
+    """Server-only signed URL; the media gateway streams its bytes, never redirects."""
+    import cloudinary.utils
+    options = {"secure": True, "type": "authenticated", "sign_url": True,
+               "resource_type": "video" if media_type == "video" else "image"}
+    if media_type != "video":
+        options.update(ALBUM_IMAGE_TRANSFORMS[1 if thumbnail else 0])
+    return cloudinary.utils.cloudinary_url(public_id, **options)[0]
 
 
 def is_cloudinary_configured() -> bool:
@@ -112,7 +135,7 @@ def get_thumb_url(public_id: str, resource_type: str = "image") -> str:
     return url
 
 
-def delete_image(public_id_or_url: str, resource_type: str = "image") -> None:
+def delete_image(public_id_or_url: str, resource_type: str = "image", delivery_type: str = "upload") -> None:
     """
     Delete an image or video from Cloudinary by its public_id or full URL.
 
@@ -123,7 +146,7 @@ def delete_image(public_id_or_url: str, resource_type: str = "image") -> None:
     pid = _resolve_public_id(public_id_or_url)
     try:
         import cloudinary.uploader
-        cloudinary.uploader.destroy(pid, resource_type=resource_type)
+        cloudinary.uploader.destroy(pid, resource_type=resource_type, type=delivery_type, invalidate=True)
     except Exception:
         pass
 
