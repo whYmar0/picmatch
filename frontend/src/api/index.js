@@ -147,9 +147,6 @@ export const votesApi = {
 };
 
 export const sharedApi = {
-  shareAlbum:  (albumId, body)           => api.post(`/shared/albums/${albumId}/share`, body),
-  listShares:  (albumId)                 => api.get(`/shared/albums/${albumId}/shares`),
-  revokeShare: (albumId, accessId)       => api.delete(`/shared/albums/${albumId}/shares/${accessId}`),
   sharedWithMe: ()                       => api.get("/shared/with-me"),
 };
 

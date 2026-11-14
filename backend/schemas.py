@@ -1,6 +1,6 @@
 """
 schemas.py — Pydantic v2 schemas
-Added: SharedAccessOut, SharedAlbumOut, CommentOut, CommentCreate, CommentLikeOut
+Added: SharedAlbumOut, CommentOut, CommentCreate, CommentLikeOut
 Updated: UserOut gains avatar_url
 """
 from datetime import datetime
@@ -219,18 +219,6 @@ class AlbumAnalytics(BaseModel):
     can_view_stats:   bool = False
 
 # ─── SharedAccess ─────────────────────────────────────────────────────────────
-
-class ShareAlbumRequest(BaseModel):
-    """Body for granting shared access to another user."""
-    username_or_email: str
-    can_view_stats: bool = True
-
-class SharedAccessOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id:             AnyUUID
-    user:           UserOut
-    can_view_stats: bool
-    created_at:     datetime
 
 class SharedAlbumOut(AlbumOut):
     """Album returned in the 'shared with me' list."""
