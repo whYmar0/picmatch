@@ -19,6 +19,7 @@ async def test_maintenance_blocks_routes_before_database_and_preserves_health(as
         for method, path in (("GET", "/api/albums/"), ("POST", "/api/albums/upload-media"),
                              ("PUT", "/api/album-drafts/11111111-1111-4111-8111-111111111111"),
                              ("POST", "/api/album-drafts/11111111-1111-4111-8111-111111111111/finalize"),
+                             ("POST", "/api/album-drafts/11111111-1111-4111-8111-111111111111/upload-grant"),
                              ("GET", "/api/media/11111111-1111-4111-8111-111111111111"),
                              ("POST", "/api/auth/login"), ("GET", "/uploads/anything.jpg")):
             reply = await async_client.request(method, path)

@@ -142,3 +142,19 @@ No minor findings were deferred.
 - Exact byte/hash/type contracts and real JPEG/WebM were checked; exhaustive codec
   decoding, external Cloudinary administrator replacement, sustained10GB transfer,
   device storage capacity and iOS background behavior are outside this evidence.
+
+## Stage7B background authorization
+
+POST /api/album-drafts/{id}/upload-grant uses the verified owner's account Bearer
+and returns a no-store {grant, expires_at}. The distinct HS256 audience/issuer/type
+and purpose permit only raw-item PUT for that immutable owner draft. Expiry is the
+minimum of24h, draft expiry and authenticating account-token expiry. The raw PUT
+accepts X-Pickmatch-Upload-Grant or the original account Bearer, never both.
+All other APIs reject this grant. User active/verified/password-version and draft
+identity are checked on each upload; ordinary transfer limits/replays remain.
+No additional schema is required. Grants are not individually server-revocable;
+close the draft, change password version or disable the account to revoke scope.
+Background URLSession follows redirects automatically. These requests carry no
+account Bearer, but still trust the HTTPS API not to redirect private file bytes.
+The phone stores this grant in a separate protected Keychain entry. This code is
+locally approved; deployment is still separately authorized.

@@ -9,6 +9,7 @@ from auth import get_current_user
 from database import get_db
 from middleware.rate_limit import limiter, _get_limit
 from schemas import DraftCreate
+from draft_upload_access import item_upload_owner, issue_upload_grant
 import album_drafts as drafts
 
 router = APIRouter(prefix="/album-drafts", tags=["Album drafts"])
@@ -54,12 +55,31 @@ async def read_draft(request: Request, draft_id: uuid.UUID, item_id: uuid.UUID |
 
 @router.put("/{draft_id}/items/{item_id}")
 async def put_item(request: Request, response: Response, draft_id: uuid.UUID, item_id: uuid.UUID,
-                    owner=Depends(draft_owner), db=Depends(get_db)):
+                    owner=Depends(item_upload_owner), db=Depends(get_db)):
     result, status = await drafts.upload_item(request, db, owner, draft_id, item_id)
     response.status_code = status
     if status == 202:
         response.headers["Retry-After"] = "2"
     return result
+
+
+@router.post("/{draft_id}/upload-grant")
+@limiter.limit(_get_limit("RATE_LIMIT_DRAFT_GRANT", "30/minute"))
+async def upload_grant(request: Request, response: Response, draft_id: uuid.UUID,
+                       owner=Depends(draft_owner), db=Depends(get_db)):
+    from auth import decode_token
+    draft = await drafts.owned(db, owner, draft_id, lock=True)
+    drafts.expire(draft)
+    if draft.status not in ("uploading", "ready"):
+        await db.commit()
+        raise HTTPException(410 if draft.status in ("expired", "cancelled") else 409, "Draft closed")
+    claims = decode_token(request.headers.get("authorization", "")[7:])
+    if not claims or type(claims.get("exp")) is not int:
+        raise HTTPException(401, "Account authorization required")
+    grant, expires = issue_upload_grant(owner, draft, claims["exp"])
+    await db.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return {"grant": grant, "expires_at": expires}
 
 
 @router.post("/{draft_id}/finalize")
