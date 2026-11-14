@@ -6,10 +6,11 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models import User, Notification, Photo
+from models import Album, User, Notification, Photo
 from schemas import NotificationOut, MessageResponse
 from auth import get_current_user
 from media_access import media_url
+from album_access import has_album_access
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -34,6 +35,14 @@ async def get_notifications(
         .order_by(Notification.created_at.desc())
     )
     notifications = result.scalars().all()
+    # A reply preview is album content too; old notifications do not grant entry.
+    context_ids = {_s(n.album_id) for n in notifications if n.album_id}
+    albums = (await db.scalars(select(Album).where(Album.id.in_(context_ids)))).all() if context_ids else []
+    permitted = set()
+    for album in albums:
+        if await has_album_access(album, current_user, db):
+            permitted.add(_s(album.id))
+    notifications = [n for n in notifications if n.album_id and _s(n.album_id) in permitted]
 
     # Collect all IDs for a single batch query
     photo_ids = list({_s(n.photo_id) for n in notifications if n.photo_id})

@@ -297,3 +297,39 @@ async def test_link_revocation_closes_participation_bypasses(async_client, media
         result = await async_client.request(method, path, headers=visitor, **({"json": body} if body else {}))
         assert result.status_code in (403, 404), (method, path, result.status_code)
     assert (await async_client.get("/api/shared/with-me", headers=visitor)).json() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("public", [True, False])
+@pytest.mark.parametrize("action", ["rotate", "revoke"])
+async def test_link_revocation_hides_new_reply_notifications(
+    async_client, media_setup, db_session, public, action
+):
+    from models import Notification
+    from sqlalchemy import select
+    album = media_setup["album"]
+    album.is_public = public
+    await db_session.commit()
+    visitor, owner = headers(media_setup, "shared"), headers(media_setup, "owner")
+    photo_id = str(media_setup["photo"].id)
+    root = await async_client.post("/api/comments/", headers=visitor,
+                                   json={"photo_id": photo_id, "text": "Original question"})
+    assert root.status_code == 201
+    endpoint = f"/api/albums/{album.id}/invitation"
+    change = await (async_client.post(endpoint + "/rotate", headers=owner) if action == "rotate"
+                    else async_client.delete(endpoint, headers=owner))
+    assert change.status_code == 200
+    reply = await async_client.post("/api/comments/", headers=owner,
+                                    json={"photo_id": photo_id, "parent_id": root.json()["id"],
+                                          "text": "Fresh reply after access was revoked"})
+    assert reply.status_code == 201, reply.text
+    assert (await async_client.get("/api/notifications/", headers=visitor)).json() == []
+    assert (await async_client.get("/api/notifications/", headers=owner)).json()
+    assert await db_session.scalar(select(Notification.id).where(
+        Notification.user_id == str(media_setup["users"]["shared"].id))) is not None
+    current = change.json()
+    if action == "revoke":
+        current = (await async_client.post(endpoint, headers=owner)).json()
+    assert (await async_client.get(f"/api/albums/invite/{current['invite_code']}", headers=visitor)).status_code == 200
+    visible = (await async_client.get("/api/notifications/", headers=visitor)).json()
+    assert len(visible) == 1 and visible[0]["text"] == "Fresh reply after access was revoked"

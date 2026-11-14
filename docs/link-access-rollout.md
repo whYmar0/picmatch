@@ -35,7 +35,7 @@ in-flight responses are outside revocation; future requests are checked again.
 ## Local verification
 
 - Backend retirement:113 baseline, then116 including new endpoint-removal checks.
-- Full link-policy backend suite:127passed before final review; focused RED/GREEN
+- Full link-policy backend suite:131passed after review corrections; focused RED/GREEN
   covers rotation, reactivation, guest media, raw IDs, legacy grants, analytics,
   comments and votes. Final result/any review corrections recorded in the ledger.
 - Real local PostgreSQL18 on127.0.0.1:55435: migration twice, pre/post content
@@ -44,9 +44,20 @@ in-flight responses are outside revocation; future requests are checked again.
 - Web media tests10passed; browser owner flow passed with mocked API and real
   Chromium. Production build passed. ESLint cannot run because this repository
   has no ESLint configuration; none installed or invented for this change.
-- Native existing seven gate scripts:64PASS groups including7 sharing checks;
+- Native seven gate scripts:67PASS groups including10 sharing checks;
   actual Darwin SDK build passed. Device ShareLink/presentation is not proved
   by Linux fixtures; do not describe it as physically accepted.
+
+The single final review found two Important issues, both reproduced then fixed:
+notification previews now require current album access, and native image/video
+denials trigger a fresh shared-list validation that fences older pending loads.
+Network/server failures preserve permitted snapshots. A newly accepted invitation
+also releases the validation guard; targeted interleave regression passes.
+No Critical or deferred Minor findings. No second review loop.
+
+Final SDK build15.79seconds; IPA4716834bytes, SHA256
+`191d3548314b6badb4ed079e18a00a22420b714ca239aefc281d95230662ae55`.
+ZIP/bundle/iOS26 minimum/ARM64 device/unsigned validated after fixes.
 
 Evidence: worktree `.local-proof/link-only-sharing/`, backend `.local-*.log`,
 native `.planning/2026-11-15-link-only-sharing/private/` and `.build/*sharing*.log`.
