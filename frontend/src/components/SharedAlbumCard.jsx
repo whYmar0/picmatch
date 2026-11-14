@@ -67,6 +67,9 @@ export default function SharedAlbumCard({ album, index }) {
       </div>
 
       {/* Action */}
+      <Link to={`/vote/${album.invite_code}`} className="btn-primary text-xs py-2 justify-center">
+        <ImageSquare size={13} /> {t("openAlbumLink")}
+      </Link>
       {album.can_view_stats && (
         <Link to={`/analytics/${album.id}`}
           className="btn-primary text-xs py-2 justify-center">

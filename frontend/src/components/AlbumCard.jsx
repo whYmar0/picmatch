@@ -11,8 +11,10 @@ import { MediaVideo, MotionMediaImage } from "./Media";
  * - Photo count badge and rounded-square (rounded-2xl) action buttons.
  */
 import { useState } from "react";
+import { createPortal } from "react-dom";
+import ShareModal from "./ShareModal";
 import { motion } from "framer-motion";
-import { LinkSimple, Check, TrashSimple, ImageSquare, Globe, LockSimple, Play } from "@phosphor-icons/react";
+import { LinkSimple, TrashSimple, ImageSquare, Globe, LockSimple, Play } from "@phosphor-icons/react";
 import { useLang } from "../contexts/LangContext";
 import { albumsApi } from "../api";
 import { isVideo } from "../utils/media";
@@ -38,32 +40,18 @@ function timeAgo(dateStr, lang) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-async function smartCopy(text) {
-  if (/Mobi|Android/i.test(navigator.userAgent) && navigator.share) {
-    try { await navigator.share({ title: "Pickmatch invite", url: text }); return true; } catch { /**/ }
-  }
-  try { await navigator.clipboard.writeText(text); return true; }
-  catch {
-    const ta = document.createElement("textarea");
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    document.execCommand("copy"); document.body.removeChild(ta); return true;
-  }
-}
-
 export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick }) {
   const { t, lang } = useLang();
   const [album, setAlbum] = useState(initialAlbum);
-  const [copied, setCopied] = useState(false);
+  const [showsLinks, setShowsLinks] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
   const photoCount = (album.photos || []).length;
 
-  const handleCopy = async (e) => {
+  const handleCopy = (e) => {
     e.stopPropagation();
-    if (await smartCopy(album.invite_url)) {
-      setCopied(true); setTimeout(() => setCopied(false), 2000);
-    }
+    setShowsLinks(true);
   };
 
   const togglePrivacy = async (e) => {
@@ -96,6 +84,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
   };
 
   return (
+    <>
     <div className="bg-card-light dark:bg-card-dark rounded-3xl shadow-card hover:shadow-card-hover-compact transition-shadow duration-200 flex flex-col w-full min-w-0">
       {/* Photo area */}
       <div
@@ -190,9 +179,9 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
             whileTap={{ scale: 0.9 }}
             className="flex items-center justify-center p-2.5 rounded-xl btn-rounded-square bg-gray-100 dark:bg-gray-800
                        text-gray-500 hover:text-primary-500 transition-colors flex-shrink-0"
-            title={t("copyLink")}
+            title={t("manageLink")}
           >
-            {copied ? <Check size={15} className="text-green-500" /> : <LinkSimple size={15} />}
+            <LinkSimple size={15} />
           </motion.button>
 
           {/* Delete */}
@@ -208,5 +197,7 @@ export default function AlbumCard({ album: initialAlbum, onDelete, onPhotoClick 
         </div>
       </div>
     </div>
+    {showsLinks && createPortal(<ShareModal album={album} open onClose={() => setShowsLinks(false)} />, document.body)}
+    </>
   );
 }

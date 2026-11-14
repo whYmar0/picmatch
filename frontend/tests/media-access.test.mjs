@@ -55,15 +55,26 @@ test("account change drops cached tickets and rejects a pending former-account r
   assert.equal(await f.access.resolve(source), current);
 });
 
-test("anonymous public media uses stable URL and clears private cached sources", async () => {
+test("anonymous media needs its author-link code and clears old account sources", async () => {
   const f = fixture();
   await f.access.resolve(source);
   f.setToken(null);
-  assert.equal(await f.access.resolve(source), source);
+  await assert.rejects(f.access.resolve(source), /invitation/i);
+  assert.equal(await f.access.resolve(source + "&invite=current-code"), source + "&invite=current-code");
   assert.equal(f.calls.length, 1);
   f.setToken("user-b");
   await f.access.resolve(source);
   assert.equal(f.calls.length, 2);
+});
+
+test("unticketed authenticated media must preserve the same explicit invitation", async () => {
+  const f = fixture();
+  f.setHandler(async () => ({ url: source, expires_at: null }));
+  await assert.rejects(f.access.resolve(source), /invalid media/i);
+  f.setHandler(async () => ({ url: source + "&invite=other", expires_at: null }));
+  await assert.rejects(f.access.resolve(source + "&invite=current"), /invalid media/i);
+  f.setHandler(async () => ({ url: source + "&invite=current", expires_at: null }));
+  assert.equal(await f.access.resolve(source + "&invite=current"), source + "&invite=current");
 });
 
 test("server cannot redirect a media element to another origin or photo", async () => {

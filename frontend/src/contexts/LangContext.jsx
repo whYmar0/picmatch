@@ -7,6 +7,17 @@ import { createContext, useContext, useState } from "react";
 
 const T = {
   en: {
+    linkAccessHint: "Both album types require an author link. Only the owner sees private-album statistics.",
+    linkRevoked: "The link is revoked. Create a new one to invite participants.",
+    linkUnconfirmed: "The change could not be confirmed. The current link state has been refreshed where possible.",
+    revokeLink: "Revoke link",
+    createLink: "Create link",
+    linkResetWarning: "Old links and access from previous visits will stop working. Already downloaded files cannot be recalled.",
+    linkConfirm: "Confirm",
+    linkCancel: "Cancel",
+    linkRetry: "Try again",
+    manageLink: "Manage invitation link",
+    openAlbumLink: "Open album",
     appName: "Pickmatch",
     login: "Log in",
     loggedInAs: "Logged in as @{username}",
@@ -210,6 +221,17 @@ const T = {
   },
 
   ru: {
+    linkAccessHint: "В оба типа альбомов входят по ссылке автора. Статистику приватного альбома видит только автор.",
+    linkRevoked: "Ссылка отозвана. Создайте новую для приглашения участников.",
+    linkUnconfirmed: "Не удалось подтвердить изменение. По возможности загружено текущее состояние ссылки.",
+    revokeLink: "Отозвать ссылку",
+    createLink: "Создать ссылку",
+    linkResetWarning: "Старые ссылки и доступ после прежних посещений перестанут работать. Уже загруженные файлы отозвать невозможно.",
+    linkConfirm: "Подтвердить",
+    linkCancel: "Отмена",
+    linkRetry: "Повторить",
+    manageLink: "Управление ссылкой",
+    openAlbumLink: "Открыть альбом",
     appName: "Pickmatch",
     login: "Войти",
     loggedInAs: "Вы вошли в аккаунт @{username}",

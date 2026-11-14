@@ -100,6 +100,10 @@ export const authApi = {
 };
 
 export const albumsApi = {
+  getInvitation: (albumId) => api.get(`/albums/${albumId}/invitation`),
+  createInvitation: (albumId) => api.post(`/albums/${albumId}/invitation`),
+  rotateInvitation: (albumId) => api.post(`/albums/${albumId}/invitation/rotate`),
+  revokeInvitation: (albumId) => api.delete(`/albums/${albumId}/invitation`),
   uploadMedia: (file, onUploadProgress, signal) => {
     const form = new FormData();
     form.append("file", file);

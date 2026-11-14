@@ -32,7 +32,12 @@ export function createMediaAccess({ apiBase, origin, getToken, request, now = ()
     const source = mediaURL(value);
     if (!source) return value;
     source.searchParams.delete("ticket");
-    if (!token) return source.href;
+    const invitation = source.searchParams.get("invite");
+    const hasInvitation = typeof invitation === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(invitation);
+    if (!token) {
+      if (!hasInvitation) throw new Error("An invitation is required to view album media");
+      return source.href;
+    }
     const key = source.href;
     const existing = cache.get(key);
     if (!force && existing?.url && existing.expiresAt > now() + 30_000) return existing.url;
@@ -49,6 +54,7 @@ export function createMediaAccess({ apiBase, origin, getToken, request, now = ()
       if (!result || result.pathname !== source.pathname
           || (result.searchParams.get("variant") || "display") !== (source.searchParams.get("variant") || "display")
           || !(expiresAt > now()) || (Number.isFinite(expiresAt) && !result.searchParams.get("ticket"))
+          || (!Number.isFinite(expiresAt) && (!hasInvitation || result.searchParams.get("invite") !== invitation))
           || (!Number.isFinite(expiresAt) && result.searchParams.has("ticket"))) throw new Error("Invalid media response");
       if (cache.get(key) === entry) cache.set(key, { url: result.href, expiresAt });
       return result.href;
