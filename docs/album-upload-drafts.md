@@ -158,3 +158,9 @@ Background URLSession follows redirects automatically. These requests carry no
 account Bearer, but still trust the HTTPS API not to redirect private file bytes.
 The phone stores this grant in a separate protected Keychain entry. This code is
 locally approved; deployment is still separately authorized.
+
+Stage7B cancellation receipts add cleanup_pending (boolean). For expired/cancelling
+drafts it remains true while any confirmed asset, uncertain provider operation or
+lease still requires cleanup. An expired receipt with cleanup_pending=false is a
+terminal local-cancellation acknowledgment; expired alone is not proof of cleanup.
+No schema migration is required for this additional response field.

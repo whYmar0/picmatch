@@ -81,6 +81,8 @@ async def draft_out(db, draft, item_id=None):
             "is_public": draft.is_public, "status": draft.status, "total_size": draft.total_size,
             "item_count": len(items), "uploaded_count": sum(item.status == "uploaded" for item in items),
             "expires_at": utc(draft.expires_at).isoformat(), "album_id": draft.album_id,
+            "cleanup_pending": draft.status in ("expired", "cancelling") and any(
+                item.status == "uploaded" or item.needs_reconcile or item.lease_id is not None for item in items),
             "items": [item_out(item) for item in filtered]}
 
 
