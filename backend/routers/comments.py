@@ -25,6 +25,7 @@ from models import User, Comment, CommentLike, Photo, Album, Vote, SharedAccess,
 from schemas import CommentCreate, CommentOut, MessageResponse, CommentThreadOut
 from auth import get_current_user
 from media_access import media_url
+from album_access import require_album_access
 
 logger = logging.getLogger("pickmatch")
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
@@ -110,33 +111,7 @@ async def get_comments(
     uid = _s(current_user.id)
     is_owner = _s(album.creator_id) == uid
 
-    if not is_owner and not album.is_public:
-        access_res = await db.execute(
-            select(SharedAccess.id).where(
-                and_(SharedAccess.user_id == uid, SharedAccess.album_id == _s(album.id))
-            )
-        )
-        has_access = access_res.scalar_one_or_none() is not None
-        if not has_access:
-            photo_id_rows = await db.execute(select(Photo.id).where(Photo.album_id == _s(album.id)))
-            photo_ids = photo_id_rows.scalars().all()
-            if photo_ids:
-                vote_res = await db.execute(
-                    select(Vote.id).where(
-                        and_(Vote.photo_id.in_(photo_ids), Vote.voter_id == uid)
-                    ).limit(1)
-                )
-                comment_res = await db.execute(
-                    select(Comment.id).where(
-                        and_(Comment.photo_id.in_(photo_ids), Comment.user_id == uid)
-                    ).limit(1)
-                )
-                has_access = (
-                    vote_res.scalar_one_or_none() is not None
-                    or comment_res.scalar_one_or_none() is not None
-                )
-        if not has_access:
-            raise HTTPException(403, detail="Access denied. This album is private.")
+    await require_album_access(album, current_user, db, status_code=403)
 
     result = await db.execute(
         select(Comment)
@@ -220,6 +195,7 @@ async def get_comment_thread(
         raise HTTPException(404, detail="Photo/Album context not found")
     
     album = photo.album
+    await require_album_access(album, current_user, db, status_code=403)
     is_album_owner = _s(album.creator_id) == uid
     is_comment_author = _s(root.user_id) == uid
 
@@ -274,30 +250,7 @@ async def create_comment(
     album_creator_id = _s(album.creator_id) if album else None
     uid = _s(current_user.id)
 
-    if album and not album.is_public and album_creator_id != uid:
-        access_res = await db.execute(
-            select(SharedAccess.id).where(
-                and_(SharedAccess.user_id == uid, SharedAccess.album_id == _s(album.id))
-            )
-        )
-        has_access = access_res.scalar_one_or_none() is not None
-        if not has_access:
-            vote_res = await db.execute(
-                select(Vote.id).where(
-                    and_(Vote.photo_id == _s(photo_obj.id), Vote.voter_id == uid)
-                ).limit(1)
-            )
-            comment_res = await db.execute(
-                select(Comment.id).where(
-                    and_(Comment.photo_id == _s(photo_obj.id), Comment.user_id == uid)
-                ).limit(1)
-            )
-            has_access = (
-                vote_res.scalar_one_or_none() is not None
-                or comment_res.scalar_one_or_none() is not None
-            )
-        if not has_access:
-            raise HTTPException(403, detail="Access denied. This album is private.")
+    await require_album_access(album, current_user, db, status_code=403)
 
     # Validate the thread root and the exact comment being addressed.
     parent = None
@@ -433,6 +386,7 @@ async def delete_comment(
     if not comment:
         raise HTTPException(404, detail="Comment not found")
 
+    await require_album_access(comment.photo.album, current_user, db, status_code=403)
     uid = _s(current_user.id)
     is_own = _s(comment.user_id) == uid
     is_album_owner = _s(comment.photo.album.creator_id) == uid
@@ -454,6 +408,16 @@ async def toggle_like(
     db: AsyncSession = Depends(get_db),
 ):
     """Toggle like on a comment. Returns 'liked' or 'unliked'."""
+    comment_obj = await db.scalar(select(Comment).options(selectinload(Comment.photo).selectinload(Photo.album))
+                                   .where(Comment.id == comment_id))
+    if comment_obj is None:
+        raise HTTPException(404, detail="Comment not found")
+    album = comment_obj.photo.album
+    await require_album_access(album, current_user, db, status_code=403)
+    if not album.is_public and str(album.creator_id) != str(current_user.id):
+        root = await db.get(Comment, str(comment_obj.parent_id)) if comment_obj.parent_id else comment_obj
+        if root is None or str(root.user_id) != str(current_user.id):
+            raise HTTPException(403, detail="Access denied")
     result = await db.execute(
         select(CommentLike).where(
             and_(CommentLike.comment_id == comment_id,
@@ -466,11 +430,6 @@ async def toggle_like(
         await db.commit()
         return MessageResponse(message="unliked")
     else:
-        res = await db.execute(select(Comment).where(Comment.id == comment_id))
-        if not res.scalar_one_or_none():
-            raise HTTPException(404, detail="Comment not found")
-            
-        comment_obj = res.scalar_one()
         db.add(CommentLike(comment_id=comment_id, user_id=_s(current_user.id)))
         
         await db.commit()

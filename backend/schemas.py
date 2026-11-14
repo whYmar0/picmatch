@@ -309,6 +309,12 @@ class ShareTokenOut(BaseModel):
     share_token: str
     share_url:   str
 
+
+class InvitationOut(BaseModel):
+    is_active: bool
+    invite_code: Optional[str] = None
+    invite_url: Optional[str] = None
+
 # ─── Generic ──────────────────────────────────────────────────────────────────
 
 class MessageResponse(BaseModel):

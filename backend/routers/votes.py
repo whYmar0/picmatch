@@ -19,6 +19,7 @@ from middleware.rate_limit import _get_limit, limiter
 from models import User, Photo, Vote, Album, SharedAccess, Notification, NotificationType
 from schemas import VoteCreate, VoteOut, SwipeSession
 from auth import get_current_user
+from album_access import require_album_access, remember_link_visit
 
 router = APIRouter(prefix="/votes", tags=["Votes"])
 
@@ -58,35 +59,9 @@ async def cast_vote(
             detail="Photo not found. Check that the photo ID is correct.",
         )
 
-    # ── IDOR / access control gate ─────────────────────────────────────────────
-    # `POST /votes/` accepts any photo_id from any authenticated user. Without
-    # this check, a registered user could brute-force UUIDs across the
-    # `photos` table and pollute analytics on PRIVATE albums they were
-    # never invited to. The OWASP "Broken Access Control" workflow in
-    # `.agents/skills/testing-for-broken-access-control/SKILL.md` (Step 4
-    # — horizontal privilege escalation) calls this exact gap.
-    #
-    # Rule:
-    #   • album.is_public=True   → anyone authenticated may vote
-    #   • album.is_public=False  → only owner OR SharedAccess user may vote
-    album_obj = photo.album
-    album_creator_id = _str(album_obj.creator_id) if album_obj else None
-    voter_id_str = _str(current_user.id)
-    if album_obj and not album_obj.is_public:
-        if album_creator_id != voter_id_str:
-            access_res = await db.execute(
-                select(SharedAccess).where(
-                    and_(
-                        SharedAccess.user_id == voter_id_str,
-                        SharedAccess.album_id == _str(album_obj.id),
-                    )
-                )
-            )
-            if not access_res.scalar_one_or_none():
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="This album is private. You do not have access to vote here.",
-                )
+    if photo.album is None:
+        raise HTTPException(404, detail="Album not found")
+    await require_album_access(photo.album, current_user, db, status_code=403)
 
     # Check for an existing vote from this voter on this photo
     result = await db.execute(
@@ -158,13 +133,15 @@ async def get_swipe_session(
     so the swipe UI can resume from where they left off.
     """
     result = await db.execute(
-        select(Album).where(
+        select(Album).with_for_update().where(
             and_(Album.invite_code == invite_code, Album.is_active == True)  # noqa: E712
         )
     )
     album = result.scalar_one_or_none()
     if not album:
         raise HTTPException(status_code=404, detail="Album not found / Альбом не найден")
+
+    await remember_link_visit(album, current_user, db)
 
     result = await db.execute(
         select(Photo).where(Photo.album_id == _str(album.id)).order_by(Photo.order)
@@ -204,6 +181,10 @@ async def get_my_votes(
     db: AsyncSession = Depends(get_db),
 ):
     """Returns all votes cast by the current user within a specific album."""
+    album = await db.scalar(select(Album).where(Album.id == album_id))
+    if album is None:
+        raise HTTPException(404, detail="Album not found")
+    await require_album_access(album, current_user, db)
     result = await db.execute(
         select(Photo.id).where(Photo.album_id == album_id)
     )
@@ -255,26 +236,7 @@ async def delete_my_votes(
     if not album:
         raise HTTPException(404, detail="Album not found")
 
-    if not album.is_public and _str(album.creator_id) != voter_id_str:
-        sa_res = await db.execute(
-            select(SharedAccess).where(
-                and_(
-                    SharedAccess.user_id == voter_id_str,
-                    SharedAccess.album_id == _str(album.id),
-                )
-            )
-        )
-        has_shared = sa_res.scalar_one_or_none() is not None
-        has_voted_here = False
-        if photo_ids:
-            vote_res = await db.execute(
-                select(Vote.id).where(
-                    and_(Vote.voter_id == voter_id_str, Vote.photo_id.in_(photo_ids))
-                ).limit(1)
-            )
-            has_voted_here = vote_res.scalar_one_or_none() is not None
-        if not (has_shared or has_voted_here):
-            raise HTTPException(404, detail="Album not found")
+    await require_album_access(album, current_user, db)
 
     if not photo_ids:
         return {"deleted": 0}

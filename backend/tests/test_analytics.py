@@ -56,10 +56,13 @@ async def test_analytics_non_owner_on_public_album_sees_full_stats(
     second_user_headers,
     db_session,
 ):
-    """Any authenticated voter can see full analytics for a public album."""
+    """A viewer admitted by the author's link can see public statistics."""
     album_id, _photo_id = await _seed_album_with_vote(
         db_session, async_client, auth_headers, is_public=True,
     )
+    from models import Album
+    album = await db_session.get(Album, album_id)
+    assert (await async_client.get(f"/api/albums/invite/{album.invite_code}", headers=second_user_headers)).status_code == 200
 
     resp = await async_client.get(
         f"/api/albums/{album_id}/analytics", headers=second_user_headers,
@@ -100,7 +103,7 @@ async def test_analytics_private_album_shared_viewer_sees_photos_only(
     db_session,
 ):
     """A SharedAccess holder can open a private album without seeing stats."""
-    from models import SharedAccess
+    from models import Album, SharedAccess
 
     album_id, _ = await _seed_album_with_vote(
         db_session, async_client, auth_headers, is_public=False,
@@ -108,6 +111,8 @@ async def test_analytics_private_album_shared_viewer_sees_photos_only(
     viewer_id = (await async_client.get("/api/auth/me", headers=second_user_headers)).json()["id"]
     db_session.add(SharedAccess(user_id=viewer_id, album_id=album_id, can_view_stats=True))
     await db_session.commit()
+    album = await db_session.get(Album, album_id)
+    assert (await async_client.get(f"/api/albums/invite/{album.invite_code}", headers=second_user_headers)).status_code == 200
 
     resp = await async_client.get(
         f"/api/albums/{album_id}/analytics", headers=second_user_headers,

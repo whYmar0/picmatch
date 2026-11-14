@@ -8,9 +8,10 @@ from sqlalchemy.orm import selectinload
 
 from auth import get_current_user
 from database import get_db
-from models import SharedAccess, User
+from models import Album, SharedAccess, User
 from routers.albums import album_to_out, _s
 from schemas import SharedAlbumOut
+from album_access import link_version
 
 router = APIRouter(prefix="/shared", tags=["Shared Access"])
 
@@ -35,6 +36,8 @@ async def shared_with_me(
     accesses = result.scalars().all()
     out = []
     for acc in accesses:
+        if not acc.album.is_active or acc.link_version != link_version(acc.album):
+            continue
         base = album_to_out(acc.album)
-        out.append(SharedAlbumOut(**base.model_dump(), can_view_stats=acc.can_view_stats))
+        out.append(SharedAlbumOut(**base.model_dump(), can_view_stats=acc.album.is_public))
     return out

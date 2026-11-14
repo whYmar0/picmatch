@@ -199,9 +199,9 @@ class Vote(Base):
 
 class SharedAccess(Base):
     """
-    Links a User to an Album they can access without being the owner.
-    can_view_stats=True → read-only analytics access.
-    No delete / edit rights are granted.
+    Remembers an actual author-link visit, valid only for link_version.
+    Effective statistics rights derive from album privacy, not the legacy bit.
+    This record never grants ownership or personal recipient permissions.
     """
     __tablename__ = "shared_accesses"
     __table_args__ = (UniqueConstraint("user_id", "album_id", name="uq_shared_user_album"),)
@@ -210,6 +210,8 @@ class SharedAccess(Base):
     user_id         = uuid_column(foreign_key="users.id")
     album_id        = uuid_column(foreign_key="albums.id")
     can_view_stats  = Column(Boolean, default=True)
+    # A remembered visit is valid only for the current author-link generation.
+    link_version    = Column(String(64), nullable=True)
     created_at      = Column(DateTime(timezone=True), default=_now)
 
     user  = relationship("User",  back_populates="shared_accesses", foreign_keys="SharedAccess.user_id")

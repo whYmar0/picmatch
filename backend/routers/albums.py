@@ -45,6 +45,7 @@ from schemas import (
 )
 from auth import SECRET_KEY, get_current_user, get_optional_current_user as get_optional_user
 from media_access import media_url, require_album_media_access
+from album_access import remember_link_visit, require_album_access
 from cloudinary_utils import (
     is_cloudinary_configured as _cloudinary_enabled,
     upload_album_media as _cloudinary_upload,
@@ -79,19 +80,19 @@ def photo_url(photo_id, media_type: str = "image") -> str:
 def photo_thumb_url(photo_id, media_type: str = "image") -> str:
     return media_url(photo_id, variant="thumbnail", media_type=media_type)
 
-def photo_to_out(p: Photo) -> PhotoOut:
+def photo_to_out(p: Photo, *, invite=None) -> PhotoOut:
     media = p.media_type or "image"
     return PhotoOut(
         id=p.id,
         filename=p.filename,
-        url=photo_url(p.id, media_type=media),
-        thumb_url=photo_thumb_url(p.id, media_type=media),
+        url=media_url(p.id, media_type=media, invite=invite),
+        thumb_url=media_url(p.id, variant="thumbnail", media_type=media, invite=invite),
         media_type=media,
         order=p.order,
         created_at=p.created_at,
     )
 
-def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0) -> AlbumOut:
+def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0, *, invite=None) -> AlbumOut:
     resolved_creator = album.creator or creator
     return AlbumOut(
         id=album.id, title=album.title, description=album.description,
@@ -103,7 +104,7 @@ def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0
         total_votes=total_votes,
         created_at=album.created_at,
         creator=resolved_creator,
-        photos=[photo_to_out(p) for p in album.photos],
+        photos=[photo_to_out(p, invite=invite) for p in album.photos],
     )
 
 
@@ -552,12 +553,13 @@ async def get_album_by_invite(
         select(Album)
         .options(selectinload(Album.photos), selectinload(Album.creator))
         .where(and_(Album.invite_code == invite_code, Album.is_active == True))  # noqa
+        .with_for_update()
     )
     album = result.scalar_one_or_none()
     if not album:
         raise HTTPException(404, detail="Album not found or invite link has expired")
-    await require_album_media_access(album, current_user, db)
-    return album_to_out(album)
+    await remember_link_visit(album, current_user, db)
+    return album_to_out(album, invite=invite_code if current_user is None else None)
 
 
 @router.get("/{album_id}/analytics", response_model=AlbumAnalytics)
@@ -566,73 +568,15 @@ async def get_album_analytics(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Returns analytics. Accessible by:
-      1. The album owner (full access)
-      2. Any authenticated voter on a public album (full access)
-      3. A SharedAccess holder on a private album (photos/comments only)
-
-    OPTIMIZED v2: 2 queries instead of eager-loading all Vote/User ORM objects.
-    Fetches raw vote columns and aggregates in O(n) Python pass.
-    """
-    uid = _s(current_user.id)
-
-    # 1. Fetch album + photos + creator (no votes eager-loaded)
-    result = await db.execute(
-        select(Album)
-        .options(selectinload(Album.photos), selectinload(Album.creator))
-        .where(Album.id == album_id)
-    )
-    album = result.scalar_one_or_none()
-    if not album:
+    """Admitted viewers get public stats; private stats remain owner-only."""
+    album = await db.scalar(select(Album).options(selectinload(Album.photos), selectinload(Album.creator))
+                            .where(Album.id == album_id))
+    if album is None:
         raise HTTPException(404, detail="Album not found")
-
-    is_owner = _s(album.creator_id) == uid
-
-    # Private albums are available here only to users explicitly allowed to
-    # vote/view the album. Their analytics response remains photo-only.
-    is_shared = False
-    if not is_owner:
-        sa_res = await db.execute(
-            select(SharedAccess).where(
-                and_(
-                    SharedAccess.user_id == uid,
-                    SharedAccess.album_id == _s(album.id),
-                )
-            )
-        )
-        sa = sa_res.scalar_one_or_none()
-        is_shared = sa is not None
-
-        # A voter or commenter who already participated in a private album
-        # keeps read-only access to the photos and their own comment threads.
-        photo_ids = [p.id for p in album.photos]
-        has_participated = False
-        if photo_ids:
-            vote_res = await db.execute(
-                select(Vote.id).where(
-                    and_(Vote.photo_id.in_(photo_ids), Vote.voter_id == uid)
-                ).limit(1)
-            )
-            comment_res = await db.execute(
-                select(Comment.id).where(
-                    and_(Comment.photo_id.in_(photo_ids), Comment.user_id == uid)
-                ).limit(1)
-            )
-            has_participated = vote_res.scalar_one_or_none() is not None or \
-                comment_res.scalar_one_or_none() is not None
-
-        if not album.is_public and not (sa or has_participated):
-            raise HTTPException(403, detail="Access denied. This album is private.")
-
-    # Public albums expose full analytics to authenticated viewers. Private
-    # non-owners receive the limited photo/comment view regardless of their
-    # SharedAccess stats bit; token-based share links use the builder directly.
-    can_view_stats = is_owner or album.is_public
-
-    return await _build_analytics(
-        album=album, db=db, is_shared=is_shared, can_view_stats=can_view_stats,
-    )
+    await require_album_access(album, current_user, db, status_code=403)
+    owner = _s(album.creator_id) == _s(current_user.id)
+    return await _build_analytics(album=album, db=db, is_shared=not owner,
+                                  can_view_stats=owner or album.is_public, viewer_id=_s(current_user.id))
 
 
 @router.get("/{album_id}/my-comments")
@@ -659,6 +603,8 @@ async def get_my_comments_in_album(
     album = album_res.scalar_one_or_none()
     if not album:
         raise HTTPException(404, detail="Album not found")
+
+    await require_album_access(album, current_user, db, status_code=403)
 
     photo_ids = [_s(p.id) for p in album.photos]
     if not photo_ids:
@@ -750,6 +696,7 @@ async def _build_analytics(
     db: AsyncSession,
     is_shared: bool,
     can_view_stats: bool,
+    viewer_id: str | None = None,
 ) -> AlbumAnalytics:
     """
     Pure builder that takes an already-loaded `album` (with `.photos` and
@@ -758,6 +705,7 @@ async def _build_analytics(
     only does the aggregation so ./share_links.py can reuse it without
     duplicating ~80 lines of vote/photo/winner math.
     """
+    can_view_stats = bool(can_view_stats and (album.is_public or str(album.creator_id) == viewer_id))
     photos = album.photos
     photo_ids = [p.id for p in photos]
 

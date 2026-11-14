@@ -48,11 +48,13 @@ async def _photo(photo_id, db):
 
 @router.get("/{photo_id}/access")
 @limiter.limit(_get_limit("RATE_LIMIT_MEDIA_ACCESS", "300/minute"))
-async def get_media_access(request: Request, photo_id: uuid.UUID, variant: Variant = "display",
+async def get_media_access(request: Request, photo_id: uuid.UUID, variant: Variant = "display", invite: str | None = Query(None, max_length=128),
                            user=Depends(get_optional_current_user), db: AsyncSession = Depends(get_db)):
     photo = await _photo(photo_id, db)
-    await require_album_media_access(photo.album, user, db)
-    token, expires_at = (None, None) if photo.album.is_public else issue_media_ticket(user, photo.id, variant)
+    await require_album_media_access(photo.album, user, db, code=invite)
+    if user is None or invite:
+        return {"url": media_url(photo.id, variant=variant, invite=invite, media_type=photo.media_type), "expires_at": None}
+    token, expires_at = issue_media_ticket(user, photo.id, variant, album=photo.album)
     return {"url": media_url(photo.id, variant=variant, ticket=token, media_type=photo.media_type), "expires_at": expires_at}
 
 
@@ -197,12 +199,12 @@ async def _cloud_response(photo, variant, request):
 
 
 @router.api_route("/{photo_id}", methods=["GET", "HEAD"])
-async def read_media(request: Request, photo_id: uuid.UUID, variant: Variant = "display", ticket: str | None = Query(None, max_length=2048),
+async def read_media(request: Request, photo_id: uuid.UUID, variant: Variant = "display", ticket: str | None = Query(None, max_length=2048), invite: str | None = Query(None, max_length=128),
                      user=Depends(get_optional_current_user), db: AsyncSession = Depends(get_db)):
     photo = await _photo(photo_id, db)
-    if not photo.album.is_public and user is None and ticket:
-        user = await media_ticket_user(ticket, photo.id, variant, db)
-    await require_album_media_access(photo.album, user, db)
+    if ticket:
+        user = await media_ticket_user(ticket, photo.id, variant, db, album=photo.album)
+    await require_album_media_access(photo.album, user, db, code=invite)
     if _cloudinary_enabled():
         return await _cloud_response(photo, variant, request)
     root = UPLOAD_DIR.resolve()
