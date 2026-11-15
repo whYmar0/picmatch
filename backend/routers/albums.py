@@ -92,7 +92,7 @@ def photo_to_out(p: Photo, *, invite=None) -> PhotoOut:
         created_at=p.created_at,
     )
 
-def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0, *, invite=None) -> AlbumOut:
+def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0, *, invite=None, unique_voters: int | None = None) -> AlbumOut:
     resolved_creator = album.creator or creator
     return AlbumOut(
         id=album.id, title=album.title, description=album.description,
@@ -102,6 +102,7 @@ def album_to_out(album: Album, creator: User | None = None, total_votes: int = 0
         is_public=album.is_public,
         photo_count=len(album.photos),
         total_votes=total_votes,
+        unique_voters=unique_voters,
         created_at=album.created_at,
         creator=resolved_creator,
         photos=[photo_to_out(p, invite=invite) for p in album.photos],
@@ -527,19 +528,20 @@ async def get_my_albums(
     )
     albums = result.scalars().all()
 
-    # Compute total votes per album in one query
+    # Keep photo-vote totals and distinct people separate in the same owner-only query.
     album_ids = [_s(a.id) for a in albums]
     vote_count_map = {}
     if album_ids:
         vote_counts = await db.execute(
-            select(Photo.album_id, func.count(Vote.id))
+            select(Photo.album_id, func.count(Vote.id), func.count(func.distinct(Vote.voter_id)))
             .join(Vote, Vote.photo_id == Photo.id)
             .where(Photo.album_id.in_(album_ids))
             .group_by(Photo.album_id)
         )
-        vote_count_map = {str(album_id): count for album_id, count in vote_counts.all()}
+        vote_count_map = {str(album_id): (count, people) for album_id, count, people in vote_counts.all()}
 
-    return [album_to_out(a, total_votes=vote_count_map.get(str(a.id), 0)) for a in albums]
+    return [album_to_out(a, total_votes=vote_count_map.get(str(a.id), (0, 0))[0],
+                         unique_voters=vote_count_map.get(str(a.id), (0, 0))[1]) for a in albums]
 
 
 @router.get("/invite/{invite_code}", response_model=AlbumWithPhotos)

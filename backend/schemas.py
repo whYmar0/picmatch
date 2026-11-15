@@ -183,6 +183,7 @@ class AlbumOut(BaseModel):
     is_public:   bool = True
     photo_count: int
     total_votes: int
+    unique_voters: Optional[int] = Field(default=None, ge=0)
     created_at:  datetime
     creator:     UserOut
     photos:      List[PhotoOut] = []
