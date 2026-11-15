@@ -88,7 +88,6 @@ export default function AlbumLinkSheet({ albumId, open, onClose, analytics = fal
         {state?.is_active ? <>
           <button className={button} disabled={busy} onClick={share}>{t("shareAlbum")}</button>
           <button className={button} disabled={busy} onClick={() => setConfirmation("rotateInvitation")}>{t("regenerateLink")}</button>
-          <button className={button + " bg-red-500"} disabled={busy} onClick={() => setConfirmation("revokeInvitation")}>{t("revokeLink")}</button>
         </> : state && <button className={button} disabled={busy} onClick={() => change("createInvitation")}>{t("createLink")}</button>}
         {confirmation && <div className="space-y-3 border-t pt-4">
           <p>{t("linkResetWarning")}</p>

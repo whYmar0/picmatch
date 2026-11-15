@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 
-test("owner panel reads state, explicitly creates/resets/revokes and preserves revocation on reopen", async ({ page }) => {
+test("owner panel creates and resets links without a separate revoke action", async ({ page }) => {
+  await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\//, route => route.abort());
   const user = { id: "owner", username: "Link owner", email: "owner@example.com", is_verified: true, role: "creator" };
   const album = { id: "album", title: "Link Test Album", description: null, invite_code: "old", invite_url: "https://pickmatch.site/vote/old",
     is_active: false, is_public: false, photo_count: 0, total_votes: 0, photos: [], creator: user, created_at: "2026-11-15T00:00:00Z" };
@@ -21,7 +22,8 @@ test("owner panel reads state, explicitly creates/resets/revokes and preserves r
     if (path.startsWith("/api/albums/album/invitation")) {
       if (method !== "GET") {
         mutations.push(method + " " + path);
-        active = method !== "DELETE";
+        expect(method).toBe("POST");
+        active = true;
         code = path.endsWith("/rotate") ? "reset-code" : "new-code";
       }
       return route.fulfill({ json: { is_active: active, invite_code: active ? code : null,
@@ -29,23 +31,23 @@ test("owner panel reads state, explicitly creates/resets/revokes and preserves r
     }
     return route.fulfill({ json: [] });
   });
-  await page.goto("/dashboard");
+  await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: album.title })).toBeVisible();
   await page.getByTitle("Manage invitation link").click();
   await expect(page.getByRole("button", { name: "Create link", exact: true })).toBeVisible();
   expect(mutations).toEqual([]);
   await page.getByRole("button", { name: "Create link", exact: true }).click();
   await expect(page.getByText("https://pickmatch.site/vote/new-code", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Regenerate link", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Revoke link", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Reset link", exact: true }).click();
   expect(mutations).toHaveLength(1);
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByText("https://pickmatch.site/vote/reset-code", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Revoke link", exact: true }).click();
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Create link", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Revoke link", exact: true })).toHaveCount(0);
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Create link", exact: true })).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset link", exact: true })).not.toBeVisible();
   await page.getByTitle("Manage invitation link").click();
-  await expect(page.getByRole("button", { name: "Create link", exact: true })).toBeVisible();
-  expect(mutations).toHaveLength(3);
+  await expect(page.getByText("https://pickmatch.site/vote/reset-code", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset link", exact: true })).toBeVisible();
+  expect(mutations).toEqual(["POST /api/albums/album/invitation", "POST /api/albums/album/invitation/rotate"]);
 });
