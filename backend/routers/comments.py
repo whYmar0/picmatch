@@ -266,6 +266,10 @@ async def create_comment(
             raise HTTPException(404, detail="Parent comment not found")
         if _s(parent.photo_id) != _s(photo_obj.id):
             raise HTTPException(400, detail="Parent comment belongs to another photo")
+        if parent.parent_id is not None:
+            raise HTTPException(400, detail="Parent comment must be a thread root")
+        if not album.is_public and uid not in (album_creator_id, _s(parent.user_id)):
+            raise HTTPException(403, detail="Access denied")
 
         if body.reply_to_id:
             target_result = await db.execute(
