@@ -2,13 +2,13 @@
 from typing import List
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from auth import get_current_user
 from database import get_db
-from models import Album, SharedAccess, User
+from models import Album, Photo, SharedAccess, User, Vote
 from routers.albums import album_to_out, _s
 from schemas import SharedAlbumOut
 from album_access import link_version
@@ -33,11 +33,24 @@ async def shared_with_me(
         .where(SharedAccess.user_id == _s(current_user.id))
         .order_by(SharedAccess.created_at.desc())
     )
-    accesses = result.scalars().all()
-    out = []
-    for acc in accesses:
-        if not acc.album.is_active or acc.link_version != link_version(acc.album):
-            continue
-        base = album_to_out(acc.album)
-        out.append(SharedAlbumOut(**base.model_dump(), can_view_stats=acc.album.is_public))
-    return out
+    albums = [
+        access.album for access in result.scalars().all()
+        if access.album.is_active and access.link_version == link_version(access.album)
+    ]
+    public_ids = [_s(album.id) for album in albums if album.is_public]
+    counts = {}
+    if public_ids:
+        results = await db.execute(
+            select(Photo.album_id, func.count(func.distinct(Vote.voter_id)))
+            .join(Vote, Vote.photo_id == Photo.id)
+            .where(Photo.album_id.in_(public_ids))
+            .group_by(Photo.album_id)
+        )
+        counts = {_s(album_id): count for album_id, count in results}
+    return [
+        SharedAlbumOut(
+            **album_to_out(album, unique_voters=counts.get(_s(album.id), 0) if album.is_public else None).model_dump(),
+            can_view_stats=album.is_public,
+        )
+        for album in albums
+    ]

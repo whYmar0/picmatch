@@ -117,8 +117,6 @@ async def create_or_get_draft(db, owner, draft_id, manifest):
         expire(draft)
         await db.commit()
         return await draft_out(db, draft), False
-    if manifest.edit is not None:
-        raise HTTPException(503, "Album editing is temporarily unavailable")
     # NO KEY UPDATE serializes creates without blocking Album's user FK checks.
     account = await db.scalar(select(User).where(User.id == owner.id).with_for_update(key_share=True))
     if account is None or not account.is_active or not account.is_verified:
@@ -383,8 +381,6 @@ async def finalize_draft(db, owner, draft_id):
     draft = await owned(db, owner, draft_id, lock=True)
     if draft.status == "completed":
         return await finalized_album(db, draft), False
-    if draft.edit_intent is not None:
-        raise HTTPException(503, "Album editing is temporarily unavailable")
     expire(draft)
     if draft.status not in ("uploading", "ready"):
         await db.commit()

@@ -564,6 +564,16 @@ async def get_album_by_invite(
     return album_to_out(album, invite=invite_code if current_user is None else None)
 
 
+@router.get("/{album_id}/edit-state")
+async def get_album_edit_state(
+    album_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from album_editing import edit_snapshot
+    return await edit_snapshot(db, current_user, album_id)
+
+
 @router.get("/{album_id}/analytics", response_model=AlbumAnalytics)
 async def get_album_analytics(
     album_id: str,
@@ -651,6 +661,7 @@ async def delete_album(
     result = await db.execute(
         select(Album).options(selectinload(Album.photos))
         .where(and_(Album.id == album_id, Album.creator_id == _s(current_user.id)))
+        .with_for_update(key_share=True)
     )
     album = result.scalar_one_or_none()
     if not album:
@@ -719,7 +730,7 @@ async def _build_analytics(
 
     if photo_ids:
         vote_query = (
-            select(Vote.photo_id, Vote.voter_id, Vote.is_like, User.username, User.avatar_url)
+            select(Vote.photo_id, Vote.voter_id, Vote.is_like, User.username, User.avatar_url, Vote.created_at)
             .join(User, Vote.voter_id == User.id)
             .where(Vote.photo_id.in_(photo_ids))
         )
@@ -730,7 +741,7 @@ async def _build_analytics(
 
         # Single O(n) pass through all votes
         for row in vote_rows:
-            row_photo_id, row_voter_id, row_is_like, row_username, row_avatar_url = row
+            row_photo_id, row_voter_id, row_is_like, row_username, row_avatar_url, voted_at = row
             pid = _s(row_photo_id)
             vid = _s(row_voter_id)
             uname = row_username or vid[:8]
@@ -745,8 +756,13 @@ async def _build_analytics(
                 pd["likes"] += 1
                 total_likes += 1
 
+            if voted_at is not None and voted_at.tzinfo is None:
+                voted_at = voted_at.replace(tzinfo=timezone.utc)
             pd["reactions"].append(
-                VoterReaction(voter_id=vid, username=uname, is_like=row_is_like, avatar_url=row_avatar_url)
+                VoterReaction(
+                    voter_id=vid, username=uname, is_like=row_is_like,
+                    avatar_url=row_avatar_url, created_at=voted_at,
+                )
             )
 
             if vid not in voter_map:

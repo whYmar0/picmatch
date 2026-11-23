@@ -145,3 +145,20 @@ async def test_analytics_private_album_blocks_non_owner_with_403(
         f"/api/albums/{album_id}/analytics", headers=second_user_headers,
     )
     assert resp.status_code == 403
+
+async def test_reaction_time_is_the_first_vote_time(async_client, auth_headers, db_session):
+    from datetime import datetime
+
+    album_id, photo_id = await _seed_album_with_vote(db_session, async_client, auth_headers)
+    url = f"/api/albums/{album_id}/analytics"
+    initial = (await async_client.get(url, headers=auth_headers)).json()["photos"][0]["reactions"][0]
+    original = datetime.fromisoformat(initial["created_at"])
+    assert original.utcoffset() is not None
+
+    changed = await async_client.post("/api/votes/", headers=auth_headers, json={
+        "photo_id": photo_id, "is_like": False,
+    })
+    assert changed.status_code in (200, 201)
+    later = (await async_client.get(url, headers=auth_headers)).json()["photos"][0]["reactions"][0]
+    assert later["created_at"] == initial["created_at"]
+    assert later["is_like"] is False

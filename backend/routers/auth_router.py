@@ -11,7 +11,7 @@ from PIL import Image
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, Form, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from auth import create_access_token, get_current_user, hash_password, verify_password
 from database import get_db
@@ -19,7 +19,9 @@ from middleware.rate_limit import _get_limit, limiter
 from email_utils import send_password_reset_email, send_verification_email
 from models import User, UserRole
 from schemas import (
+    ChangePasswordRequest,
     ForgotPasswordRequest,
+    ProfileUpdateRequest,
     MessageResponse,
     ResetPasswordRequest,
     ResendVerificationRequest,
@@ -229,26 +231,67 @@ async def reset_password(request: Request, req: ResetPasswordRequest, db: AsyncS
     if expires_at and expires_at < get_now():
         raise HTTPException(status_code=400, detail="Reset token has expired.")
 
-    user.hashed_password = hash_password(req.password)
-    # Invalidate every JWT issued before this password change. Combined with
-    # the `pwd_version` JWT claim and the check in get_current_user, this
-    # forces a re-login on any device still holding a stolen or leaked token.
-    user.password_version = int(user.password_version) + 1
-    user.reset_token = None
-    user.reset_token_expires_at = None
-    await _commit_or_conflict(db)
-    await db.refresh(user)
-    return {
-        "message": "Password reset successfully.",
-        "access_token": create_access_token(user),
+    result = await _replace_password(db, user, req.password, reset_token=req.token)
+    return {"message": "Password reset successfully.", **result}
+
+
+async def _replace_password(
+    db: AsyncSession, user: User, password: str, *, reset_token: str | None = None,
+) -> dict:
+    version = int(user.password_version)
+    statement = update(User).where(User.id == user.id, User.password_version == version)
+    if reset_token is not None:
+        statement = statement.where(User.reset_token == reset_token)
+    statement = statement.values(
+        hashed_password=hash_password(password),
+        password_version=version + 1,
+        reset_token=None,
+        reset_token_expires_at=None,
+    ).returning(User)
+    result = await db.execute(
+        statement, execution_options={"populate_existing": True, "synchronize_session": False},
+    )
+    changed = result.scalar_one_or_none()
+    if changed is None:
+        raise HTTPException(status_code=409, detail="Password state changed.")
+    response = {
+        "access_token": create_access_token(changed),
         "token_type": "bearer",
-        "user": UserOut.model_validate(user),
+        "user": UserOut.model_validate(changed),
     }
+    await _commit_or_conflict(db)
+    return response
 
 
 @router.get("/me", response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
     return UserOut.model_validate(current_user)
+
+
+@router.patch("/me", response_model=UserOut)
+@limiter.limit(_get_limit("RATE_LIMIT_PROFILE_UPDATE", "12/minute"))
+async def update_profile(
+    request: Request,
+    body: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    current_user.username = body.username
+    await _commit_or_conflict(db)
+    return UserOut.model_validate(current_user)
+
+
+@router.post("/change-password")
+@limiter.limit(_get_limit("RATE_LIMIT_CHANGE_PASSWORD", "5/minute"))
+async def change_password(
+    request: Request,
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect current password.")
+    return await _replace_password(db, current_user, body.new_password)
 
 
 @router.post("/avatar", response_model=UserOut)

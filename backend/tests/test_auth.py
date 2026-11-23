@@ -141,3 +141,93 @@ async def test_register_rejects_weak_password(async_client):
     assert isinstance(detail, list)
     msgs = " ".join(str(e.get("msg", "")) for e in detail)
     assert ("uppercase" in msgs) or ("special" in msgs)
+
+async def test_update_username_keeps_identity_and_requires_unique_valid_name(
+    async_client, auth_headers, second_user_headers,
+):
+    before = (await async_client.get("/api/auth/me", headers=auth_headers)).json()
+    other = (await async_client.get("/api/auth/me", headers=second_user_headers)).json()
+    url = "/api/auth/me"
+    anonymous = await async_client.patch(url, json={"username": "new_name"})
+    assert anonymous.status_code in (401, 403)
+    invalid = await async_client.patch(url, headers=auth_headers, json={"username": "a/b"})
+    assert invalid.status_code == 422
+    conflict = await async_client.patch(url, headers=auth_headers, json={"username": other["username"]})
+    assert conflict.status_code == 409
+    result = await async_client.patch(url, headers=auth_headers, json={"username": "новый_ник"})
+    assert result.status_code == 200
+    assert result.json() == {**before, "username": "новый_ник"}
+    assert (await async_client.get(url, headers=auth_headers)).json() == result.json()
+
+
+async def test_change_password_replaces_token_and_clears_outstanding_reset(
+    async_client, auth_headers, db_session,
+):
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select
+    from models import User
+
+    before = (await async_client.get("/api/auth/me", headers=auth_headers)).json()
+    user = await db_session.scalar(select(User).where(User.email == before["email"]))
+    original_version = user.password_version
+    user.reset_token = "256c3aa2-637e-473e-81ad-2e773d5082df"
+    user.reset_token_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    await db_session.commit()
+    url = "/api/auth/change-password"
+    body = {"current_password": "Test1234!A", "new_password": "Updated!209"}
+    wrong = await async_client.post(url, headers=auth_headers, json={**body, "current_password": "Wrong!099"})
+    assert wrong.status_code == 400
+    weak = await async_client.post(url, headers=auth_headers, json={**body, "new_password": "lowercase"})
+    assert weak.status_code == 422
+    assert "lowercase" not in weak.text and "Test1234!A" not in weak.text
+    assert (await async_client.get("/api/auth/me", headers=auth_headers)).status_code == 200
+
+    changed = await async_client.post(url, headers=auth_headers, json=body)
+    assert changed.status_code == 200
+    response = changed.json()
+    assert response["token_type"] == "bearer" and response["user"] == before
+    await db_session.refresh(user)
+    assert user.password_version == original_version + 1
+    assert user.reset_token is None and user.reset_token_expires_at is None
+    assert (await async_client.get("/api/auth/me", headers=auth_headers)).status_code == 401
+    fresh = {"Authorization": f"Bearer {response['access_token']}"}
+    assert (await async_client.get("/api/auth/me", headers=fresh)).json() == before
+    for password, code in [("Test1234!A", 401), ("Updated!209", 200)]:
+        login = await async_client.post("/api/auth/login", json={"email": before["email"], "password": password})
+        assert login.status_code == code
+
+
+async def test_only_one_concurrent_password_change_can_commit(async_client, auth_headers):
+    import asyncio
+
+    route = "/api/auth/change-password"
+    responses = await asyncio.gather(
+        *(async_client.post(route, headers=auth_headers, json={
+            "current_password": "Test1234!A", "new_password": password,
+        }) for password in ("Updated!210", "Updated!211"))
+    )
+    assert [result.status_code for result in responses].count(200) == 1
+    committed = next(result.json() for result in responses if result.status_code == 200)
+    assert (await async_client.get("/api/auth/me", headers={
+        "Authorization": f"Bearer {committed['access_token']}",
+    })).status_code == 200
+
+async def test_changed_password_uses_all_bytes_and_accepts_a_legacy_hash(
+    async_client, auth_headers, db_session,
+):
+    from passlib.hash import bcrypt
+    from sqlalchemy import select
+    from models import User
+
+    user = await db_session.scalar(select(User).where(User.username == "alice"))
+    user.hashed_password = bcrypt.hash("Test1234!A")
+    await db_session.commit()
+
+    prefix = "Aa!" + "a" * 69
+    changed = await async_client.post("/api/auth/change-password", headers=auth_headers, json={
+        "current_password": "Test1234!A", "new_password": prefix + "NewTail",
+    })
+    assert changed.status_code == 200
+    for suffix, code in (("OldTail", 401), ("NewTail", 200)):
+        login = await async_client.post("/api/auth/login", json={"email": user.email, "password": prefix + suffix})
+        assert login.status_code == code

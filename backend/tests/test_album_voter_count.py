@@ -43,3 +43,37 @@ async def test_owner_list_counts_people_not_photo_votes(async_client, auth_heade
     shared = await async_client.get('/api/shared/with-me', headers=second_user_headers)
     assert shared.status_code == 200
     assert shared.json()[0].get('unique_voters') is None
+
+async def test_shared_public_list_counts_distinct_voters_for_live_links(
+    async_client, auth_headers, second_user_headers, db_session,
+):
+    owner = (await async_client.get('/api/auth/me', headers=auth_headers)).json()['id']
+    public = Album(title='Public', creator_id=owner, invite_code='shared-count', is_public=True)
+    empty = Album(title='Empty', creator_id=owner, invite_code='empty-shared-count', is_public=True)
+    db_session.add_all([public, empty])
+    await db_session.flush()
+    photos = [Photo(album_id=str(public.id), filename=f'p-{i}.jpg', stored_filename=f'p-{i}.jpg') for i in range(2)]
+    db_session.add_all(photos)
+    await db_session.flush()
+    db_session.add_all(Vote(photo_id=str(photo.id), voter_id=owner, is_like=True) for photo in photos)
+    await db_session.commit()
+
+    for album in (public, empty):
+        opened = await async_client.get(f'/api/albums/invite/{album.invite_code}', headers=second_user_headers)
+        assert opened.status_code == 200
+
+    async def shared_list():
+        response = await async_client.get('/api/shared/with-me', headers=second_user_headers)
+        assert response.status_code == 200
+        return {row['id']: row for row in response.json()}
+
+    rows = await shared_list()
+    assert rows[str(public.id)]['unique_voters'] == 1
+    assert rows[str(empty.id)]['unique_voters'] == 0
+    private = await async_client.patch(f'/api/albums/{public.id}/privacy', headers=auth_headers,
+                                      data={'is_public': 'false'})
+    assert private.status_code == 200
+    assert (await shared_list())[str(public.id)]['unique_voters'] is None
+    rotated = await async_client.post(f'/api/albums/{empty.id}/invitation/rotate', headers=auth_headers)
+    assert rotated.status_code == 200
+    assert str(empty.id) not in await shared_list()

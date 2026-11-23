@@ -7,7 +7,9 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
@@ -238,6 +240,14 @@ app.state.limiter = limiter
 # default which echoes back the configured limit string (a fingerprint
 # adversaries can use to probe-and-time our rate limits).
 app.add_exception_handler(RateLimitExceeded, custom_rate_limit_exceeded_handler)
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_error(request: Request, exc: RequestValidationError):
+    route = request.scope.get("route")
+    if getattr(route, "name", None) == "change_password":
+        return JSONResponse(status_code=422, content={"detail": "Invalid password input."})
+    return await request_validation_exception_handler(request, exc)
+
 # SlowAPIMiddleware injects X-RateLimit-Limit / X-RateLimit-Remaining /
 # X-RateLimit-Reset headers on every response so clients can self-throttle.
 app.add_middleware(SlowAPIMiddleware)

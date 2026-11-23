@@ -174,6 +174,7 @@ class VoterReaction(BaseModel):
     username:   str
     is_like:    bool
     avatar_url: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 
 class PhotoStats(BaseModel):
