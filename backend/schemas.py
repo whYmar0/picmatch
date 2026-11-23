@@ -38,12 +38,27 @@ class DraftItemCreate(BaseModel):
         return value.lower()
 
 
+class AlbumEditIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    album_id: UUID
+    base_version: int = Field(strict=True, ge=0, lt=2_147_483_647)
+    remove_photo_ids: List[UUID] = Field(default_factory=list, max_length=10000)
+
+    @field_validator("remove_photo_ids")
+    @classmethod
+    def unique_removals(cls, values):
+        if len(set(values)) != len(values):
+            raise ValueError("Duplicate removal")
+        return values
+
+
 class DraftCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str = Field(min_length=1, max_length=255)
     description: Optional[str] = Field(default=None, max_length=1000)
     is_public: bool = True
-    items: List[DraftItemCreate] = Field(min_length=1, max_length=10000)
+    items: List[DraftItemCreate] = Field(max_length=10000)
+    edit: AlbumEditIntent | None = None
 
     @field_validator("title", mode="before")
     @classmethod
@@ -52,6 +67,8 @@ class DraftCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_batch(self):
+        if not self.items and self.edit is None:
+            raise ValueError("Missing draft items")
         if len({item.id for item in self.items}) != len(self.items):
             raise ValueError("Duplicate item")
         if sum(item.size for item in self.items) > 10000000000:
@@ -65,28 +82,43 @@ class UserRole(str, enum.Enum):
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
+def _valid_username(value: str) -> str:
+    if not value.replace("_", "").replace("-", "").isalnum():
+        raise ValueError("Username may only contain letters, numbers, _ and -")
+    return value
+
+
+def _valid_password(value: str) -> str:
+    if not any(char.isupper() for char in value):
+        raise ValueError("Password must contain at least one uppercase letter")
+    special_chars = "!@#$%^&*()_+-=[]{}|;':\",./<>?"
+    if not any(char in special_chars for char in value):
+        raise ValueError("Password must contain at least one special character")
+    return value
+
+
 class UserRegister(BaseModel):
-    email:    EmailStr
+    email: EmailStr
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=8, max_length=100)
     role: UserRole = UserRole.CREATOR
 
-    @field_validator("username")
-    @classmethod
-    def username_valid(cls, v: str) -> str:
-        if not v.replace("_", "").replace("-", "").isalnum():
-            raise ValueError("Username may only contain letters, numbers, _ and -")
-        return v
+    username_valid = field_validator("username")(_valid_username)
+    password_valid = field_validator("password")(_valid_password)
 
-    @field_validator("password")
-    @classmethod
-    def password_valid(cls, v: str) -> str:
-        if not any(char.isupper() for char in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        special_chars = "!@#$%^&*()_+-=[]{}|;':\",./<>?"
-        if not any(char in special_chars for char in v):
-            raise ValueError("Password must contain at least one special character")
-        return v
+
+class ProfileUpdateRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+
+    username_valid = field_validator("username")(_valid_username)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=100)
+    new_password: str = Field(..., min_length=8, max_length=100)
+
+    new_password_valid = field_validator("new_password")(_valid_password)
+
 
 class VerifyEmailRequest(BaseModel):
     email: EmailStr
@@ -102,15 +134,8 @@ class ResetPasswordRequest(BaseModel):
     token: str
     password: str = Field(..., min_length=8, max_length=100)
 
-    @field_validator("password")
-    @classmethod
-    def password_valid(cls, v: str) -> str:
-        if not any(char.isupper() for char in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        special_chars = "!@#$%^&*()_+-=[]{}|;':\",./<>?"
-        if not any(char in special_chars for char in v):
-            raise ValueError("Password must contain at least one special character")
-        return v
+    password_valid = field_validator("password")(_valid_password)
+
 
 class UserLogin(BaseModel):
     email:    EmailStr
@@ -149,6 +174,7 @@ class VoterReaction(BaseModel):
     username:   str
     is_like:    bool
     avatar_url: Optional[str] = None
+
 
 class PhotoStats(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -9,7 +9,7 @@ New in this version:
 """
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, BigInteger, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, Index, CheckConstraint, text
+from sqlalchemy import Column, String, Integer, BigInteger, Boolean, DateTime, ForeignKey, JSON, Text, UniqueConstraint, Index, CheckConstraint, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 import enum
@@ -87,6 +87,8 @@ class Album(Base):
     share_token = Column(String(64), nullable=True, unique=True, index=True)
     created_at  = Column(DateTime(timezone=True), default=_now)
 
+    edit_version  = Column(Integer, nullable=False, default=0, server_default=text("0"))
+
     creator       = relationship("User",  back_populates="albums")
     photos        = relationship("Photo", back_populates="album",
                                  cascade="all, delete-orphan", order_by="Photo.order")
@@ -147,14 +149,25 @@ class AlbumUploadDraft(Base):
     total_size = Column(BigInteger, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     expires_at = Column(DateTime(timezone=True), nullable=False)
+    edit_intent = Column(JSON, nullable=True)
     # Receipt survives album deletion so a finalize replay cannot recreate it.
     album_id = Column(String(36), nullable=True)
     __table_args__ = (
         Index("uq_album_upload_active_owner", "user_id", unique=True,
               sqlite_where=text("status IN ('uploading','ready','cancelling')"),
               postgresql_where=text("status IN ('uploading','ready','cancelling')")),
-        CheckConstraint("total_size > 0 AND total_size <= 10000000000", name="ck_draft_total_size"),
+        CheckConstraint("total_size >= 0 AND total_size <= 10000000000", name="ck_draft_total_size"),
     )
+
+
+class RemovedAlbumMedia(Base):
+    __tablename__ = "removed_album_media"
+    id = uuid_column(primary_key=True)
+    stored_filename = Column(String(500), nullable=False)
+    media_type = Column(String(10), nullable=False)
+    delivery_type = Column(String(16), nullable=False)
+    storage_kind = Column(String(16), nullable=False)
+    retry_at = Column(DateTime(timezone=True), nullable=False, default=_now, index=True)
 
 
 class AlbumUploadItem(Base):

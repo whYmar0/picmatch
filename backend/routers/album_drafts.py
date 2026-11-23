@@ -73,6 +73,8 @@ async def upload_grant(request: Request, response: Response, draft_id: uuid.UUID
     if draft.status not in ("uploading", "ready"):
         await db.commit()
         raise HTTPException(410 if draft.status in ("expired", "cancelled") else 409, "Draft closed")
+    if draft.total_size == 0:
+        raise HTTPException(409, "No files to upload")
     claims = decode_token(request.headers.get("authorization", "")[7:])
     if not claims or type(claims.get("exp")) is not int:
         raise HTTPException(401, "Account authorization required")

@@ -46,7 +46,7 @@ if len(SECRET_KEY.encode("utf-8")) < 32:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt", "bcrypt_sha256"], deprecated="auto")
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
 

@@ -42,12 +42,14 @@ async def _pending_upload_cleanup_loop():
     """Periodically remove abandoned pre-uploaded media."""
     from routers.albums import _cleanup_expired_pending_uploads
     from album_drafts import cleanup_album_drafts
+    from album_editing import cleanup_removed_media
 
     while True:
         try:
             async with AsyncSessionLocal() as db:
                 await _cleanup_expired_pending_uploads(db)
                 await cleanup_album_drafts(db)
+                await cleanup_removed_media(db)
         except asyncio.CancelledError:
             raise
         except Exception:

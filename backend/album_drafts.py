@@ -22,6 +22,7 @@ from cloudinary_utils import is_cloudinary_configured, DraftAssetConflict
 from models import AlbumUploadDraft, AlbumUploadItem, User, Album
 from middleware.rate_limit import limiter, _get_limit
 import album_draft_storage as storage
+import album_editing
 
 ACTIVE = ("uploading", "ready", "cancelling")
 EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
@@ -77,7 +78,11 @@ async def draft_out(db, draft, item_id=None):
     filtered = items if item_id is None else [item for item in items if item.item_id == str(item_id)]
     if item_id is not None and not filtered:
         raise HTTPException(404, "Item not found")
-    return {"id": str(draft.id), "title": draft.title, "description": draft.description,
+    edit = (
+        {"target_album_id": draft.edit_intent["album_id"], "edit": draft.edit_intent}
+        if draft.edit_intent else {}
+    )
+    return {**edit, "id": str(draft.id), "title": draft.title, "description": draft.description,
             "is_public": draft.is_public, "status": draft.status, "total_size": draft.total_size,
             "item_count": len(items), "uploaded_count": sum(item.status == "uploaded" for item in items),
             "expires_at": utc(draft.expires_at).isoformat(), "album_id": draft.album_id,
@@ -101,7 +106,8 @@ async def get_draft(db, owner, draft_id, item_id=None):
 async def create_or_get_draft(db, owner, draft_id, manifest):
     # A rollback expires ORM attributes; retries retain only the authenticated identity.
     owner = SimpleNamespace(id=str(owner.id))
-    encoded = json.dumps(manifest.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    payload = manifest.model_dump(mode="json", exclude={"edit"} if manifest.edit is None else None)
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     fingerprint = hashlib.sha256(encoded.encode()).hexdigest()
     existing = await db.scalar(select(AlbumUploadDraft).where(AlbumUploadDraft.id == str(draft_id)))
     if existing:
@@ -111,6 +117,8 @@ async def create_or_get_draft(db, owner, draft_id, manifest):
         expire(draft)
         await db.commit()
         return await draft_out(db, draft), False
+    if manifest.edit is not None:
+        raise HTTPException(503, "Album editing is temporarily unavailable")
     # NO KEY UPDATE serializes creates without blocking Album's user FK checks.
     account = await db.scalar(select(User).where(User.id == owner.id).with_for_update(key_share=True))
     if account is None or not account.is_active or not account.is_verified:
@@ -125,10 +133,14 @@ async def create_or_get_draft(db, owner, draft_id, manifest):
         await db.flush()
         if active.status in ACTIVE:
             raise HTTPException(409, {"message": "Active draft exists", "draft_id": str(active.id)})
+    target = await album_editing.validate_intent(db, owner, manifest.edit, len(manifest.items)) if manifest.edit else None
     cloud = is_cloudinary_configured()
     draft = AlbumUploadDraft(id=str(draft_id), user_id=str(owner.id), manifest_hash=fingerprint,
-                             title=manifest.title, description=manifest.description, is_public=manifest.is_public,
-                             total_size=sum(item.size for item in manifest.items), status="uploading",
+                             title=manifest.title, description=manifest.description,
+                             is_public=target.is_public if target else manifest.is_public,
+                             edit_intent=manifest.edit.model_dump(mode="json") if manifest.edit else None,
+                             total_size=sum(item.size for item in manifest.items),
+                             status="uploading" if manifest.items else "ready",
                              expires_at=now() + timedelta(days=7))
     db.add(draft)
     try:
@@ -361,6 +373,8 @@ async def finalized_album(db, draft):
         selectinload(Album.photos), selectinload(Album.creator)).execution_options(populate_existing=True)) if draft.album_id else None
     if album is None:
         raise HTTPException(410, "Completed album no longer exists")
+    if draft.edit_intent:
+        return await album_editing.album_result(db, album)
     return album_to_out(album)
 
 
@@ -369,17 +383,22 @@ async def finalize_draft(db, owner, draft_id):
     draft = await owned(db, owner, draft_id, lock=True)
     if draft.status == "completed":
         return await finalized_album(db, draft), False
+    if draft.edit_intent is not None:
+        raise HTTPException(503, "Album editing is temporarily unavailable")
     expire(draft)
     if draft.status not in ("uploading", "ready"):
         await db.commit()
         raise HTTPException(410 if draft.status in ("expired", "cancelled") else 409, "Draft closed")
     items = list((await db.scalars(select(AlbumUploadItem).where(
         AlbumUploadItem.draft_id == str(draft.id)).order_by(AlbumUploadItem.order))).all())
-    if not items or any(item.status != "uploaded" for item in items):
+    if (not items and not draft.edit_intent) or any(item.status != "uploaded" for item in items):
         raise HTTPException(409, "Draft upload incomplete")
     rows = [{"idx": item.order, "filename": item.filename, "stored": item.stored_filename,
              "media_type": item.media_type, "cloudinary_delivery_type": item.cloudinary_delivery_type} for item in items]
-    album = await add_album_with_photos(db, owner, draft.title, draft.description, draft.is_public, rows)
+    if draft.edit_intent:
+        album = await album_editing.apply_edit(db, owner, draft, rows)
+    else:
+        album = await add_album_with_photos(db, owner, draft.title, draft.description, draft.is_public, rows)
     draft.album_id = str(album.id)
     draft.status = "completed"
     await db.commit()
